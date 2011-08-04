@@ -237,9 +237,9 @@ nil if the end of stream has been reached")
      :default (recur (do (.append buffer ch) buffer) (read-char reader)))))
 
 (def special-symbols
-  {'nil nil
-   'true true
-   'false false})
+  {"nil" nil
+   "true" true
+   "false" false})
 
 (defn read-symbol
   [reader initch]
@@ -247,8 +247,7 @@ nil if the end of stream has been reached")
     (if (gstring/contains token "/")
       (symbol (subs token 0 (.indexOf token "/"))
               (subs (inc (.indexOf token "/")) (.length token)))
-      (let [s (symbol token)]
-        (s special-symbols s)))))
+      (get special-symbols token (symbol token)))))
 
 (defn read-keyword
   [reader initch]
