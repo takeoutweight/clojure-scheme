@@ -110,6 +110,145 @@
          (extend-type ~t ~@(dt->et impls)))
       `(deftype* ~t ~fields))))
 
+;; (defn- emit-defrecord 
+;;   "Do not use this directly - use defrecord"
+;;   [tagname name fields interfaces methods]
+;;   (let [classname (with-meta (symbol (str (namespace-munge *ns*) "." name)) (meta name))
+;;         interfaces (vec interfaces)
+;;         interface-set (set (map resolve interfaces))
+;;         methodname-set (set (map first methods))
+;;         hinted-fields fields
+;;         fields (vec (map #(with-meta % nil) fields))
+;;         base-fields fields
+;;         fields (conj fields '__meta '__extmap)]
+;;     (let [gs (gensym)]
+;;     (letfn 
+;;      [(irecord [[i m]]
+;;         [(conj i 'cljs.core.IRecord)
+;;          m])
+;;       ;; (ihash [[i m]] 
+;;       ;;   [(conj i 'cljs.core.IHash)
+;;       ;;    (conj m 
+;;       ;;          `(-hash [this#] (hash-coll this#)))])
+;;       ;; (iequiv [[i m]] 
+;;       ;;   [(conj i 'cljs.core.IEquiv)
+;;       ;;    (conj m 
+;;       ;;          `(-equiv [this# other#] (equiv-map this# other#)))])
+;;       ;; (imeta [[i m]] 
+;;       ;;   [(conj i 'cljs.core.IMeta)
+;;       ;;    (conj m 
+;;       ;;          `(-meta [this#] ~'__meta))])
+;;       ;; (iwithmeta [[i m]] 
+;;       ;;   [(conj i 'cljs.core.IWithMeta)
+;;       ;;    (conj m 
+;;       ;;          `(-with-meta [this# ~gs] (new ~tagname ~@(replace {'__meta gs} fields))))])
+;;       ;; (ilookup [[i m]] 
+;;       ;;    [(conj i 'cljs.core.ILookup)
+;;       ;;     (conj m
+;;       ;; 		`(-lookup [this# k#] (-lookup this# k# nil))
+;;       ;;           `(-lookup [this# k# else#] 
+;;       ;;              (case k# ~@(mapcat (fn [fld] [(keyword fld) fld]) 
+;;       ;;                                  base-fields)
+;;       ;;                    (get ~'__extmap k# else#))))])
+;;       ;; (icounted [[i m]] 
+;;       ;;   [(conj i 'cljs.core.ICounted)
+;;       ;;    (conj m 
+;;       ;;          `(-count [this#] (+ ~(count base-fields) (count ~'__extmap))))])
+;;       ;; (icollection [[i m]] 
+;;       ;;   [(conj i 'cljs.core.ICollection)
+;;       ;;    (conj m 
+;;       ;;          `(-conj [this# entry#]
+;;       ;; 		       (if (vector? entry#)
+;;       ;; 			 (-assoc this# (-nth entry# 0) (-nth entry# 1))
+;;       ;; 			 (reduce -conj
+;;       ;; 				 this#
+;;       ;; 				 entry#))))])
+;;       ;; (iassociative [[i m]] 
+;;       ;;   [(conj i 'cljs.core.IAssociative)
+;;       ;;    (conj m 
+;;       ;;          `(-assoc [this# k# ~gs]
+;;       ;;                (condp identical? k#
+;;       ;;                  ~@(mapcat (fn [fld]
+;;       ;;                              [(keyword fld) (list* `new tagname (replace {fld gs} fields))])
+;;       ;;                            base-fields)
+;;       ;;                  (new ~tagname ~@(remove #{'__extmap} fields) (assoc ~'__extmap k# ~gs)))))])
+;;       ;; (imap [[i m]] 
+;;       ;;   [(conj i 'cljs.core.IMap)
+;;       ;;    (conj m 
+;;       ;;          `(-dissoc [this# k#] (if (contains? #{~@(map keyword base-fields)} k#)
+;;       ;;                                       (dissoc (with-meta (into {} this#) ~'__meta) k#)
+;;       ;;                                       (new ~tagname ~@(remove #{'__extmap} fields) 
+;;       ;;                                            (not-empty (dissoc ~'__extmap k#))))))])
+;;       ;; (iseqable [[i m]] 
+;;       ;;   [(conj i 'cljs.core.ISeqable)
+;;       ;;    (conj m 
+;;       ;;          `(-seq [this#] (seq (concat [~@(map #(list `vector (keyword %) %) base-fields)] 
+;;       ;;                                         ~'__extmap))))])
+;;       ;; (iprintable [[i m]] 
+;;       ;;   [(conj i 'cljs.core.IPrintable)
+;;       ;;    (conj m 
+;;       ;;          `(-pr-seq [this# opts#]
+;;       ;; 			 (let [pr-pair (fn [keyval] (pr-sequential pr-seq "" " " "" opts keyval))]
+;;       ;; 			   (pr-sequential pr-pair (str "#:" ~tagname "{") ", " "}" opts# ~'__extmap))))])
+
+;;       ]
+;;      (let [[i m] (-> [interfaces methods] irecord
+;; 		     ;; ihash iequiv imeta iwithmeta ilookup icounted icollection iassociative imap iseqable iprintable
+;; 		     )]
+;;        `(deftype* ~tagname ~classname ~(conj hinted-fields '__meta '__extmap) 
+;;           :implements ~(vec i) 
+;;           ~@m))))))
+
+(defn- concat-defrecord-impls [tagname fields impls]
+  (let [hinted-fields fields
+        fields (vec (map #(with-meta % nil) fields))
+        base-fields fields
+	fields (conj fields '__meta '__extmap)]
+    (let [gs (gensym)]
+      (concat impls ['IRecord
+		     'IHash
+		     `(~'-hash [this#] 0)
+		     'ICounted
+		     `(~'-count [this#] (+ ~(count base-fields) (count ~'__extmap)))
+		     'IPrintable
+		     `(~'-pr-seq [this# opts#]
+				 (let [pr-pair# (fn [keyval#] (pr-sequential pr-seq "" " " "" opts# keyval#))]
+				   (pr-sequential pr-pair# (str "#:" ~tagname "{") ", " "}" opts# ~'__extmap)))]))))
+
+(defmacro defrecord [t fields & impls]
+  (let [impls (concat-defrecord-impls t fields impls)
+	hinted-fields fields
+        fields (vec (map #(with-meta % nil) fields))
+        base-fields fields
+	fields (conj fields '__meta '__extmap) ;; TH: note, fields needs to include '__meta and '__extmap before adorn-params
+	adorn-params (fn [sig]
+                       (cons (vary-meta (second sig) assoc :cljs.compiler/fields fields)
+                             (nnext sig)))
+        ;;reshape for extend-type
+        dt->et (fn [specs]
+                 (loop [ret [] s specs]
+                   (if (seq s)
+                     (recur (-> ret
+                                (conj (first s))
+                                (into
+                                 (reduce (fn [v [f sigs]]
+                                           (conj v (cons f (map adorn-params sigs))))
+                                         []
+                                         (group-by first (take-while seq? (next s))))))
+                            (drop-while seq? (next s)))
+                     ret)))
+	;; ns-part (namespace-munge *ns*)
+        ;; classname (symbol (str ns-part "." t))
+       
+
+	]
+    `(do
+       (deftype* ~t ~(conj hinted-fields '__meta '__extmap))
+       (extend-type ~t ~@(dt->et impls))
+       ;; (defn ~(symbol (str 'map-> t))
+       ;;   ([m#] (~(symbol (str classname "/create")) m#)))
+       )))
+
 (defmacro defprotocol [psym & doc+methods]
   (let [p (:name (cljs.compiler/resolve-var (dissoc &env :locals) psym))
         prefix (protocol-prefix p)
