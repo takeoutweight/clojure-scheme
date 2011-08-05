@@ -1,4 +1,4 @@
-Simple ClojureScript Project Example.
+Simple ClojureScript Project Example Using an External JavaScript Library
 
 One-time Setup
 ==============
@@ -18,9 +18,9 @@ Run in Development Mode
 Development mode allows for each file to be loaded in a separate script tag so
 that errors can be easily tracked to the offending file.
 
-        cljsc src > hello.js
+        cljsc src > hello-js.js
 
-After running the above command, open hello-dev.html. Notice that each required
+After running the above command, open hello-js-dev.html. Notice that each required
 JavaScript file has been loaded in its most readable form. 
 
 Run Optimized JavaScript
@@ -28,7 +28,6 @@ Run Optimized JavaScript
 
 Once an application is ready for production, a single optimized file can be produced.
 
-    cljsc src {:optimizations :advanced} > hello.js
+    cljsc src {:optimizations :advanced} > hello-js.js
 
-After running the above command, open hello.html to view the result.
-
+After running the above command, open hello-js.html to view the result.
