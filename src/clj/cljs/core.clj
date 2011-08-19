@@ -194,30 +194,29 @@
 	 (extend-type ~tagname ~@(dt->et impls))))))
 
 (defn- build-positional-factory
-  [nom classname fields]
-  (let [fn-name (symbol (str '-> nom))]
+  [rsym rname fields]
+  (let [fn-name (symbol (str '-> rsym))]
     `(defn ~fn-name
        [~@fields]
-       `(new ~classname ~@fields))))
+       (new ~rname ~@fields))))
 
 (defn- build-map-factory
-  [nom classname fields]
-  (let [fn-name (symbol (str 'map-> nom))
+  [rsym rname fields]
+  (let [fn-name (symbol (str 'map-> rsym))
 	ms (gensym)
-	getters (map (fn [sym] `((keyword ~sym) ~ms)) fields)]
+	ks (map keyword fields)
+	getters (map (fn [k] `(~k ~ms)) ks)]
     `(defn ~fn-name
        [~ms]
-       (new ~classname ~@getters)))) ;; TH: perhaps could do (set! classname/create (fn [m#] ...))
+       (new ~rname ~@getters nil (dissoc ~ms ~@ks)))))
+;; (set! ~rname/create (fn [m#] ...))
 
-(defmacro defrecord [t fields & impls]
-  (let [;; ns-part (namespace-munge *ns*)
-        ;; classname (symbol (str ns-part "." t))
-	]
+(defmacro defrecord [rsym fields & impls]
+  (let [r (:name (cljs.compiler/resolve-var (dissoc &env :locals) rsym))]
     `(let []
-       ~(emit-defrecord t fields impls)
-       ;; (defn ~(symbol (str 'map-> t))
-       ;;   ([m#] (~(symbol (str classname "/create")) m#)))
-       )))
+       ~(emit-defrecord rsym fields impls)
+       ~(build-positional-factory rsym r fields)
+       ~(build-map-factory rsym r fields))))
 
 (defmacro defprotocol [psym & doc+methods]
   (let [p (:name (cljs.compiler/resolve-var (dissoc &env :locals) psym))
