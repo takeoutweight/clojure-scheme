@@ -152,7 +152,7 @@
 		  ;; 	      (case k# ~@(mapcat (fn [fld] [(keyword fld) fld]) 
 		  ;; 			       base-fields)
 		  ;; 		  (get ~'__extmap k# else#)))
-		  `(~'-lookup [this# k# else#]
+		  `(~'-lookup [this# k# else#] ;; TH: use condp instead
 			      (get (merge (hash-map ~@(mapcat (fn [fld] [(keyword fld) fld]) 
 							      base-fields))
 					  ~'__extmap)
@@ -192,6 +192,22 @@
       `(do
 	 (deftype* ~tagname ~(conj hinted-fields '__meta '__extmap))
 	 (extend-type ~tagname ~@(dt->et impls))))))
+
+(defn- build-positional-factory
+  [nom classname fields]
+  (let [fn-name (symbol (str '-> nom))]
+    `(defn ~fn-name
+       [~@fields]
+       `(new ~classname ~@fields))))
+
+(defn- build-map-factory
+  [nom classname fields]
+  (let [fn-name (symbol (str 'map-> nom))
+	ms (gensym)
+	getters (map (fn [sym] `((keyword ~sym) ~ms)) fields)]
+    `(defn ~fn-name
+       [~ms]
+       (new ~classname ~@getters)))) ;; TH: perhaps could do (set! classname/create (fn [m#] ...))
 
 (defmacro defrecord [t fields & impls]
   (let [;; ns-part (namespace-munge *ns*)
