@@ -190,7 +190,8 @@
 					 ~'__extmap))))
 		  ])]
       `(do
-	 (deftype* ~tagname ~(conj hinted-fields '__meta '__extmap))
+	 ;; (~'defrecord* ~tagname ~(conj hinted-fields '__meta '__extmap))
+	 (~'defrecord* ~tagname ~hinted-fields)
 	 (extend-type ~tagname ~@(dt->et impls))))))
 
 (defn- build-positional-factory
