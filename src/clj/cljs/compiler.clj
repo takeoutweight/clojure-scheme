@@ -16,6 +16,8 @@
 (declare resolve-var)
 (require 'cljs.core)
 
+(def js-this 'this)
+
 (def js-reserved
   #{"abstract" "boolean" "break" "byte" "case"
     "catch" "char" "class" "const" "continue"
@@ -37,16 +39,18 @@
 (def ^:dynamic *cljs-warn-on-undeclared* false)
 
 (defn munge [s]
-  (let [ss (str s)
-        ms (if (.contains ss "]")
-             (let [idx (inc (.lastIndexOf ss "]"))]
-               (str (subs ss 0 idx)
-                    (clojure.lang.Compiler/munge (subs ss idx))))
-             (clojure.lang.Compiler/munge ss))
-        ms (if (js-reserved ms) (str ms "$") ms)]
-    (if (symbol? s)
-      (symbol ms)
-      ms)))
+  (if (identical? s js-this)
+    s
+    (let [ss (str s)
+          ms (if (.contains ss "]")
+               (let [idx (inc (.lastIndexOf ss "]"))]
+                 (str (subs ss 0 idx)
+                      (clojure.lang.Compiler/munge (subs ss idx))))
+               (clojure.lang.Compiler/munge ss))
+          ms (if (js-reserved ms) (str ms "$") ms)]
+      (if (symbol? s)
+        (symbol ms)
+        ms))))
 
 (defn confirm-var-exists [env prefix suffix]
   (when *cljs-warn-on-undeclared*
@@ -73,7 +77,9 @@
   (let [parts (string/split (name sym) #"\.")
         first (first parts)
         step (fn [part] (str "['" part "']"))]
-    (apply str first (map step (rest parts)))))
+    (if (= (symbol first) js-this)
+      js-this
+      (apply str first (map step (rest parts))))))
 
 (defn resolve-existing-var [env sym]
   (if (= (namespace sym) "js")
