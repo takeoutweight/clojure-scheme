@@ -3276,4 +3276,3 @@ reduces them without incurring seq initialization"
           bind-fn (goog.bind f obj)]
       (js* "~{obj}[~{str-name}] = ~{bind-fn}")))
   obj)
-
