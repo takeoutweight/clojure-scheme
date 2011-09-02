@@ -16,6 +16,8 @@
 (declare resolve-var)
 (require 'cljs.core)
 
+(def js-this 'this)
+
 (def js-reserved
   #{"abstract" "boolean" "break" "byte" "case"
     "catch" "char" "class" "const" "continue"
