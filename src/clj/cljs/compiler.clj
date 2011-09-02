@@ -16,8 +16,6 @@
 (declare resolve-var)
 (require 'cljs.core)
 
-(def js-this 'this)
-
 (def js-reserved
   #{"abstract" "boolean" "break" "byte" "case"
     "catch" "char" "class" "const" "continue"
@@ -40,7 +38,7 @@
 (def ^:dynamic *cljs-warn-on-undeclared* false)
 
 (defn munge [s]
-  (if (identical? s js-this)
+  (if (:js-this (meta s))
     s
     (let [ss (str s)
           ms (if (.contains ss "]")
@@ -92,8 +90,8 @@ goog.require = function(rule){Packages.clojure.lang.RT[\"var\"](\"cljs.compiler\
   (let [parts (string/split (name sym) #"\.")
         first (first parts)
         step (fn [part] (str "['" part "']"))]
-    (if (= (symbol first) js-this)
-      js-this
+    (if (= "this" first)
+      (with-meta (symbol first) {:js-this true})
       (apply str first (map step (rest parts))))))
 
 (defn resolve-existing-var [env sym]
