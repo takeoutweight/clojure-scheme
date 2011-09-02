@@ -3213,3 +3213,8 @@ reduces them without incurring seq initialization"
 (defn prefers
   "Given a multimethod, returns a map of preferred value -> set of other values"
   [multifn] (-prefers multifn))
+
+(defn extend-object
+  ""
+  [obj fn-map]
+  )
