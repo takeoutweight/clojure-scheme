@@ -3220,4 +3220,7 @@ reduces them without incurring seq initialization"
 (defn extend-object
   ""
   [obj fn-map]
-  )
+  (doseq [[key-name f] fn-map]
+    (let [str-name (name key-name)
+          bind-fn (goog.bind f obj)]
+      (js* "~{obj}[~{str-name}] = ~{bind-fn}"))))
