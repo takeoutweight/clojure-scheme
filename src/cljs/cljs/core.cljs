@@ -3267,10 +3267,13 @@ reduces them without incurring seq initialization"
   [multifn] (-prefers multifn))
 
 (defn extend-object
-  ""
+  "Takes a JavaScript object and a map of names to functions and
+  attaches said functions as methods on the object.  The attached
+  methods will resolve the implict this as the object."
   [obj fn-map]
   (doseq [[key-name f] fn-map]
     (let [str-name (name key-name)
           bind-fn (goog.bind f obj)]
-      (js* "~{obj}[~{str-name}] = ~{bind-fn}"))))
+      (js* "~{obj}[~{str-name}] = ~{bind-fn}")))
+  obj)
 
