@@ -729,11 +729,13 @@
   (let [obj (js* "{}")]
     (extend-object obj
       {:foo #(do 42)
-       :bar #(+ 100 (. js/this (foo)))
-       :baz #(+ % %2)})
+       :bar #(+ 100 (. js/this (foo)))  ;; warning is good here
+       :baz #(+ % %2)
+       :qux #(+ 100 (. obj baz 1 2))})  ;; avoids warning
     
     (assert (= 42  (. obj (foo))))
     (assert (= 142 (. obj (bar))))
-    (assert (= 3   (. obj baz 1 2))))
+    (assert (= 3   (. obj baz 1 2)))
+    (assert (= 103 (. obj (qux)))))
   
   :ok)
