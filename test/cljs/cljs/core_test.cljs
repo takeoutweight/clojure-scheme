@@ -726,5 +726,16 @@
   (assert (= (assoc fred :lastname "Flintstone") {:firstname "Fred" :lastname "Flintstone"}))
   (assert (= (assoc fred :wife :ethel) {:firstname "Fred" :lastname "Mertz" :wife :ethel}))
   (assert (= (dissoc ethel :husband) {:firstname "Ethel" :lastname "Mertz"}))
+
+  ;; extend-object
+  (let [obj (js* "{}")]
+    (extend-object obj
+      {:foo #(do 42)
+       :bar #(+ 100 (. js/this (foo)))
+       :baz #(+ % %2)})
+    
+    (assert (= 42  (. obj (foo))))
+    (assert (= 142 (. obj (bar))))
+    (assert (= 3   (. obj baz 1 2))))
   
   :ok)
