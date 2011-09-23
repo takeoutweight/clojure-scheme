@@ -276,10 +276,13 @@
 
 (defmethod emit :if
   [{:keys [test then else env]}]
-  (let [context (:context env)]
+  (let [context (:context env)
+        valsym (gensym)]
     (if (= :expr context)
-      (print (str "(cljs.core.truth_(" (emits test) ")?" (emits then) ":" (emits else) ")"))
-      (print (str "if(cljs.core.truth_(" (emits test) "))\n{" (emits then) "} else\n{" (emits else) "}\n")))))
+      (print (str "(((" valsym " = (" (emits test) ")) || (" valsym " != null && " valsym " !== false))?" (emits then) ":" (emits else) ")"))
+      (do
+        (print (str "var " valsym " = " (emits test) ";\n"))
+        (print (str "if(" valsym " != null && " valsym " !== false)\n{" (emits then) "} else\n{" (emits else) "}\n"))))))
 
 (defmethod emit :throw
   [{:keys [throw env]}]

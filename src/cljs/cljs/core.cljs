@@ -12,11 +12,6 @@
             [goog.object :as gobject]
             [goog.array :as garray]))
 
-(defn truth_
-  "Internal - do not use!"
-  [x]
-  (js* "(~{x} != null && ~{x} !== false)"))
-
 (defn type_satisfies_
   "Internal - do not use!"
   [p x]
