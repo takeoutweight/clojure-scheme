@@ -278,7 +278,7 @@
   [{:keys [test then else env]}]
   (let [context (:context env)]
     (if (= :expr context)
-      (print (str "((" (emits test) " != null && " (emits test) " !== false)?" (emits then) ":" (emits else) ")"))
+      (print (str "(cljs.core.truth_(" (emits test) ")?" (emits then) ":" (emits else) ")"))
       (let [valsym (gensym)]
         (print (str "var " valsym " = " (emits test) ";\n"))
         (print (str "if(" valsym " != null && " valsym " !== false)\n{" (emits then) "} else\n{" (emits else) "}\n"))))))
