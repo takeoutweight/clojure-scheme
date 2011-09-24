@@ -276,11 +276,10 @@
 
 (defmethod emit :if
   [{:keys [test then else env]}]
-  (let [context (:context env)
-        valsym (gensym)]
+  (let [context (:context env)]
     (if (= :expr context)
-      (print (str "(((" valsym " = (" (emits test) ")) || (" valsym " != null && " valsym " !== false))?" (emits then) ":" (emits else) ")"))
-      (do
+      (print (str "((" (emits test) " != null && " (emits test) " !== false)?" (emits then) ":" (emits else) ")"))
+      (let [valsym (gensym)]
         (print (str "var " valsym " = " (emits test) ";\n"))
         (print (str "if(" valsym " != null && " valsym " !== false)\n{" (emits then) "} else\n{" (emits else) "}\n"))))))
 
