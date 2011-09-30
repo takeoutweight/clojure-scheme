@@ -3272,7 +3272,6 @@ reduces them without incurring seq initialization"
   methods will resolve the implict this as the object."
   [obj fn-map]
   (doseq [[key-name f] fn-map]
-    (let [str-name (name key-name)
-          bind-fn (goog.bind f obj)]
-      (js* "~{obj}[~{str-name}] = ~{bind-fn}")))
+    (let [str-name (name key-name)]
+      (js* "~{obj}[~{str-name}] = ~{f}")))
   obj)
