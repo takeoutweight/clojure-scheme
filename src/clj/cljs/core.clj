@@ -187,13 +187,14 @@
                    ret)
         impl-map (loop [ret {} s impls]
                    (if (seq s)
-                     (recur (assoc ret (resolve (first s)) (take-while seq? (next s)))
+                     (recur (assoc ret (first s) (take-while seq? (next s)))
                             (drop-while seq? (next s)))
                      ret))]
     (if (base-type tsym)
       (let [t (base-type tsym)
-            assign-impls (fn [[psym sigs]]
-                           (let [pfn-prefix (subs (str psym) 0 (clojure.core/inc (.lastIndexOf (str psym) ".")))]
+            assign-impls (fn [[p sigs]]
+                           (let [psym (resolve p)
+				 pfn-prefix (subs (str psym) 0 (clojure.core/inc (.lastIndexOf (str psym) ".")))]
                              (cons `(aset ~psym ~t true)
                                    (map (fn [[f & meths]]
                                           `(aset ~(symbol (str pfn-prefix f)) ~t (fn* ~@meths)))
@@ -201,13 +202,25 @@
         `(do ~@(mapcat assign-impls impl-map)))
       (let [t (resolve tsym)
             prototype-prefix (str t ".prototype.")
-            
-            assign-impls (fn [[psym sigs]]
-                           (let [pprefix (protocol-prefix psym)]
-                             (cons `(set! ~(symbol (str prototype-prefix pprefix)) true)
-                                   (map (fn [[f & meths]]
-                                          `(set! ~(symbol (str prototype-prefix pprefix f)) (fn* ~@meths)))
-                                        sigs))))]
+            assign-impls (fn [[p sigs]]
+                           (let [psym (resolve p)
+				 pprefix (protocol-prefix psym)]
+			     (if (= p 'Object)
+			       (let [this-as* (fn [name body]
+						(list* 'let [name (list 'js* "this")]
+						       body))
+				     adapt-params (fn [[sig & body]]
+						    (let [[tname & args] sig]
+						      (list (with-meta (vec args)
+							      (assoc (meta sig) :cljs.compiler/this-as tname))
+							    (this-as* tname body))))]
+				 (map (fn [[f & meths]]
+					`(set! ~(symbol (str prototype-prefix f)) (fn* ~@(map adapt-params meths))))
+				      sigs))
+			       (cons `(set! ~(symbol (str prototype-prefix pprefix)) true)
+				     (map (fn [[f & meths]]
+					    `(set! ~(symbol (str prototype-prefix pprefix f)) (fn* ~@meths)))
+					  sigs)))))]
         `(do ~@(mapcat assign-impls impl-map))))))
 
 (defmacro deftype [t fields & impls]
