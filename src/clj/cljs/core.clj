@@ -181,6 +181,12 @@
           ~@impls))
       (new ~t ~@locals))))
 
+(defmacro this-as
+  "Defines a scope where JavaScript's implicit \"this\" is bound to the name provided."
+  [name & body]
+  `(let [~name (~'js* "this")]
+     ~@body))
+
 (defmacro extend-type [tsym & impls]
   (let [resolve #(let [ret (:name (cljs.compiler/resolve-var (dissoc &env :locals) %))]
                    (assert ret (str "Can't resolve: " %))
@@ -206,14 +212,11 @@
                            (let [psym (resolve p)
 				 pprefix (protocol-prefix psym)]
 			     (if (= p 'Object)
-			       (let [this-as* (fn [name body]
-						(list* 'let [name (list 'js* "this")]
-						       body))
-				     adapt-params (fn [[sig & body]]
+			       (let [adapt-params (fn [[sig & body]]
 						    (let [[tname & args] sig]
 						      (list (with-meta (vec args)
 							      (assoc (meta sig) :cljs.compiler/this-as tname))
-							    (this-as* tname body))))]
+							    (list* 'this-as tname body))))]
 				 (map (fn [[f & meths]]
 					`(set! ~(symbol (str prototype-prefix f)) (fn* ~@(map adapt-params meths))))
 				      sigs))
@@ -656,9 +659,3 @@
          ret# ~expr]
      (prn (str "Elapsed time: " (- (.getTime (js/Date.) ()) start#) " msecs"))
      ret#))
-
-(defmacro this-as
-  "Defines a scope where JavaScript's implicit \"this\" is bound to the name provided."
-  [name & body]
-  `(let [~name (~'js* "this")]
-     ~@body))
