@@ -18,15 +18,44 @@
   (:require [clojure.browser.net   :as net]
             [clojure.browser.event :as event]))
 
+(def xpc-connection (atom nil))
+
+(defn repl-print [data]
+  (if-let [conn @xpc-connection]
+    (net/transmit conn :print (pr-str data))))
+
 (defn evaluate-javascript
   "Process a single block of JavaScript received from the server"
-  [block]
+  [conn block]
   (let [result (try {:status :success :value (str (js* "eval(~{block})"))}
-                    (catch js/Error e {:status :exception :value (pr-str e)}))]
+                    (catch js/Error e
+                      {:status :exception :value (pr-str e)
+                       :stacktrace (if (.hasOwnProperty e "stack")
+                                     (.stack e)
+                                     "No stacktrace available.")}))]
     (pr-str result)))
 
 (defn send-result [connection url data]
   (net/transmit connection url "POST" data nil 0))
+
+(defn send-print
+  "Send data to be printed in the REPL. If there is an error, try again
+  up to 10 times."
+  ([url data]
+     (send-print url data 0))
+  ([url data n]
+     (let [conn (net/xhr-connection)]
+       (event/listen conn :error
+                     (fn [_]
+                       (if (< n 10)
+                         (send-print url data (inc n))
+                         (.log js/console (str "Could not send " data " after " n " attempts.")))))
+       (net/transmit conn url "POST" data nil 0))))
+
+(def order (atom 0))
+
+(defn wrap-message [t data]
+  (pr-str {:type t :content data :order (swap! order inc)}))
 
 (defn start-evaluator
   "Start the REPL server connection."
@@ -44,13 +73,18 @@
 
       (net/register-service repl-connection
                             :send-result
-                            (partial send-result
-                                     connection
-                                     url))
+                            (fn [data]
+                              (send-result connection url (wrap-message :result data))))
+
+      (net/register-service repl-connection
+                            :print
+                            (fn [data]
+                              (send-print url (wrap-message :print data))))
+      
       (net/connect repl-connection
                    (constantly nil))
 
-      (js/setTimeout #(send-result connection url "ready") 50))
+      (js/setTimeout #(send-result connection url (wrap-message :ready "ready")) 50))
     (js/alert "No 'xpc' param provided to child iframe.")))
 
 (defn connect
@@ -60,13 +94,14 @@
   [repl-server-url]
   (let [repl-connection (net/xpc-connection
                          {:peer_uri repl-server-url})]
+    (swap! xpc-connection (constantly repl-connection))
     (net/register-service repl-connection
                           :evaluate-javascript
                           (fn [js]
                             (net/transmit
                              repl-connection
                              :send-result
-                             (evaluate-javascript js))))
+                             (evaluate-javascript repl-connection js))))
     (net/connect repl-connection
                  (constantly nil)
                  (fn [iframe]

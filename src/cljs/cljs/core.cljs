@@ -12,6 +12,26 @@
             [goog.object :as gobject]
             [goog.array :as garray]))
 
+(def
+  ^{:doc "Each runtime environment provides a diffenent way to print output.
+  Whatever function *print-fn* is bound to will be passed any
+  Strings which should be printed."}
+  *print-fn*
+  (fn [_]
+    (throw (js/Error. "No *print-fn* fn set for evaluation environment"))))
+
+(def
+  ^{:doc "bound in a repl thread to the most recent value printed"}
+  *1)
+
+(def 
+  ^{:doc "bound in a repl thread to the second most recent value printed"}
+  *2)
+
+(def
+  ^{:doc "bound in a repl thread to the third most recent value printed"}
+  *3)
+
 (defn truth_
   "Internal - do not use!"
   [x]
@@ -176,6 +196,9 @@
   ICollection
   (-conj [_ o] (list o))
 
+  IPrintable
+  (-pr-seq [o] (list "nil"))
+
   IIndexed
   (-nth
    ([_ n] nil)
@@ -219,7 +242,7 @@
 
 (extend-type js/Date
   IEquiv
-  (-equiv [o other] (identical? (.toString o) (.toString other))))
+  (-equiv [o other] (identical? (. o (toString)) (. other (toString)))))
 
 (extend-type number
   IEquiv
@@ -227,6 +250,10 @@
 
   IHash
   (-hash [o] o))
+
+(extend-type boolean
+  IHash
+  (-hash [o] (js* "((~{o} === true) ? 1 : 0)")))
 
 (extend-type function
   IHash
@@ -237,9 +264,6 @@
   "Returns a number one greater than num."
   [x] (js* "(~{x} + 1)"))
 
-(defn- lt- [x y]
-  (js* "(~{x} < ~{y})"))
-
 (defn- ci-reduce
   "Accepts any collection which satisfies the ICount and IIndexed protocols and
 reduces them without incurring seq initialization"
@@ -247,17 +271,17 @@ reduces them without incurring seq initialization"
      (if (= 0 (-count cicoll))
        (f)
        (loop [val (-nth cicoll 0), n 1]
-         (if (lt- n (-count cicoll))
+         (if (< n (-count cicoll))
            (recur (f val (-nth cicoll n)) (inc n))
            val))))
   ([cicoll f val]
      (loop [val val, n 0]
-         (if (lt- n (-count cicoll))
+         (if (< n (-count cicoll))
            (recur (f val (-nth cicoll n)) (inc n))
            val)))
   ([cicoll f val idx]
      (loop [val val, n idx]
-         (if (lt- n (-count cicoll))
+         (if (< n (-count cicoll))
            (recur (f val (-nth cicoll n)) (inc n))
            val))))
 
@@ -266,21 +290,39 @@ reduces them without incurring seq initialization"
   (-seq [this] this)
   ISeq
   (-first [_] (aget a i))
-  (-rest [_] (if (lt- (inc i) (.length a))
+  (-rest [_] (if (< (inc i) (.length a))
                (IndexedSeq. a (inc i))
                (list)))
+
   ICounted
-  (-count [_] (.length a))
+  (-count [_] (- (.length a) i))
+
+  IIndexed
+  (-nth [coll n]
+    (let [i (+ n i)]
+      (when (< i (.length a))
+        (aget a i))))
+  (-nth [coll n not-found]
+    (let [i (+ n i)]
+      (if (< i (.length a))
+        (aget a i)
+        not-found)))
 
   ISequential
   IEquiv
   (-equiv [coll other] (equiv-sequential coll other))
 
+  ICollection
+  (-conj [coll o] (cons o coll))
+
   IReduce
   (-reduce [coll f]
     (ci-reduce coll f (aget a i) (inc i)))
   (-reduce [coll f start]
-    (ci-reduce coll f start i)))
+    (ci-reduce coll f start i))
+
+  IHash
+  (-hash [coll] (hash-coll coll)))
 
 (defn prim-seq [prim i]
   (when-not (= 0 (.length prim))
@@ -299,9 +341,9 @@ reduces them without incurring seq initialization"
   IIndexed
   (-nth
     ([array n]
-       (if (lt- n (.length array)) (aget array n)))
+       (if (< n (.length array)) (aget array n)))
     ([array n not-found]
-       (if (lt- n (.length array)) (aget array n)
+       (if (< n (.length array)) (aget array n)
            not-found)))
 
   ILookup
@@ -939,7 +981,7 @@ reduces them without incurring seq initialization"
    ([coll n]
       (if-let [xs (nthnext coll n)]
         (first xs)
-        (throw "Index out of bounds")))
+        (throw (js/Error. "Index out of bounds"))))
    ([coll n not-found]
       (if-let [xs (nthnext coll n)]
         (first xs)
@@ -948,18 +990,31 @@ reduces them without incurring seq initialization"
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;; basics ;;;;;;;;;;;;;;;;;;
 
+(defn- str*
+  "Internal - do not use!"
+  ([] "")
+  ([x] (cond
+        (nil? x) ""
+        :else (. x (toString))))
+  ([x & ys]
+     ((fn [sb more]
+        (if more
+          (recur (. sb  (append (str* (first more)))) (next more))
+          (str* sb)))
+      (gstring/StringBuffer. (str* x)) ys)))
+
 (defn str
   "With no args, returns the empty string. With one arg x, returns
   x.toString().  (str nil) returns the empty string. With more than
   one arg, returns the concatenation of the str values of the args."
   ([] "")
-  ([x] (if (nil? x) "" (. x (toString))))
+  ([x] (cond
+        (symbol? x) (. x (substring 2 (.length x)))
+        (keyword? x) (str* ":" (. x (substring 2 (.length x))))
+        (nil? x) ""
+        :else (. x (toString))))
   ([x & ys]
-     ((fn [sb more]
-        (if more
-          (recur (. sb  (append (str (first more)))) (next more))
-          (str sb)))
-      (gstring/StringBuffer. (str x)) ys)))
+     (apply str* x ys)))
 
 (defn subs
   "Returns the substring of s beginning at start inclusive, and ending
@@ -970,17 +1025,17 @@ reduces them without incurring seq initialization"
 (defn symbol
   "Returns a Symbol with the given namespace and name."
   ([name] (cond (symbol? name) name
-                (keyword? name) (str "\uFDD1" "'" (subs name 2))
-                :else (str "\uFDD1" "'" name)))
-  ([ns name] (symbol (str ns "/" name))))
+                (keyword? name) (str* "\uFDD1" "'" (subs name 2)))
+     :else (str* "\uFDD1" "'" name))
+  ([ns name] (symbol (str* ns "/" name))))
 
 (defn keyword
   "Returns a Keyword with the given namespace and name.  Do not use :
   in the keyword strings, it will be added automatically."
   ([name] (cond (keyword? name) name
-                (symbol? name) (str "\uFDD0" "'" (subs name 2))
-                :else (str "\uFDD0" "'" name)))
-  ([ns name] (keyword (str ns "/" name))))
+                (symbol? name) (str* "\uFDD0" "'" (subs name 2))
+                :else (str* "\uFDD0" "'" name)))
+  ([ns name] (keyword (str* ns "/" name))))
 
 
 
@@ -1005,6 +1060,16 @@ reduces them without incurring seq initialization"
 (defn- hash-coll [coll]
   (reduce #(hash-combine %1 (hash %2)) (hash (first coll)) (next coll)))
 
+(defn- extend-object!
+  "Takes a JavaScript object and a map of names to functions and
+  attaches said functions as methods on the object.  Any references to
+  JavaScript's implict this (via the this-as macro) will resolve to the 
+  object that the function is attached."
+  [obj fn-map]
+  (doseq [[key-name f] fn-map]
+    (let [str-name (name key-name)]
+      (js* "~{obj}[~{str-name}] = ~{f}")))
+  obj)
 
 ;;;;;;;;;;;;;;;; cons ;;;;;;;;;;;;;;;;
 (deftype List [meta first rest count]
@@ -1054,7 +1119,7 @@ reduces them without incurring seq initialization"
 
   IStack
   (-peek [coll] nil)
-  (-pop [coll] #_(throw "Can't pop empty list"))
+  (-pop [coll] #_(throw (js/Error. "Can't pop empty list")))
 
   ICollection
   (-conj [coll o] (List. meta o nil 1))
@@ -1363,7 +1428,7 @@ reduces them without incurring seq initialization"
   "Returns true if n is even, throws an exception if n is not an integer"
    [n] (if (integer? n)
         (zero? (bit-and n 1))
-        (throw (str "Argument must be an integer: " n))))
+        (throw (js/Error. (str "Argument must be an integer: " n)))))
 
 (defn odd?
   "Returns true if n is odd, throws an exception if n is not an integer"
@@ -1844,7 +1909,7 @@ reduces them without incurring seq initialization"
       (let [new-array (aclone array)]
         (. new-array (pop))
         (Vector. meta new-array))
-      (throw "Can't pop empty vector")))
+      (throw (js/Error. "Can't pop empty vector"))))
 
   ICollection
   (-conj [coll o]
@@ -1879,7 +1944,7 @@ reduces them without incurring seq initialization"
   (-nth [coll n]
     (if (and (<= 0 n) (< n (.length array)))
       (aget array n)
-      #_(throw (str "No item " n " in vector of length " (.length array)))))
+      #_(throw (js/Error. (str "No item " n " in vector of length " (.length array))))))
   (-nth [coll n not-found]
     (if (and (<= 0 n) (< n (.length array)))
       (aget array n)
@@ -2184,9 +2249,9 @@ reduces them without incurring seq initialization"
     (loop [ret {} keys (seq keyseq)]
       (if keys
         (let [key   (first keys)
-              entry (get map key)]
+              entry (get map key ::not-found)]
           (recur
-           (if entry
+           (if (not= entry ::not-found)
              (assoc ret key entry)
              ret)
            (next keys)))
@@ -2297,7 +2362,7 @@ reduces them without incurring seq initialization"
         (if (< i 0)
           (subs x 2)
           (subs x (inc i))))
-    :else nil #_(throw (str "Doesn't support name: " x))))
+    :else (throw (js/Error. (str "Doesn't support name: " x)))))
 
 (defn namespace
   "Returns the namespace String of a symbol or keyword, or nil if not present."
@@ -2306,7 +2371,7 @@ reduces them without incurring seq initialization"
     (let [i (.lastIndexOf x "/")]
       (when (> i -1)
         (subs x 2 i)))
-    nil #_(throw (str "Doesn't support namespace: " x))))
+    (throw (js/Error. (str "Doesn't support namespace: " x)))))
 
 (defn zipmap
   "Returns a map with the keys mapped to the corresponding vals."
@@ -2393,7 +2458,7 @@ reduces them without incurring seq initialization"
       (+ start (* n step))
       (if (and (> start end) (= step 0))
         start
-        (throw "Index out of bounds"))))
+        (throw (js/Error. "Index out of bounds")))))
   (-nth [rng n not-found]
     (if (< n (-count rng))
       (+ start (* n step))
@@ -2577,10 +2642,8 @@ reduces them without incurring seq initialization"
             (interpose [sep] (map #(print-one % opts) coll)))
           [end]))
 
-; This should be different in different runtime environments. For example
-; when in the browser, could use console.debug instead of print.
 (defn string-print [x]
-  (js/print x)
+  (*print-fn* x)
   nil)
 
 (defn flush [] ;stub
@@ -2780,8 +2843,9 @@ reduces them without incurring seq initialization"
   [a new-value]
   (when-let [validate (.validator a)]
     (assert (validate new-value) "Validator rejected reference state"))
-  (set! (.state a) new-value)
-  (-notify-watches a (.state a) new-value)
+  (let [old-value (.state a)]
+    (set! (.state a) new-value)
+    (-notify-watches a old-value new-value))
   new-value)
 
 (defn swap!
@@ -3089,9 +3153,9 @@ reduces them without incurring seq initialization"
      (or
       (when-not (contains? (tp tag) parent)
         (when (contains? (ta tag) parent)
-          (throw (str tag "already has" parent "as ancestor")))
+          (throw (js/Error. (str tag "already has" parent "as ancestor"))))
         (when (contains? (ta parent) tag)
-          (throw (str "Cyclic derivation:" parent "has" tag "as ancestor")))
+          (throw (js/Error. (str "Cyclic derivation:" parent "has" tag "as ancestor"))))
         {:parents (assoc (:parents h) tag (conj (get tp tag #{}) parent))
          :ancestors (tf (:ancestors h) tag td parent ta)
          :descendants (tf (:descendants h) parent ta tag td)})
@@ -3153,9 +3217,10 @@ reduces them without incurring seq initialization"
                                            e
                                            be)]
                                  (when-not (dominates (first be2) k prefer-table)
-                                   (throw (str "Multiple methods in multimethod '" name
-                                               "' match dispatch value: " dispatch-val " -> " k
-                                               " and " (first be2) ", and neither is preferred")))
+                                   (throw (js/Error.
+                                           (str "Multiple methods in multimethod '" name
+                                                "' match dispatch value: " dispatch-val " -> " k
+                                                " and " (first be2) ", and neither is preferred"))))
                                  be2)))
                            nil @method-table)]
     (when best-entry
@@ -3183,7 +3248,7 @@ reduces them without incurring seq initialization"
   (let [dispatch-val (apply dispatch-fn args)
         target-fn (-get-method mf dispatch-val)]
     (when-not target-fn
-      (throw (str "No method in multimethod '" name "' for dispatch value: " dispatch-val)))
+      (throw (js/Error. (str "No method in multimethod '" name "' for dispatch value: " dispatch-val))))
     (apply target-fn args)))
 
 (deftype MultiFn [name dispatch-fn default-dispatch-val hierarchy
@@ -3218,8 +3283,8 @@ reduces them without incurring seq initialization"
 
   (-prefer-method [mf dispatch-val-x dispatch-val-y]
     (when (prefers* dispatch-val-x dispatch-val-y prefer-table)
-      (throw (str "Preference conflict in multimethod '" name "': " dispatch-val-y
-                  " is already preferred to " dispatch-val-x)))
+      (throw (js/Error. (str "Preference conflict in multimethod '" name "': " dispatch-val-y
+                   " is already preferred to " dispatch-val-x))))
     (swap! prefer-table
            (fn [old]
              (assoc old dispatch-val-x
