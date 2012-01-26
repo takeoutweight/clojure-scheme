@@ -15,14 +15,16 @@
   (assert (= '(7 8 9) (reader/read-string "(7 8 9)")))
   (assert (= '(deref foo) (reader/read-string "@foo")))
   (assert (= '(quote bar) (reader/read-string "'bar")))
+  (assert (= 'foo/bar (reader/read-string "foo/bar")))
   (assert (= \a (reader/read-string "\\a")))
   (assert (= {:tag 'String} (meta (reader/read-string "^String {:a 1}"))))
   (assert (= [:a 'b #{'c {:d [:e :f :g]}}]
                (reader/read-string "[:a b #{c {:d [:e :f :g]}}]")))
+  (assert (= :foo/bar (reader/read-string ":foo/bar")))
   (assert (= nil (reader/read-string "nil")))
   (assert (= true (reader/read-string "true")))
   (assert (= false (reader/read-string "false")))
   (assert (= "string" (reader/read-string "\"string\"")))
   (assert (= "escape chars \t \r \n \\ \" \b \f" (reader/read-string "\"escape chars \\t \\r \\n \\\\ \\\" \\b \\f\"")))
-
+  
   :ok)

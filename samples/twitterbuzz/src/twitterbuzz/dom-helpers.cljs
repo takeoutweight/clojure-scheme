@@ -31,7 +31,7 @@
     (doto e (dom/setTextContent s))))
 
 (defn normalize-args [tag args]
-  (let [parts (string/split tag #"(\.|#)")
+  (let [parts (string/split (name tag) #"(\.|#)")
         [tag attrs] [(first parts)
                      (apply hash-map (map #(cond (= % ".") :class
                                                  (= % "#") :id
@@ -52,7 +52,7 @@
   [tag & args]
   (let [[tag attrs children] (normalize-args tag args)
         parent (dom/createDom (name tag)
-                              (.strobj (reduce (fn [m [k v]]
+                              (.-strobj (reduce (fn [m [k v]]
                                                  (assoc m k v))
                                                {}
                                                (map #(vector (name %1) %2)
