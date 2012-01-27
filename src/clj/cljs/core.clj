@@ -74,7 +74,7 @@
      return-expr
      `(if (~'js* ~(s/join " && " (repeat (count args) "typeof ~{} == 'number'")) ~@args)
         ~return-expr
-        (throw (js/Error. ~(str "Unsupported operation: arguments to " op " must be numbers.")))))))
+        (throw (js/Error. ~(str "Unsupported operation: arguments to " op " must be numbers")))))))
 
 (defmacro +
   ([] 0)
@@ -96,8 +96,13 @@
 
 (defmacro /
   ([] 1)
-  ([x] (check-numbers "(1 / ~{})" '/ x))
-  ([x y] (check-numbers "(~{} / ~{})" '/ x y))
+  ([x] `(/ 1 ~x))
+  ([x y] (let [expr (check-numbers "(~{} / ~{})" '/ x y)]
+           (if @*js-unchecked-arithmetic*
+             expr
+             `(if (zero? ~y)
+                (throw (js/Error. "Arithmetic exception: divide by zero"))
+                ~expr))))
   ([x y & more] `(/ (/ ~x ~y) ~@more)))
 
 (defmacro <
