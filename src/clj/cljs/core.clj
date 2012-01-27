@@ -20,7 +20,8 @@
                             aget aset
                             + - * / < <= > >= == zero? pos? neg? inc dec max min mod
                             bit-and bit-and-not bit-clear bit-flip bit-not bit-or bit-set 
-                            bit-test bit-shift-left bit-shift-right bit-xor]))
+                            bit-test bit-shift-left bit-shift-right bit-xor])
+  (:require [clojure.string :as s]))
 
 (alias 'core 'clojure.core)
 
@@ -43,7 +44,7 @@
   when when-first when-let when-not while])
 
 (defmacro true? [x]
-  (list 'js* "~{} === true" x))
+  `(~'js* "~{} === true" ~x))
 
 (defmacro false? [x]
   (list 'js* "~{} === false" x))
@@ -60,53 +61,68 @@
 (defmacro aset [a i v]
   (list 'js* "(~{}[~{}] = ~{})" a i v))
 
+(def ^:dynamic *js-unchecked-arithmetic* (atom false))
+
+(defmacro set-unchecked-arithmetic! [v]
+  (reset! *js-unchecked-arithmetic* v))
+
+(defn check-numbers [expr op & args]
+  (let [return-expr (if (seq args)
+                      `(~'js* ~expr ~@args)
+                      `(~'js* ~expr))]
+   (if @*js-unchecked-arithmetic*
+     return-expr
+     `(if (~'js* ~(s/join " && " (repeat (count args) "typeof ~{} == 'number'")) ~@args)
+        ~return-expr
+        (throw (js/Error. ~(str "Unsupported operation: arguments to " op " must be numbers.")))))))
+
 (defmacro +
   ([] 0)
-  ([x] x)
-  ([x y] (list 'js* "(~{} + ~{})" x y))
+  ([x] (check-numbers "~{}" '+ x))
+  ([x y] (check-numbers "(~{} + ~{})" '+ x y))
   ([x y & more] `(+ (+ ~x ~y) ~@more)))
 
 (defmacro -
   ([] 0)
-  ([x] (list 'js* "(- ~{})" x))
-  ([x y] (list 'js* "(~{} - ~{})" x y))
+  ([x] (check-numbers "(- ~{})" '- x))
+  ([x y] (check-numbers "(~{} - ~{})" '- x y))
   ([x y & more] `(- (- ~x ~y) ~@more)))
 
 (defmacro *
   ([] 1)
-  ([x] x)
+  ([x] (check-numbers "~{}" '* x))
   ([x y] (list 'js* "(~{} * ~{})" x y))
   ([x y & more] `(* (* ~x ~y) ~@more)))
 
 (defmacro /
   ([] 1)
-  ([x] `(/ 1 x))
-  ([x y] (list 'js* "(~{} / ~{})" x y))
+  ([x] (check-numbers "(1 / ~{})" '/ x))
+  ([x y] (check-numbers "(~{} / ~{})" '/ x y))
   ([x y & more] `(/ (/ ~x ~y) ~@more)))
 
 (defmacro <
-  ([x] true)
-  ([x y] (list 'js* "(~{} < ~{})" x y))
+  ([x] (check-numbers "(~{} && true)" '< x))
+  ([x y] (check-numbers "(~{} < ~{})" '< x y))
   ([x y & more] `(and (< ~x ~y) (< ~y ~@more))))
 
 (defmacro <=
-  ([x] true)
-  ([x y] (list 'js* "(~{} <= ~{})" x y))
+  ([x] (check-numbers "(~{} && true)" '<= x))
+  ([x y] (check-numbers "(~{} <= ~{})" '<= x y))
   ([x y & more] `(and (<= ~x ~y) (<= ~y ~@more))))
 
 (defmacro >
-  ([x] true)
-  ([x y] (list 'js* "(~{} > ~{})" x y))
+  ([x] (check-numbers "(~{} && true)" '> x))
+  ([x y] (check-numbers "(~{} > ~{})" '> x y))
   ([x y & more] `(and (> ~x ~y) (> ~y ~@more))))
 
 (defmacro >=
-  ([x] true)
-  ([x y] (list 'js* "(~{} >= ~{})" x y))
+  ([x] (check-numbers "(~{} && true)" '>= x))
+  ([x y] (check-numbers "(~{} >= ~{})" '>= x y))
   ([x y & more] `(and (>= ~x ~y) (>= ~y ~@more))))
 
 (defmacro ==
-  ([x] true)
-  ([x y] (list 'js* "(~{} === ~{})" x y))
+  ([x] (check-numbers "(~{} && true)" '== x))
+  ([x y] (check-numbers "(~{} === ~{})" '== x y))
   ([x y & more] `(and (== ~x ~y) (== ~y ~@more))))
 
 (defmacro dec [x]
@@ -125,54 +141,54 @@
   `(< ~x 0))
 
 (defmacro max
-  ([x] x)
-  ([x y] (list 'js* "((~{} > ~{}) ? ~{} : ~{})" x y x y))
+  ([x] (check-numbers "~{}" 'max x))
+  ([x y] (check-numbers "((~{} > ~{}) ? ~{} : ~{})" 'max x y x y))
   ([x y & more] `(max (max ~x ~y) ~@more)))
 
 (defmacro min
-  ([x] x)
-  ([x y] (list 'js* "((~{} < ~{}) ? ~{} : ~{})" x y x y))
+  ([x] (check-numbers "~{}" 'min x))
+  ([x y] (check-numbers "((~{} < ~{}) ? ~{} : ~{})" 'min x y x y))
   ([x y & more] `(min (min ~x ~y) ~@more)))
 
 (defmacro mod [num div]
-  (list 'js* "(~{} % ~{})" num div))
+  (check-numbers "(~{} % ~{})" 'mod num div))
 
 (defmacro bit-not [x]
-  (list 'js* "(~ ~{})" x))
+  (check-numbers "(~ ~{})" 'bit-not x))
 
 (defmacro bit-and
-  ([x y] (list 'js* "(~{} & ~{})" x y))
+  ([x y] (check-numbers "(~{} & ~{})" 'bit-and x y))
   ([x y & more] `(bit-and (bit-and ~x ~y) ~@more)))
 
 (defmacro bit-or
-  ([x y] (list 'js* "(~{} | ~{})" x y))
+  ([x y] (check-numbers "(~{} | ~{})" 'bit-or x y))
   ([x y & more] `(bit-or (bit-or ~x ~y) ~@more)))
 
 (defmacro bit-xor
-  ([x y] (list 'js* "(~{} ^ ~{})" x y))
+  ([x y] (check-numbers "(~{} ^ ~{})" 'bit-xor x y))
   ([x y & more] `(bit-xor (bit-xor ~x ~y) ~@more)))
 
 (defmacro bit-and-not
-  ([x y] (list 'js* "(~{} & ~~{})" x y))
+  ([x y] (check-numbers "(~{} & ~~{})" 'bit-and-not x y))
   ([x y & more] `(bit-and-not (bit-and-not ~x ~y) ~@more)))
 
 (defmacro bit-clear [x n]
-  (list 'js* "(~{} & ~(1 << ~{}))" x n))
+  (check-numbers "(~{} & ~(1 << ~{}))" 'bit-clear x n))
 
 (defmacro bit-flip [x n]
-  (list 'js* "(~{} ^ (1 << ~{}))" x n))
+  (check-numbers "(~{} ^ (1 << ~{}))" 'bit-flip x n))
 
 (defmacro bit-test [x n]
-  (list 'js* "((~{} & (1 << ~{})) != 0)" x n))
+  (check-numbers "((~{} & (1 << ~{})) != 0)" 'bit-test x n))
 
 (defmacro bit-shift-left [x n]
-  (list 'js* "(~{} << ~{})" x n))
+  (check-numbers "(~{} << ~{})" 'bit-shift-left x n))
 
 (defmacro bit-shift-right [x n]
-  (list 'js* "(~{} >> ~{})" x n))
+  (check-numbers "(~{} >> ~{})" 'bit-shift-right x n))
 
 (defmacro bit-set [x n]
-  (list 'js* "(~{} | (1 << ~{}))" x n))
+  (check-numbers "(~{} | (1 << ~{}))" 'bit-set x n))
 
 (defn- protocol-prefix [psym]
   (str (.replace (str psym) \. \$) "$"))
