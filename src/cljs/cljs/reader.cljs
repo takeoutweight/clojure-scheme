@@ -187,7 +187,7 @@ nil if the end of stream has been reached")
 (defn not-implemented
   [rdr ch]
   (reader-error rdr "Reader for " ch " not implemented yet"))
-
+;; TODO: extensible dispatch here.
 (defn read-dispatch
   [rdr _]
   (let [ch (read-char rdr)

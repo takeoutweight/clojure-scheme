@@ -26,5 +26,10 @@
   (assert (= false (reader/read-string "false")))
   (assert (= "string" (reader/read-string "\"string\"")))
   (assert (= "escape chars \t \r \n \\ \" \b \f" (reader/read-string "\"escape chars \\t \\r \\n \\\\ \\\" \\b \\f\"")))
+
+  ;; defrecords tests
+  (defrecord R [a b])
+  
+  ;; extensible reader tests
   
   :ok)
