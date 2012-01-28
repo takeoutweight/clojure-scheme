@@ -103,7 +103,7 @@
 (defmacro *
   ([] 1)
   ([x] (check-numbers "~{}" '* x))
-  ([x y] (list 'js* "(~{} * ~{})" x y))
+  ([x y] (check-numbers "(~{} * ~{})" x y))
   ([x y & more] `(* (* ~x ~y) ~@more)))
 
 (defmacro /
