@@ -66,6 +66,9 @@
 (defmacro set-unchecked-arithmetic! [v]
   (reset! *js-unchecked-arithmetic* v))
 
+;; arith-ops and def-arith-op-errors are helpers to help
+;; prevent code bloat from checked math ops
+
 (def arith-ops
   '[+ - * / == < > <= >= dec inc zero? pos? neg? min max mod
     bit-not bit-and bit-or bit-xor bit-and-not bit-clear bit-flip
