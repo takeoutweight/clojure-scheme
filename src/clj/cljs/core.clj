@@ -66,6 +66,18 @@
 (defmacro set-unchecked-arithmetic! [v]
   (reset! *js-unchecked-arithmetic* v))
 
+(def arith-ops
+  '[+ - * / == < > <= >= dec inc zero? pos? neg? min max mod
+    bit-not bit-and bit-or bit-xor bit-and-not bit-clear bit-flip
+    bit-test bit-shift-left bit-shift-right])
+
+(defmacro def-arith-op-errors []
+  `(do
+     (set! (.-arith cljs.core.errors) (~'js* "{}"))
+     ~@(for [op arith-ops]
+         `(set! ~(symbol "cljs.core.errors.arith" (str op))
+                ~(str "Unsupported operation: arguments to " op " must be numbers")))))
+
 (defn check-numbers [expr op & args]
   (let [return-expr (if (seq args)
                       `(~'js* ~expr ~@args)
@@ -74,7 +86,7 @@
      return-expr
      `(if (~'js* ~(s/join " && " (repeat (count args) "typeof ~{} == 'number'")) ~@args)
         ~return-expr
-        (throw (js/Error. ~(str "Unsupported operation: arguments to " op " must be numbers")))))))
+        (throw (js/Error. ~(symbol "cljs.core.errors.arith" (str op))))))))
 
 (defmacro +
   ([] 0)

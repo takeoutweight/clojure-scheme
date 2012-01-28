@@ -12,6 +12,10 @@
             [goog.object :as gobject]
             [goog.array :as garray]))
 
+(set! cljs.core.errors (js* "{}"))
+;; install arithmetic op error strings - code size optimization
+(def-arith-op-errors)
+
 (def
   ^{:doc "Each runtime environment provides a diffenent way to print output.
   Whatever function *print-fn* is bound to will be passed any
