@@ -9,11 +9,12 @@
 (set! *warn-on-reflection* true)
 
 (ns cljs.compiler
-  (:refer-clojure :exclude [munge macroexpand-1])
+  (:refer-clojure :exclude [munge macroexpand-1 *unchecked-math*])
   (:require [clojure.java.io :as io]
             [clojure.string :as string]))
 
 (declare resolve-var)
+(def ^:dynamic *unchecked-math* (atom false))
 (require 'cljs.core)
 
 (def js-reserved
@@ -236,6 +237,9 @@
      (when (= :return (:context env#)) (print "return "))
      ~@body
      (when-not (= :expr (:context env#)) (print ";\n"))))
+
+(defmethod emit :no-op [m]
+  (println "null;"))
 
 (defmethod emit :var
   [{:keys [info env] :as arg}]
@@ -788,21 +792,30 @@
   [_ env [_ target val] _]
   (disallowing-recur
    (let [enve (assoc env :context :expr)
-         targetexpr (if (symbol? target)
-                      (do
-                        (let [local (-> env :locals target)]
-                          (assert (or (nil? local)
-                                      (and (:field local)
-                                           (:mutable local)))
-                                  "Can't set! local var or non-mutable field"))
-                        (analyze-symbol enve target))
-                      (when (seq? target)
-                        (let [targetexpr (analyze-seq enve target nil)]
-                          (when (:field targetexpr)
-                            targetexpr))))
+         targetexpr (cond
+                     (= target '*unchecked-math*)
+                     (do
+                       (reset! *unchecked-math* val)
+                       ::set-unchecked-math)
+
+                     (symbol? target)
+                     (do
+                       (let [local (-> env :locals target)]
+                         (assert (or (nil? local)
+                                     (and (:field local)
+                                          (:mutable local)))
+                                 "Can't set! local var or non-mutable field"))
+                       (analyze-symbol enve target))
+                     
+                     :else (when (seq? target)
+                             (let [targetexpr (analyze-seq enve target nil)]
+                               (when (:field targetexpr)
+                                 targetexpr))))
          valexpr (analyze enve val)]
      (assert targetexpr "set! target must be a field or a symbol naming a var")
-     {:env env :op :set! :target targetexpr :val valexpr :children [targetexpr valexpr]})))
+     (if (= targetexpr ::set-unchecked-math)
+       {:env env :op :no-op}
+       {:env env :op :set! :target targetexpr :val valexpr :children [targetexpr valexpr]}))))
 
 (defmethod parse 'ns
   [_ env [_ name & args] _]

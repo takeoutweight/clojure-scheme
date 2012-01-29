@@ -61,11 +61,6 @@
 (defmacro aset [a i v]
   (list 'js* "(~{}[~{}] = ~{})" a i v))
 
-(def ^:dynamic *js-unchecked-arithmetic* (atom false))
-
-(defmacro set-unchecked-arithmetic! [v]
-  (reset! *js-unchecked-arithmetic* v))
-
 ;; arith-ops and def-arith-op-errors are helpers to help
 ;; prevent code bloat from checked math ops
 
@@ -85,7 +80,7 @@
   (let [return-expr (if (seq args)
                       `(~'js* ~expr ~@args)
                       `(~'js* ~expr))]
-   (if @*js-unchecked-arithmetic*
+   (if @cljs.compiler/*unchecked-math*
      return-expr
      `(if (~'js* ~(s/join " && " (repeat (count args) "typeof ~{} == 'number'")) ~@args)
         ~return-expr
@@ -111,7 +106,7 @@
 (defmacro /
   ([x] `(/ 1 ~x))
   ([x y] (let [expr (check-numbers "(~{} / ~{})" '/ x y)]
-           (if @*js-unchecked-arithmetic*
+           (if @cljs.compiler/*unchecked-math*
              expr
              `(if (zero? ~y)
                 (throw (js/Error. "Arithmetic exception: divide by zero"))
