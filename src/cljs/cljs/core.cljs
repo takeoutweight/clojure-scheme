@@ -6,19 +6,15 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software.
 
-(ns cljs.core
-  (:require [goog.string :as gstring]
-            [goog.string.StringBuffer :as gstringbuf]
-            [goog.object :as gobject]
-            [goog.array :as garray]))
+(ns cljs.core)
 
 (def
   ^{:doc "Each runtime environment provides a diffenent way to print output.
   Whatever function *print-fn* is bound to will be passed any
   Strings which should be printed."}
   *print-fn*
-  (fn [_]
-    (throw (js/Error. "No *print-fn* fn set for evaluation environment"))))
+  (fn [s]
+    (scm* [s] (show s))))
 
 (def
   ^{:doc "bound in a repl thread to the most recent value printed"}
@@ -32,47 +28,25 @@
   ^{:doc "bound in a repl thread to the third most recent value printed"}
   *3)
 
-(defn truth_
-  "Internal - do not use!"
-  [x]
-  (js* "(~{x} != null && ~{x} !== false)"))
-
-(defn type_satisfies_
-  "Internal - do not use!"
-  [p x]
-  (or
-   (aget p (goog.typeOf x))
-   (aget p "_")
-   false))
-
-(defn is_proto_
-  [x]
-  (js* "(~{x}).constructor.prototype === ~{x}"))
-
 (def
   ^{:doc "When compiled for a command-line target, whatever
   function *main-fn* is set to will be called with the command-line
   argv as arguments"}
   *main-cli-fn* nil)
 
-(defn missing-protocol [proto obj]
-  (js/Error (js* "~{}+~{}+~{}+~{}+~{}+~{}"
-                 "No protocol method " proto
-                 " defined for type " (goog/typeOf obj) ": " obj)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; arrays ;;;;;;;;;;;;;;;;
 
 (defn aclone
   "Returns a javascript array, cloned from the passed in array"
-  [array-like]
-  #_(goog.array.clone array-like)
-  (js* "Array.prototype.slice.call(~{array-like})"))
+  [a]
+  (scm* [a] (vector-copy a)))
 
 (defn array
-  "Creates a new javascript array.
+  "Creates a raw scheme \"array\" (a mutable vector, distinct from persistent clojure Vector)
 @param {...*} var_args" ;;array is a special case, don't emulate this doc string
-  [var-args]            ;; [& items]
-  (js* "Array.prototype.slice.call(arguments)"))
+  ([] (scm* [] (vector)))
+  ([var-args] ;; [& items]
+     (scm* [var-args] (apply vector var-args))))
 
 (defn aget
   "Returns the value at the index."
@@ -82,38 +56,19 @@
 (defn aset
   "Sets the value at the index."
   [array i val]
-  (cljs.core/aset array i val))
+  (cljs.core/aset array i val) (scm* [array i val] (vector-set! array i val)))
 
 (defn alength
   "Returns the length of the Java array. Works on arrays of all types."
   [array]
-  (.-length array))
+  (cljs.core/alength array))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; core protocols ;;;;;;;;;;;;;
 
+(scm* {} (load "cond-apply.scm"))
+(scm* {} (define cljs.core/protocol-impls (make-table)))
 (defprotocol IFn
-  (-invoke
-    [this]
-    [this a]
-    [this a b]
-    [this a b c]
-    [this a b c d]
-    [this a b c d e]
-    [this a b c d e f]
-    [this a b c d e f g]
-    [this a b c d e f g h]
-    [this a b c d e f g h i]
-    [this a b c d e f g h i j]
-    [this a b c d e f g h i j k]
-    [this a b c d e f g h i j k l]
-    [this a b c d e f g h i j k l m]
-    [this a b c d e f g h i j k l m n]
-    [this a b c d e f g h i j k l m n o]
-    [this a b c d e f g h i j k l m n o p]
-    [this a b c d e f g h i j k l m n o p q]
-    [this a b c d e f g h i j k l m n o p q s]
-    [this a b c d e f g h i j k l m n o p q s t]
-    [this a b c d e f g h i j k l m n o p q s t rest]))
+  (-invoke [this args]))
 
 (defprotocol ICounted
   (-count [coll] "constant time count"))
@@ -197,7 +152,28 @@
   (-add-watch [this key f])
   (-remove-watch [this key]))
 
+(defprotocol IPairable
+  (-pair [coll]))
+
+(defn pair [coll]
+  (-pair coll))
+
 ;;;;;;;;;;;;;;;;;;; fundamentals ;;;;;;;;;;;;;;;
+;basic Scheme types-- do not instantiate.
+(def Class (scm* {} Class-class))
+(deftype Number [])
+(deftype Pair [])
+(deftype Boolean [])
+(deftype Nil [])
+(deftype Null [])
+(deftype Char [])
+(deftype Array [])
+(deftype Table [])
+(deftype Symbol [])
+(deftype Keyword [])
+(deftype Procedure [])
+(deftype String [])
+
 (defn identical?
   "Tests if 2 arguments are the same object"
   [x y]
@@ -216,18 +192,40 @@
   [x]
   (identical? x nil))
 
+(defn char?
+  "Returns true if x is a char, false otherwise."
+  [x] (scm* [x] (char? x)))
+
 (defn type [x]
-  (js* "(~{x}).constructor"))
+  (case (cljs.core/scm-type-idx x)
+    0 Number ;Fixnum
+    3 Pair
+    2 (case x
+        (true false) Boolean
+        nil Nil ;we hijack #!void to map to Clojure's nil
+        (scm* [x] ()) Null            ;raw scheme null = empty list.
+        (cond
+          (char? x) Char
+          :else (throw "Can't discern special type")))
+    1 (case (cljs.core/scm-subtype-idx x)
+        0 Array ; raw scheme vector
+        (2 3 30 31) Number            ;Rational ;Complex ;Flonum, ;Bignum
+        4 Table
+        6 (scm-object->class x) ;Meroon object
+        8 Symbol
+        9 Keyword
+        14 Procedure
+        19 String
+        (20 21 22 23 24 25 26 27 28 29) Array ;Various numerically-typed scheme vectors
+        )))
 
-(extend-type js/Function
-  IPrintable
-  (-pr-seq [this]
-    (list "#<" (str this) ">")))
-
+(defn scm-equal?-hash [o]
+  (scm* [o] (equal?-hash o)))
 ;;;;;;;;;;;;;;;;;;; protocols on primitives ;;;;;;;;
 (declare hash-map list equiv-sequential)
 
-(extend-type nil
+;maps to Gambit scheme's #!void
+(extend-type Nil
   IEquiv
   (-equiv [_ o] (nil? o))
 
@@ -241,7 +239,7 @@
   (-conj [_ o] (list o))
 
   IPrintable
-  (-pr-seq [o] (list "nil"))
+  (-pr-seq [o _] (list "nil"))
 
   IIndexed
   (-nth
@@ -251,6 +249,12 @@
   ISeq
   (-first [_] nil)
   (-rest [_] (list))
+
+  ISeqable
+  (-seq [_] nil)
+
+  IPairable
+  (-pair [_] (scm* [] '()))
 
   ILookup
   (-lookup
@@ -282,26 +286,111 @@
     ([_ f start] start))
 
   IHash
-  (-hash [o] 0))
+  (-hash [o] (scm-equal?-hash o)))
 
-(extend-type js/Date
+;The scheme empty list '()
+(extend-type Null 
   IEquiv
-  (-equiv [o other] (identical? (. o (toString)) (. other (toString)))))
+  (-equiv [_ o] (scm* [o] (null? o)))
 
-(extend-type number
+  ICounted
+  (-count [_] 0)
+
+  IEmptyableCollection
+  (-empty [_] (scm* [] '()))
+
+  ICollection
+  (-conj [_ o] (scm* [o] (list o)))
+
+  IPrintable
+  (-pr-seq [o _] (list "#<null>"))
+
+  IIndexed
+  (-nth
+   ([_ n] nil)
+   ([_ n not-found] not-found))
+
+  ISeq
+  (-first [_] nil)
+  (-rest [_] (scm* [] '()))
+
+  ISeqable
+  (-seq [coll] nil)
+
+  IPairable
+  (-pair [coll] coll)
+
+  IReduce
+  (-reduce
+    ([_ f] (f))
+    ([_ f start] start))
+
+  IHash
+  (-hash [o] (scm-equal?-hash o)))
+
+(extend-type Pair 
+  ISeq
+  (-first [coll] (scm* [coll] (car coll)))
+  (-rest [coll] (scm* [coll] (cdr coll)))
+
+  ICollection
+  (-conj [coll o] (scm* [coll o] (cons o coll)))
+
+  IEmptyableCollection
+  (-empty [coll] (scm* [] '()))
+
+  ISequential
+  IEquiv
+  (-equiv [coll other] (equiv-sequential coll other))
+
+  IHash
+  (-hash [coll] (hash-coll coll))
+
+  ICounted
+  (-count [coll] (scm* [coll] (length coll)))
+
+  IStack
+  (-peek [coll] (-first coll))
+  (-pop [coll] (-rest coll))
+
+  IIndexed
+  (-nth [coll n] (scm* [coll n] (list-ref coll n)))
+  (-nth [coll n not-found]
+    (if (and (<= 0 n) (< n (-count coll)))
+      (scm* [coll n] (list-ref coll n))
+      not-found))
+
+  ISeqable
+  (-seq [coll] coll)
+
+  IPairable
+  (-pair [coll] coll)
+
+  IReduce 
+  (-reduce
+    ([v f]
+       (if (scm* [v] (null? v))
+         (f)
+         (-reduce (scm* [v] (cdr v)) f (scm* [v] (car v)))))
+    ([v f start]
+       (if (scm* [v] (null? v))
+         start
+         (recur (scm* [v] (cdr v)) f (f start (scm* [v] (car v))) )))))
+
+(extend-type Number
   IEquiv
   (-equiv [x o] (identical? x o))
 
   IHash
-  (-hash [o] o))
+  (-hash [o] (scm-equal?-hash o)))
 
-(extend-type boolean
+(extend-type Boolean
   IHash
-  (-hash [o] (js* "((~{o} === true) ? 1 : 0)")))
+  (-hash [o] (scm-equal?-hash o)))
 
-(extend-type function
+(extend-type Procedure
   IHash
-  (-hash [o] (goog.getUid o)))
+  (-hash [o] (scm-equal?-hash o)))
 
 ;;this is primitive because & emits call to array-seq
 (defn inc
@@ -332,25 +421,31 @@ reduces them without incurring seq initialization"
 (deftype IndexedSeq [a i]
   ISeqable
   (-seq [this] this)
+
+  IPairable
+  (-pair [this] (scm* [a] (vector->list a)))
+  
   ISeq
   (-first [_] (aget a i))
-  (-rest [_] (if (< (inc i) (.-length a))
+  (-rest [_] (if (< (inc i) (alength a))
                (IndexedSeq. a (inc i))
                (list)))
 
   ICounted
-  (-count [_] (- (.-length a) i))
+  (-count [_] (- (alength a) i))
 
   IIndexed
-  (-nth [coll n]
-    (let [i (+ n i)]
-      (when (< i (.-length a))
-        (aget a i))))
-  (-nth [coll n not-found]
-    (let [i (+ n i)]
-      (if (< i (.-length a))
-        (aget a i)
-        not-found)))
+  (-nth
+    ([coll n]
+       (let [i (+ n i)]
+         (when (< i (alength a))
+           (aget a i))))
+    ([coll n not-found]
+          (let [i (+ n i)]
+            (if (< i (alength a))
+              (aget a i)
+              not-found))))
+  
 
   ISequential
   IEquiv
@@ -360,34 +455,55 @@ reduces them without incurring seq initialization"
   (-conj [coll o] (cons o coll))
 
   IReduce
-  (-reduce [_ f]
-    (ci-reduce a f (aget a i) (inc i)))
-  (-reduce [_ f start]
-    (ci-reduce a f start i))
+  (-reduce
+    ([_ f]
+       (ci-reduce a f (aget a i) (inc i)))
+    ([_ f start]
+       (ci-reduce a f start i)))
 
   IHash
   (-hash [coll] (hash-coll coll)))
 
 (defn prim-seq [prim i]
-  (when-not (= 0 (.-length prim))
+  (when-not (= 0 (alength prim))
     (IndexedSeq. prim i)))
 
 (defn array-seq [array i]
   (prim-seq array i))
 
-(extend-type array
+(declare Vector)
+(extend-type Array
+  IWithMeta
+  (-with-meta [coll meta] (Vector. meta coll))
+  
   ISeqable
   (-seq [array] (array-seq array 0))
 
-  ICounted
-  (-count [a] (.-length a))
+  IPairable
+  (-pair [coll] (scm* [coll] (vector->list coll)))
 
-  IIndexed
+  ICounted
+  (-count [a] (alength a))
+
+  ICollection
+  (-conj [coll o]
+    (scm* [coll o] (vector-append coll (vector o))))
+
+  IAssociative
+  (-assoc [array k v]
+    (let [new-array (aclone array)]
+      (aset new-array k v)
+      new-array))
+  
+  IVector
+  (-assoc-n [coll n val] (-assoc coll n val))
+
+   IIndexed
   (-nth
     ([array n]
-       (if (< n (.-length array)) (aget array n)))
+       (if (< n (alength array)) (aget array n)))
     ([array n not-found]
-       (if (< n (.-length array)) (aget array n)
+       (if (< n (alength array)) (aget array n)
            not-found)))
 
   ILookup
@@ -403,6 +519,8 @@ reduces them without incurring seq initialization"
        (ci-reduce array f))
     ([array f start]
        (ci-reduce array f start))))
+
+
 
 (defn seq
   "Returns a seq on the collection. If the collection is
@@ -464,17 +582,6 @@ reduces them without incurring seq initialization"
     (recur (next s))
     (first s)))
 
-(extend-type default
-  IEquiv
-  (-equiv [x o] (identical? x o))
-
-  ICounted
-  (-count [x]
-    (loop [s (seq x) n 0]
-      (if s
-	(recur (next s) (inc n))
-	n))))
-
 (defn not
   "Returns true if x is logical false, false otherwise."
   [x] (if x false true))
@@ -507,9 +614,9 @@ reduces them without incurring seq initialization"
   also works for strings, arrays, regex Matchers and Lists, and,
   in O(n) time, for sequences."
   ([coll n]
-     (-nth coll (.floor js/Math n)))
+     (-nth coll n))
   ([coll n not-found]
-     (-nth coll (.floor js/Math n) not-found)))
+     (-nth coll n not-found)))
 
 (defn get
   "Returns the value mapped to key, not-found or nil if key not present."
@@ -625,21 +732,9 @@ reduces them without incurring seq initialization"
   "Return true if x satisfies IVector"
   [x] (satisfies? IVector x))
 
-;;;;;;;;;;;;;;;;;;;; js primitives ;;;;;;;;;;;;
-(defn js-obj []
-  (js* "{}"))
-
-(defn js-keys [obj]
-  (let [keys (array)]
-    (goog.object/forEach obj (fn [val key obj] (.push keys key)))
-    keys))
-
-(defn js-delete [obj key]
-  (js* "delete ~{obj}[~{key}]"))
-
 ;;;;;;;;;;;;;;;; preds ;;;;;;;;;;;;;;;;;;
 
-(def ^:private lookup-sentinel (js-obj))
+(def ^:private lookup-sentinel (fn []))
 
 (defn false?
   "Returns true if x is the value false, false otherwise."
@@ -649,11 +744,11 @@ reduces them without incurring seq initialization"
   "Returns true if x is the value true, false otherwise."
   [x] (cljs.core/true? x))
 
-(defn undefined? [x]
+#_(defn undefined? [x]
   (cljs.core/undefined? x))
 
 (defn instance? [t o]
-  (js* "(~{o} != null && (~{o} instanceof ~{t} || ~{o}.constructor === ~{t} || ~{t} === Object))"))
+  (identical? t (type o)))
 
 (defn seq?
   "Return true if s satisfies ISeq"
@@ -666,29 +761,24 @@ reduces them without incurring seq initialization"
   (if x true false))
 
 (defn string? [x]
-  (and (goog/isString x)
-       (not (or (= (.charAt x 0) \uFDD0)
-                (= (.charAt x 0) \uFDD1)))))
+  (instance? String x))
 
 (defn keyword? [x]
-  (and (goog/isString x)
-       (= (.charAt x 0) \uFDD0)))
+  (instance? Keyword x))
 
 (defn symbol? [x]
-  (and (goog/isString x)
-       (= (.charAt x 0) \uFDD1)))
+  (instance? Symbol x))
 
 (defn number? [n]
-  (goog/isNumber n))
+  (instance? Number n))
 
 (defn fn? [f]
-  (goog/isFunction f))
+  (instance? Procedure f))
 
 (defn integer?
   "Returns true if n is an integer.  Warning: returns true on underflow condition."
   [n]
-  (and (number? n)
-       (js* "(~{n} == ~{n}.toFixed())")))
+  (scm* [n] (fixnum? n)))
 
 (defn contains?
   "Returns true if key is present in the given collection, otherwise
@@ -787,6 +877,21 @@ reduces them without incurring seq initialization"
   ([f val coll]
      (-reduce coll f val)))
 
+; simple nth based on seqs, used as default
+(defn- seq-nth
+  ([coll n]
+     (if (= 0 n)
+       (first coll)
+       (if-let [nxt (next coll)]
+         (seq-nth nxt (dec n))
+         (throw "Index out of range"))))
+  ([coll n not-found]
+     (if (= 0 n)
+       (first coll)
+       (if-let [nxt (next coll)]
+         (seq-nth nxt (dec n) not-found)
+         not-found))))
+
 ; simple reduce based on seqs, used as default
 (defn- seq-reduce
   ([f coll]
@@ -798,14 +903,6 @@ reduces them without incurring seq initialization"
       (if coll
         (recur (f val (first coll)) (next coll))
         val))))
-
-(extend-type default
-  IReduce
-  (-reduce
-    ([coll f]
-       (seq-reduce f coll))
-    ([coll f start]
-       (seq-reduce f start coll))))
 
 ;;; Math - variadic forms will not work until the following implemented:
 ;;; first, next, reduce
@@ -835,7 +932,7 @@ reduces them without incurring seq initialization"
   "If no denominators are supplied, returns 1/numerator,
   else returns numerator divided by all of the denominators."  
   ([x] (/ 1 x))
-  ([x y] (js* "(~{x} / ~{y})")) ;; FIXME: waiting on cljs.core//
+  ([x y] (scm* [x y] (/ x y)))
   ([x y & more] (reduce / (/ x y) more)))
 
 (defn <
@@ -947,10 +1044,14 @@ reduces them without incurring seq initialization"
   "Bitwise or"
   [x y] (cljs.core/bit-or x y))
 
+(defn bit-not
+  "Bitwise complement"
+  [x] (cljs.core/bit-not x))
+
 (defn bit-and-not
   "Bitwise and"
   [x y] (cljs.core/bit-and-not x y))
-
+(comment
 (defn bit-clear
   "Clear bit at index n"
   [x n]
@@ -960,10 +1061,6 @@ reduces them without incurring seq initialization"
   "Flip bit at index n"
   [x n]
   (cljs.core/bit-flip x n))
-
-(defn bit-not
-  "Bitwise complement"
-  [x] (cljs.core/bit-not x))
 
 (defn bit-set
   "Set bit at index n"
@@ -981,7 +1078,7 @@ reduces them without incurring seq initialization"
 
 (defn bit-shift-right
   "Bitwise shift right"
-  [x n] (cljs.core/bit-shift-right x n))
+  [x n] (cljs.core/bit-shift-right x n)))
 
 (defn ==
   "Returns non-nil if nums all have the equivalent
@@ -1018,52 +1115,24 @@ reduces them without incurring seq initialization"
       (recur (dec n) (next xs))
       xs)))
 
-(extend-type default
-  IIndexed
-  (-nth
-   ([coll n]
-      (if-let [xs (nthnext coll n)]
-        (first xs)
-        (throw (js/Error. "Index out of bounds"))))
-   ([coll n not-found]
-      (if-let [xs (nthnext coll n)]
-        (first xs)
-        not-found))))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;; basics ;;;;;;;;;;;;;;;;;;
-
-(defn- str*
-  "Internal - do not use!"
-  ([] "")
-  ([x] (cond
-        (nil? x) ""
-        :else (. x (toString))))
-  ([x & ys]
-     ((fn [sb more]
-        (if more
-          (recur (. sb  (append (str* (first more)))) (next more))
-          (str* sb)))
-      (gstring/StringBuffer. (str* x)) ys)))
 
 (defn str
   "With no args, returns the empty string. With one arg x, returns
   x.toString().  (str nil) returns the empty string. With more than
   one arg, returns the concatenation of the str values of the args."
   ([] "")
-  ([x] (cond
-        (symbol? x) (. x (substring 2 (.-length x)))
-        (keyword? x) (str* ":" (. x (substring 2 (.-length x))))
-        (nil? x) ""
-        :else (. x (toString))))
+  ([x] (scm* {:strs (pair (-pr-seq x nil))} (apply string-append :strs)) )
   ([x & ys]
-     (apply str* x ys)))
+     (scm* {:x-s (str x) :ys-s (apply str ys)}
+           (string-append :x-s :ys-s))))
 
 (defn subs
   "Returns the substring of s beginning at start inclusive, and ending
   at end (defaults to length of string), exclusive."
-  ([s start] (.substring s start))
-  ([s start end] (.substring s start end)))
+  ([s start] (scm* [s start] (substring s start)))
+  ([s start end] (scm* [s start end] (substring s start end))))
 
 (defn symbol
   "Returns a Symbol with the given namespace and name."
@@ -1115,39 +1184,7 @@ reduces them without incurring seq initialization"
   obj)
 
 ;;;;;;;;;;;;;;;; cons ;;;;;;;;;;;;;;;;
-(deftype List [meta first rest count]
-  IWithMeta
-  (-with-meta [coll meta] (List. meta first rest count))
-
-  IMeta
-  (-meta [coll] meta)
-
-  ISeq
-  (-first [coll] first)
-  (-rest [coll] rest)
-
-  IStack
-  (-peek [coll] first)
-  (-pop [coll] (-rest coll))
-
-  ICollection
-  (-conj [coll o] (List. meta o coll (inc count)))
-
-  IEmptyableCollection
-  (-empty [coll] cljs.core.List/EMPTY)
-
-  ISequential
-  IEquiv
-  (-equiv [coll other] (equiv-sequential coll other))
-
-  IHash
-  (-hash [coll] (hash-coll coll))
-
-  ISeqable
-  (-seq [coll] coll)
-
-  ICounted
-  (-count [coll] count))
+(declare empty-list)
 
 (deftype EmptyList [meta]
   IWithMeta
@@ -1165,7 +1202,7 @@ reduces them without incurring seq initialization"
   (-pop [coll] #_(throw (js/Error. "Can't pop empty list")))
 
   ICollection
-  (-conj [coll o] (List. meta o nil 1))
+  (-conj [coll o] (Cons. meta o empty-list))
 
   IEmptyableCollection
   (-empty [coll] coll)
@@ -1179,11 +1216,27 @@ reduces them without incurring seq initialization"
 
   ISeqable
   (-seq [coll] nil)
+  IPairable
+  (-pair [coll] (scm* [] '()))
 
   ICounted
-  (-count [coll] 0))
+  (-count [coll] 0)
 
-(set! cljs.core.List/EMPTY (EmptyList. nil))
+  IIndexed
+  (-nth
+    ([coll n]
+       (throw (str "index " n " out of bounds.")))
+    ([coll n not-found]
+       not-found))
+  
+  IReduce
+  (-reduce
+    ([_ f] (f))
+    ([_ f start] start)))
+
+(def empty-list (EmptyList. nil))
+
+
 
 (defn reverse
   "Returns a seq of the items in coll in reverse order. Not lazy."
@@ -1204,11 +1257,15 @@ reduces them without incurring seq initialization"
   (-first [coll] first)
   (-rest [coll] (if (nil? rest) () rest))
 
+  IStack
+  (-peek [coll] first)
+  (-pop [coll] (-rest coll))
+
   ICollection
   (-conj [coll o] (Cons. nil o coll))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.List/EMPTY meta))
+  (-empty [coll] (with-meta empty-list meta))
 
   ISequential
   IEquiv
@@ -1218,7 +1275,24 @@ reduces them without incurring seq initialization"
   (-hash [coll] (hash-coll coll))
 
   ISeqable
-  (-seq [coll] coll))
+  (-seq [coll] coll)
+
+  ICounted
+  (-count [c] (inc (count rest)))
+
+  IIndexed
+  (-nth
+    ([coll n] (seq-nth coll n))
+    ([coll n not-found] (seq-nth coll n not-found)))
+
+  IReduce 
+  (-reduce
+    ([v f] (seq-reduce f v))
+    ([v f start] (seq-reduce f start v)))
+
+  IPairable
+  (-pair [coll] (let [pairedrest (pair rest)]
+                  (scm* [first pairedrest] (cons first pairedrest)))))
 
 (defn cons
   "Returns a new seq where x is the first element and seq is the rest."
@@ -1227,22 +1301,36 @@ reduces them without incurring seq initialization"
 
 (declare hash-map)
 
-(extend-type string
+#_(set! js/String.prototype.apply
+      (fn
+        [s args]
+        (if (< (count args) 2)
+          (get (aget args 0) s)
+          (get (aget args 0) s (aget args 1)))))
+
+(extend-type String
+  IFn
+  (-invoke
+    ([this coll]
+       (get coll this))
+    ([this coll not-found]
+       (get coll this not-found)))
+
   IHash
-  (-hash [o] (goog.string/hashCode o))
+  (-hash [o] (scm-equal?-hash o))
 
   ISeqable
   (-seq [string] (prim-seq string 0))
   
   ICounted
-  (-count [s] (.-length s))
+  (-count [s] (alength s))
 
   IIndexed
   (-nth
-    ([string n]
-       (if (< n (-count string)) (.charAt string n)))
+    ([string n] ;//TODO could catch exception
+       (if (< n (-count string)) (scm* [string n] (string-ref string n))))
     ([string n not-found]
-       (if (< n (-count string)) (.charAt string n)
+       (if (< n (-count string)) (scm* [string n] (string-ref string n))
            not-found)))
 
   ILookup
@@ -1259,33 +1347,18 @@ reduces them without incurring seq initialization"
     ([string f start]
        (ci-reduce string f start))))
 
-;;hrm
-(extend-type js/String
-  IFn
-  (-invoke
-    ([this coll]
-       (get coll (.toString this)))
-    ([this coll not-found]
-       (get coll (.toString this) not-found))))
-
-(set! js/String.prototype.apply
-      (fn
-        [s args]
-        (if (< (count args) 2)
-          (get (aget args 0) s)
-          (get (aget args 0) s (aget args 1)))))
-
 ; could use reify
 ;;; LazySeq ;;;
 
 (defn- lazy-seq-value [lazy-seq]
-  (let [x (.-x lazy-seq)]
-    (if (.-realized lazy-seq)
+  (let [x (scm* [lazy-seq] (cljs.core/LazySeq-x lazy-seq))]
+    (if (scm* [lazy-seq] (cljs.core/LazySeq-realized lazy-seq))
       x
       (do
-        (set! (.-x lazy-seq) (x))
-        (set! (.-realized lazy-seq) true)
-        (.-x lazy-seq)))))
+        (let [forced-val (x)]
+          (scm* [lazy-seq forced-val] (cljs.core/LazySeq-x-set! lazy-seq forced-val))
+          (scm* [lazy-seq true] (cljs.core/LazySeq-realized-set! lazy-seq true))
+          forced-val)))))
 
 (deftype LazySeq [meta realized x]
   IWithMeta
@@ -1293,6 +1366,9 @@ reduces them without incurring seq initialization"
 
   IMeta
   (-meta [coll] meta)
+
+  IPairable
+  (-pair [coll] (pair (-seq coll)))
 
   ISeq
   (-first [coll] (first (lazy-seq-value coll)))
@@ -1302,7 +1378,7 @@ reduces them without incurring seq initialization"
   (-conj [coll o] (cons o coll))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.List/EMPTY meta))
+  (-empty [coll] (with-meta empty-list meta))
 
   ISequential
   IEquiv
@@ -1312,19 +1388,23 @@ reduces them without incurring seq initialization"
   (-hash [coll] (hash-coll coll))
 
   ISeqable
-  (-seq [coll] (seq (lazy-seq-value coll))))
+  (-seq [coll] (seq (lazy-seq-value coll)))
+
+  IIndexed
+  (-nth
+    ([coll n] (seq-nth coll n))
+    ([coll n not-found] (seq-nth coll n not-found)))
+
+  IReduce 
+  (-reduce
+    ([v f] (seq-reduce f v))
+    ([v f start] (seq-reduce f start v))))
 
 ;;;;;;;;;;;;;;;;
 
 (defn to-array
-  "Naive impl of to-array as a start."
   [s]
-  (let [ary (array)]
-    (loop [s s]
-      (if (seq s)
-        (do (. ary push (first s))
-            (recur (next s)))
-        ary))))
+  (array s))
 
 (defn- bounded-count [s n]
   (loop [s s i n sum 0]
@@ -1378,50 +1458,9 @@ reduces them without incurring seq initialization"
 (defn apply
   "Applies fn f to the argument list formed by prepending intervening arguments to args.
   First cut.  Not lazy.  Needs to use emitted toApply."
-  ([f args]
-     (let [fixed-arity (.-cljs$lang$maxFixedArity f)]
-       (if (.-cljs$lang$applyTo f)
-         (if (<= (bounded-count args (inc fixed-arity))
-                 fixed-arity)
-           (.apply f f (to-array args))
-           (.cljs$lang$applyTo f args))
-         (.apply f f (to-array args)))))
-  ([f x args]
-     (let [arglist (list* x args)
-           fixed-arity (.-cljs$lang$maxFixedArity f)]
-       (if (.-cljs$lang$applyTo f)
-         (if (<= (bounded-count arglist fixed-arity)
-                 fixed-arity)
-           (.apply f f (to-array arglist))
-           (.cljs$lang$applyTo f arglist))
-         (.apply f f (to-array arglist)))))
-  ([f x y args]
-     (let [arglist (list* x y args)
-           fixed-arity (.-cljs$lang$maxFixedArity f)]
-       (if (.-cljs$lang$applyTo f)
-         (if (<= (bounded-count arglist fixed-arity)
-                 fixed-arity)
-           (.apply f f (to-array arglist))
-           (.cljs$lang$applyTo f arglist))
-         (.apply f f (to-array arglist)))))
-  ([f x y z args]
-     (let [arglist (list* x y z args)
-           fixed-arity (.-cljs$lang$maxFixedArity f)]
-       (if (.-cljs$lang$applyTo f)
-         (if (<= (bounded-count arglist fixed-arity)
-                 fixed-arity)
-           (.apply f f (to-array arglist))
-           (.cljs$lang$applyTo f arglist))
-         (.apply f f (to-array arglist)))))
-  ([f a b c d & args]
-     (let [arglist (cons a (cons b (cons c (cons d (spread args)))))
-           fixed-arity (.-cljs$lang$maxFixedArity f)]
-       (if (.-cljs$lang$applyTo f)
-         (if (<= (bounded-count arglist fixed-arity)
-                 fixed-arity)
-           (.apply f f (to-array arglist))
-           (.cljs$lang$applyTo f arglist))
-         (.apply f f (to-array arglist))))))
+  ([f args] (let [arglist (-pair args)] (scm* [f arglist] (apply f arglist))))
+  ([f x & args] (let [r (concat [x] (butlast args) (last args))]
+                  (apply f r))))
 
 (defn vary-meta
  "Returns an object of the same type and value as obj, with
@@ -1931,7 +1970,7 @@ reduces them without incurring seq initialization"
 
 
 ;;; Vector
-
+(declare empty-vector)
 (deftype Vector [meta array]
   IWithMeta
   (-with-meta [coll meta] (Vector. meta array))
@@ -1941,24 +1980,23 @@ reduces them without incurring seq initialization"
 
   IStack
   (-peek [coll]
-    (let [count (.-length array)]
+    (let [count (alength array)]
       (when (> count 0)
         (aget array (dec count)))))
   (-pop [coll]
-    (if (> (.-length array) 0)
+    (if (> (alength array) 0)
       (let [new-array (aclone array)]
-        (. new-array (pop))
+        (scm* [new-array] (subvector new-array 0 (vector-length new-array)))
         (Vector. meta new-array))
       (throw (js/Error. "Can't pop empty vector"))))
 
   ICollection
   (-conj [coll o]
-    (let [new-array (aclone array)]
-      (.push new-array o)
+    (let [new-array (scm* [array o] (vector-append array (vector o)))] 
       (Vector. meta new-array)))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.Vector/EMPTY meta))
+  (-empty [coll] (with-meta empty-vector meta))
 
   ISequential
   IEquiv
@@ -1969,30 +2007,33 @@ reduces them without incurring seq initialization"
 
   ISeqable
   (-seq [coll]
-    (when (> (.-length array) 0)
+    (when (> (alength array) 0)
       (let [vector-seq
-             (fn vector-seq [i]
-               (lazy-seq
-                 (when (< i (.-length array))
-                   (cons (aget array i) (vector-seq (inc i))))))]
+            (fn vector-seq [i]
+              (lazy-seq
+                (when (< i (alength array))
+                  (cons (aget array i) (vector-seq (inc i))))))]
         (vector-seq 0))))
 
+  IPairable
+  (-pair [this] (scm* [array] (vector->list array)))
+
   ICounted
-  (-count [coll] (.-length array))
+  (-count [coll] (alength array))
 
   IIndexed
-  (-nth [coll n]
-    (if (and (<= 0 n) (< n (.-length array)))
-      (aget array n)
-      #_(throw (js/Error. (str "No item " n " in vector of length " (.-length array))))))
-  (-nth [coll n not-found]
-    (if (and (<= 0 n) (< n (.-length array)))
-      (aget array n)
-      not-found))
+  (-nth
+    ([coll n] (aget array n))
+    ([coll n not-found]
+       (if (and (<= 0 n) (< n (alength array)))
+         (aget array n)
+         not-found)))
 
   ILookup
-  (-lookup [coll k] (-nth coll k nil))
-  (-lookup [coll k not-found] (-nth coll k not-found))
+  (-lookup
+    ([coll k] (-nth coll k nil))
+    ([coll k not-found] (-nth coll k not-found)))
+  
 
   IAssociative
   (-assoc [coll k v]
@@ -2004,23 +2045,25 @@ reduces them without incurring seq initialization"
   (-assoc-n [coll n val] (-assoc coll n val))
 
   IReduce
-  (-reduce [v f]
-	   (ci-reduce array f))
-  (-reduce [v f start]
-	   (ci-reduce array f start))
+  (-reduce
+    ([v f]
+       (ci-reduce array f))
+    ([v f start]
+       (ci-reduce array f start)))
+
 
   IFn
-  (-invoke [coll k]
-    (-lookup coll k))
-  (-invoke [coll k not-found]
-    (-lookup coll k not-found)))
+  (-invoke [coll [k not-found]]
+    (if (nil? not-found)
+      (-lookup coll k)
+      (-lookup coll k not-found))))
 
-(set! cljs.core.Vector/EMPTY (Vector. nil (array)))
+(def empty-vector (Vector. nil (array)))
 
-(set! cljs.core.Vector/fromArray (fn [xs] (Vector. nil xs)))
+(defn vector-from-array [xs] (Vector. nil xs))
 
 (defn vec [coll]
-  (reduce conj cljs.core.Vector/EMPTY coll)) ; using [] here causes infinite recursion
+  (reduce conj empty-vector coll)) ; using [] here causes infinite recursion
 
 (defn vector [& args] (vec args))
 
@@ -2044,7 +2087,7 @@ reduces them without incurring seq initialization"
     (Subvec. meta (-assoc-n v end o) start (inc end)))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.Vector/EMPTY meta))
+  (-empty [coll] (with-meta empty-vector meta))
 
   ISequential
   IEquiv
@@ -2059,21 +2102,27 @@ reduces them without incurring seq initialization"
                        (when-not (= i end)
                          (cons (-nth v i)
                                (lazy-seq
-                                (subvec-seq (inc i))))))]
+                                 (subvec-seq (inc i))))))]
       (subvec-seq start)))
+
+  IPairable
+  (-pair [this] (scm* [v start end] (vector->list (subvector v start end))))
 
   ICounted
   (-count [coll] (- end start))
 
   IIndexed
-  (-nth [coll n]
-    (-nth v (+ start n)))
-  (-nth [coll n not-found]
-    (-nth v (+ start n) not-found))
+  (-nth
+    ([coll n]
+       (-nth v (+ start n)))
+    ([coll n not-found]
+           (-nth v (+ start n) not-found)))
 
   ILookup
-  (-lookup [coll k] (-nth coll k nil))
-  (-lookup [coll k not-found] (-nth coll k not-found))
+  (-lookup
+    ([coll k] (-nth coll k nil))
+    ([coll k not-found] (-nth coll k not-found)))
+  
 
   IAssociative
   (-assoc [coll key val]
@@ -2085,16 +2134,18 @@ reduces them without incurring seq initialization"
   (-assoc-n [coll n val] (-assoc coll n val))
 
   IReduce
-  (-reduce [coll f]
-    (ci-reduce coll f))
-  (-reduce [coll f start]
-    (ci-reduce coll f start))
+  (-reduce
+    ([coll f]
+       (ci-reduce coll f))
+    ([coll f start]
+       (ci-reduce coll f start)))
+  
 
   IFn
-  (-invoke [coll k]
-    (-lookup coll k))
-  (-invoke [coll k not-found]
-    (-lookup coll k not-found)))
+  (-invoke [coll [k not-found]]
+    (if (nil? not-found)
+      (-lookup coll k)
+      (-lookup coll k not-found))))
 
 (defn subvec
   "Returns a persistent vector of the items in vector from
@@ -2129,7 +2180,7 @@ reduces them without incurring seq initialization"
   (-conj [coll o] (cons o coll))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.List/EMPTY meta))
+  (-empty [coll] (with-meta empty-list meta))
 
   ISequential
   IEquiv
@@ -2140,7 +2191,7 @@ reduces them without incurring seq initialization"
 
   ISeqable
   (-seq [coll] coll))
-
+(declare empty-persistent-queue)
 (deftype PersistentQueue [meta count front rear]
   IWithMeta
   (-with-meta [coll meta] (PersistentQueue. meta count front rear))
@@ -2168,7 +2219,7 @@ reduces them without incurring seq initialization"
       (PersistentQueue. meta (inc count) (conj front o) [])))
 
   IEmptyableCollection
-  (-empty [coll] cljs.core.PersistentQueue/EMPTY)
+  (-empty [coll] empty-persistent-queue)
 
   ISequential
   IEquiv
@@ -2182,12 +2233,12 @@ reduces them without incurring seq initialization"
     (let [rear (seq rear)]
       (if (or front rear)
         (PersistentQueueSeq. nil front (seq rear))
-        cljs.core.List/EMPTY)))
+        empty-list)))
 
   ICounted
   (-count [coll] count))
 
-(set! cljs.core.PersistentQueue/EMPTY (PersistentQueue. nil 0 nil []))
+(def empty-persistent-queue (PersistentQueue. nil 0 nil []))
 
 (deftype NeverEquiv []
   IEquiv
@@ -2210,7 +2261,7 @@ reduces them without incurring seq initialization"
 
 
 (defn- scan-array [incr k array]
-  (let [len (.-length array)]
+  (let [len (alength array)]
     (loop [i 0]
       (when (< i len)
         (if (= k (aget array i))
@@ -2223,7 +2274,8 @@ reduces them without incurring seq initialization"
 ; key already exists in strobj, the old value is overwritten. If a
 ; non-string key is assoc'ed, return a HashMap object instead.
 
-(defn- obj-map-contains-key?
+#_TODO
+#_(defn- obj-map-contains-key?
   ([k strobj]
      (obj-map-contains-key? k strobj true false))
   ([k strobj true-val false-val]
@@ -2232,7 +2284,7 @@ reduces them without incurring seq initialization"
        false-val)))
 
 (declare hash-map)
-(deftype ObjMap [meta keys strobj]
+#_(deftype ObjMap [meta keys strobj]
   IWithMeta
   (-with-meta [coll meta] (ObjMap. meta keys strobj))
 
@@ -2258,16 +2310,18 @@ reduces them without incurring seq initialization"
 
   ISeqable
   (-seq [coll]
-    (when (pos? (.-length keys))
+    (when (pos? (alength keys))
       (map #(vector % (aget strobj %)) keys)))
 
   ICounted
-  (-count [coll] (.-length keys))
+  (-count [coll] (alength keys))
 
   ILookup
-  (-lookup [coll k] (-lookup coll k nil))
-  (-lookup [coll k not-found]
-    (obj-map-contains-key? k strobj (aget strobj k) not-found))
+  (-lookup
+    ([coll k] (-lookup coll k nil))
+    ([coll k not-found]
+    (obj-map-contains-key? k strobj (aget strobj k) not-found)))
+  
 
   IAssociative
   (-assoc [coll k v]
@@ -2296,23 +2350,24 @@ reduces them without incurring seq initialization"
       coll)) ; key not found, return coll unchanged
 
   IFn
-  (-invoke [coll k]
-    (-lookup coll k))
-  (-invoke [coll k not-found]
-    (-lookup coll k not-found))) 
+  (-invoke [coll [k not-found]]
+    (if (nil? not-found)
+      (-lookup coll k)
+      (-lookup coll k not-found)))) 
 
-(set! cljs.core.ObjMap/EMPTY (ObjMap. nil (array) (js-obj)))
+#_(set! cljs.core.ObjMap/EMPTY (ObjMap. nil (array) (js-obj)))
 
-(set! cljs.core.ObjMap/fromObject (fn [ks obj] (ObjMap. nil ks obj)))
+#_(set! cljs.core.ObjMap/fromObject (fn [ks obj] (ObjMap. nil ks obj)))
 
 ; The keys field is an array of all keys of this map, in no particular
 ; order. Each key is hashed and the result used as a property name of
 ; hashobj. Each values in hashobj is actually a bucket in order to handle hash
 ; collisions. A bucket is an array of alternating keys (not their hashes) and
 ; vals.
-(deftype HashMap [meta count hashobj]
+(declare empty-hash-map)
+(deftype HashMap [meta table]
   IWithMeta
-  (-with-meta [coll meta] (HashMap. meta count hashobj))
+  (-with-meta [coll meta] (HashMap. meta table))
 
   IMeta
   (-meta [coll] meta)
@@ -2326,7 +2381,7 @@ reduces them without incurring seq initialization"
               entry)))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.HashMap/EMPTY meta))
+  (-empty [coll] (with-meta empty-hash-map meta))
 
   IEquiv
   (-equiv [coll other] (equiv-map coll other))
@@ -2336,83 +2391,134 @@ reduces them without incurring seq initialization"
 
   ISeqable
   (-seq [coll]
-    (when (pos? count)
-      (let [hashes (.sort (js-keys hashobj))]
-        (mapcat #(map vec (partition 2 (aget hashobj %)))
-                hashes))))
+    (map (fn [pr] [(scm* [pr] (car pr)) (scm* [pr] (cdr pr))])
+         (scm* [table] (table->list table))))
+
+  IReduce 
+  (-reduce
+    ([v f] (seq-reduce f v))
+    ([v f start] (seq-reduce f start v)))
 
   ICounted
-  (-count [coll] count)
+  (-count [coll] (scm* [table] (table-length table)))
 
   ILookup
-  (-lookup [coll k] (-lookup coll k nil))
-  (-lookup [coll k not-found]
-    (let [bucket (aget hashobj (hash k))
-          i (when bucket (scan-array 2 k bucket))]
-      (if i
-        (aget bucket (inc i))
-        not-found)))
+  (-lookup
+    ([coll k] (scm* [table k] (table-ref table k)))
+    ([coll k not-found]
+       (scm* [table k not-found]
+             (with-exception-catcher
+               (lambda (e) (if (unbound-table-key-exception? e)
+                             not-found
+                             (raise e)))
+               (lambda () (table-ref table k))))))  
 
   IAssociative
   (-assoc [coll k v]
-    (let [h (hash k)
-          bucket (aget hashobj h)]
-      (if bucket
-        (let [new-bucket (aclone bucket)
-              new-hashobj (goog.object/clone hashobj)]
-          (aset new-hashobj h new-bucket)
-          (if-let [i (scan-array 2 k new-bucket)]
-            (do                         ; found key, replace
-              (aset new-bucket (inc i) v)
-              (HashMap. meta count new-hashobj))
-            (do                         ; did not find key, append
-              (.push new-bucket k v)
-              (HashMap. meta (inc count) new-hashobj))))
-        (let [new-hashobj (goog.object/clone hashobj)] ; did not find bucket
-          (aset new-hashobj h (array k v))
-          (HashMap. meta (inc count) new-hashobj)))))
+    (let [newtable (scm* [table] (table-copy table))]
+      (scm* [newtable k v] (table-set! newtable k v))
+      (HashMap. meta newtable)))
   (-contains-key? [coll k]
-    (let [bucket (aget hashobj (hash k))
-          i (when bucket (scan-array 2 k bucket))]
-      (if i
-        true
-        false)))
+    (let [i (-lookup coll k lookup-sentinel)]
+      (if (identical? i lookup-sentinel)
+        false
+        true)))
 
   IMap
   (-dissoc [coll k]
-    (let [h (hash k)
-          bucket (aget hashobj h)
-          i (when bucket (scan-array 2 k bucket))]
-      (if (not i)
-        coll ; key not found, return coll unchanged
-        (let [new-hashobj (goog.object/clone hashobj)]
-          (if (> 3 (.-length bucket))
-            (js-delete new-hashobj h)
-            (let [new-bucket (aclone bucket)]
-              (.splice new-bucket i 2)
-              (aset new-hashobj h new-bucket)))
-          (HashMap. meta (dec count) new-hashobj)))))
+    (let [newtable (scm* [table] (table-copy table))]
+      (scm* [newtable k] (table-set! newtable k))
+      (HashMap. meta newtable)))
 
   IFn
-  (-invoke [coll k]
-    (-lookup coll k))
-  (-invoke [coll k not-found]
-    (-lookup coll k not-found)))
+  (-invoke [coll [k not-found]]
+    (if (nil? not-found)
+      (-lookup coll k)
+      (-lookup coll k not-found))))
 
-(set! cljs.core.HashMap/EMPTY (HashMap. nil 0 (js-obj)))
+(extend-type Table
+  IWithMeta
+  (-with-meta [coll meta] (HashMap. meta coll))
 
-(set! cljs.core.HashMap/fromArrays (fn [ks vs]
-  (let [len (.-length ks)]
-    (loop [i 0, out cljs.core.HashMap/EMPTY]
+  ICollection
+  (-conj [coll entry]
+    (if (vector? entry)
+      (-assoc coll (-nth entry 0) (-nth entry 1))
+      (reduce -conj
+              coll
+              entry)))
+
+  IEmptyableCollection
+  (-empty [coll] (scm* [] (make-table)))
+
+  IEquiv
+  (-equiv [coll other] (equiv-map coll other))
+
+  IHash
+  (-hash [coll] (scm-equal?-hash coll))
+
+  ISeqable
+  (-seq [table]
+    (map (fn [pr] [(scm* [pr] (car pr)) (scm* [pr] (cdr pr))])
+         (scm* [table] (table->list table))))
+
+  IReduce 
+  (-reduce
+    ([v f] (seq-reduce f v))
+    ([v f start] (seq-reduce f start v)))
+
+  ICounted
+  (-count [table] (scm* [table] (table-length table)))
+
+  ILookup
+  (-lookup
+    ([table k] (scm* [table k] (table-ref table k)))
+    ([table k not-found]
+       (scm* [table k not-found]
+             (with-exception-catcher
+               (lambda (e) (if (unbound-table-key-exception? e)
+                             not-found
+                             (raise e)))
+               (lambda () (table-ref table k))))))  
+
+  IAssociative
+  (-assoc [table k v]
+    (let [newtable (scm* [table] (table-copy table))]
+      (scm* [newtable k v] (table-set! newtable k v))
+      newtable))
+  (-contains-key? [table k]
+    (let [i (-lookup table k lookup-sentinel)]
+      (if (identical? i lookup-sentinel)
+        false
+        true)))
+
+  IMap
+  (-dissoc [table k]
+    (let [newtable (scm* [table] (table-copy table))]
+      (scm* [newtable k] (table-set! newtable k))
+      newtable))
+
+  IFn
+  (-invoke [coll [k not-found]]
+    (if (nil? not-found)
+      (-lookup coll k)
+      (-lookup coll k not-found))))
+
+(def empty-hash-map (HashMap. nil (scm* [] (make-table))))
+
+(defn hash-map-from-arrays
+  [ks vs]
+  (let [len (alength ks)]
+    (loop [i 0, out empty-hash-map]
       (if (< i len)
         (recur (inc i) (assoc out (aget ks i) (aget vs i)))
-        out)))))
+        out))))
 
 (defn hash-map
   "keyval => key val
   Returns a new hash map with supplied mappings."
   [& keyvals]
-  (loop [in (seq keyvals), out cljs.core.HashMap/EMPTY]
+  (loop [in (seq keyvals), out empty-hash-map]
     (if in
       (recur (nnext in) (assoc out (first in) (second in)))
       out)))
@@ -2466,7 +2572,7 @@ reduces them without incurring seq initialization"
         ret)))
 
 ;;; Set
-
+(declare empty-set)
 (deftype Set [meta hash-map]
   IWithMeta
   (-with-meta [coll meta] (Set. meta hash-map))
@@ -2479,7 +2585,7 @@ reduces them without incurring seq initialization"
     (Set. meta (assoc hash-map o nil)))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.Set/EMPTY meta))
+  (-empty [coll] (with-meta empty-set meta))
 
   IEquiv
   (-equiv [coll other]
@@ -2499,30 +2605,32 @@ reduces them without incurring seq initialization"
   (-count [coll] (count (seq coll)))
 
   ILookup
-  (-lookup [coll v]
-    (-lookup coll v nil))
-  (-lookup [coll v not-found]
-    (if (-contains-key? hash-map v)
-      v
-      not-found))
+  (-lookup
+    ([coll v]
+       (-lookup coll v nil))
+    ([coll v not-found]
+       (if (-contains-key? hash-map v)
+         v
+         not-found)))
+  
 
   ISet
   (-disjoin [coll v]
     (Set. meta (dissoc hash-map v)))
 
   IFn
-  (-invoke [coll k]
-    (-lookup coll k))
-  (-invoke [coll k not-found]
-    (-lookup coll k not-found)))
+  (-invoke [coll [k not-found]]
+    (if (nil? not-found)
+      (-lookup coll k)
+      (-lookup coll k not-found))))
 
-(set! cljs.core.Set/EMPTY (Set. nil (hash-map)))
+(def empty-set (Set. nil (scm* [] (make-table))))
 
 (defn set
   "Returns a set of the distinct elements of coll."
   [coll]
   (loop [in (seq coll)
-         out cljs.core.Set/EMPTY]
+         out empty-set]
     (if-not (empty? in)
       (recur (rest in) (conj out (first in)))
       out)))
@@ -2561,19 +2669,17 @@ reduces them without incurring seq initialization"
       (recur (conj ret (first s)) (next s))
       (seq ret))))
 
+;TODO: strip out namesapce
 (defn name
   "Returns the name String of a string, symbol or keyword."
   [x]
   (cond
     (string? x) x
-    (or (keyword? x) (symbol? x))
-      (let [i (.lastIndexOf x "/")]
-        (if (< i 0)
-          (subs x 2)
-          (subs x (inc i))))
+    (keyword? x) (scm* [x] (keyword->string x))
+    (symbol? x) (scm* [x] (symbol->string x))
     :else (throw (js/Error. (str "Doesn't support name: " x)))))
-
-(defn namespace
+#_TODO
+#_(defn namespace
   "Returns the namespace String of a symbol or keyword, or nil if not present."
   [x]
   (if (or (keyword? x) (symbol? x))
@@ -2646,7 +2752,7 @@ reduces them without incurring seq initialization"
   (-conj [rng o] (cons o rng))
 
   IEmptyableCollection
-  (-empty [rng] (with-meta cljs.core.List/EMPTY meta))
+  (-empty [rng] (with-meta empty-list meta))
 
   ISequential
   IEquiv
@@ -2659,21 +2765,23 @@ reduces them without incurring seq initialization"
   (-count [rng]
     (if-not (-seq rng)
       0
-      (js/Math.ceil (/ (- end start) step))))
+      :TODO #_(js/Math.ceil (/ (- end start) step))))
 
   IIndexed
-  (-nth [rng n]
-    (if (< n (-count rng))
-      (+ start (* n step))
-      (if (and (> start end) (= step 0))
-        start
-        (throw (js/Error. "Index out of bounds")))))
-  (-nth [rng n not-found]
-    (if (< n (-count rng))
-      (+ start (* n step))
-      (if (and (> start end) (= step 0))
-        start
-        not-found)))
+  (-nth
+    ([rng n]
+       (if (< n (-count rng))
+         (+ start (* n step))
+         (if (and (> start end) (= step 0))
+           start
+           (throw (js/Error. "Index out of bounds")))))
+    ([rng n not-found]
+       (if (< n (-count rng))
+         (+ start (* n step))
+         (if (and (> start end) (= step 0))
+           start
+           not-found))))
+  
 
   ISeqable
   (-seq [rng]
@@ -2682,14 +2790,15 @@ reduces them without incurring seq initialization"
         rng)))
 
   IReduce
-  (-reduce [rng f] (ci-reduce rng f))
-  (-reduce [rng f s] (ci-reduce rng f s)))
+  (-reduce
+    ([rng f] (ci-reduce rng f))
+    ([rng f s] (ci-reduce rng f s))))
 
 (defn range
   "Returns a lazy seq of nums from start (inclusive) to end
    (exclusive), by step, where start defaults to 0, step to 1,
    and end to infinity."
-  ([] (range 0 js/Number.MAX_VALUE 1))
+  ([] (range 0 :TODO)) ;js/Number.MAX_VALUE 1
   ([end] (range 0 end 1))
   ([start end] (range start end 1))
   ([start end step] (Range. nil start end step)))
@@ -2806,26 +2915,27 @@ reduces them without incurring seq initialization"
 
 ;;;;;;;;;;;;;;;;;;;;;;;;; Regular Expressions ;;;;;;;;;;
 
-(defn re-matches
-  "Returns the result of (re-find re s) if re fully matches s."
-  [re s]
-  (let [matches (.exec re s)]
-    (when (= (first matches) s)
-      (if (= (count matches) 1)
-        (first matches)
-        (vec matches)))))
+(comment TODO
+  (defn re-matches
+    "Returns the result of (re-find re s) if re fully matches s."
+    [re s]
+    (let [matches (.exec re s)]
+      (when (= (first matches) s)
+        (if (= (count matches) 1)
+          (first matches)
+          (vec matches)))))
 
-(defn re-find
-  "Returns the first regex match, if any, of s to re, using
+  (defn re-find
+    "Returns the first regex match, if any, of s to re, using
   re.exec(s). Returns a vector, containing first the matching
   substring, then any capturing groups if the regular expression contains
   capturing groups."
-  [re s]
-  (let [matches (.exec re s)]
-    (when-not (nil? matches)
-      (if (= (count matches) 1)
-        (first matches)
-        (vec matches)))))
+    [re s]
+    (let [matches (.exec re s)]
+      (when-not (nil? matches)
+        (if (= (count matches) 1)
+          (first matches)
+          (vec matches)))))
 
 (defn re-seq
   "Returns a lazy sequence of successive matches of re in s."
@@ -2839,7 +2949,7 @@ reduces them without incurring seq initialization"
 (defn re-pattern
   "Returns an instance of RegExp which has compiled the provided string."
   [s]
-  (js/RegExp. s))
+  (js/RegExp. s)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Printing ;;;;;;;;;;;;;;;;
 
@@ -2859,7 +2969,6 @@ reduces them without incurring seq initialization"
 (defn- pr-seq [obj opts]
   (cond
     (nil? obj) (list "nil")
-    (undefined? obj) (list "#<undefined>")
     :else (concat
             (when (and (get opts :meta)
                        (satisfies? IMeta obj)
@@ -2877,9 +2986,9 @@ reduces them without incurring seq initialization"
         sb (gstring/StringBuffer.)]
     (doseq [obj objs]
       (when-not (identical? obj first-obj)
-        (.append sb " "))
+        (str sb " "))
       (doseq [string (pr-seq obj opts)]
-        (.append sb string)))
+        (str sb string)))
     (str sb)))
 
 (defn pr-with-opts
@@ -2942,19 +3051,34 @@ reduces them without incurring seq initialization"
   (newline (pr-opts)))
 
 (extend-protocol IPrintable
-  boolean
-  (-pr-seq [bool opts] (list (str bool)))
+  Boolean
+  (-pr-seq [bool opts] (list (if bool "true" "false")))
 
-  number
-  (-pr-seq [n opts] (list (str n)))
+  Number
+  (-pr-seq [n opts] (list (scm* [n] (number->string n))))
 
-  array
+  Pair
+  (-pr-seq [a opts]
+    (pr-sequential pr-seq "#<Pair [" ", " "]>" opts a))
+  
+  Array
   (-pr-seq [a opts]
     (pr-sequential pr-seq "#<Array [" ", " "]>" opts a))
 
-  string
-  (-pr-seq [obj opts]
-    (cond
+  Table
+  (-pr-seq [coll opts]
+    (let [pr-pair (fn [keyval ops] (pr-sequential pr-seq "" " " "" opts keyval))]
+      (pr-sequential pr-pair "{" ", " "}" opts coll)))
+
+  Keyword
+  (-pr-seq [k opts] (list (str ":" (scm* [n] (keyword->string k)))))
+
+  Symbol
+  (-pr-seq [s opts] (list (scm* [n] (symbol->string s))))
+
+  String ;TODO: I don't overload strings so need to break apart keywords etc.
+  (-pr-seq [obj opts] (list obj)
+    #_(cond
      (keyword? obj)
      (list (str ":"
                 (when-let [nspc (namespace obj)]
@@ -2964,7 +3088,7 @@ reduces them without incurring seq initialization"
      (list (str (when-let [nspc (namespace obj)]
                   (str nspc "/"))
                 (name obj)))
-     :else (list (if (:readably opts)
+     :else (list (if (get opts :readably)
                    (goog.string.quote obj)
                    obj))))
 
@@ -2975,9 +3099,6 @@ reduces them without incurring seq initialization"
   (-pr-seq [coll opts] (pr-sequential pr-seq "(" " " ")" opts coll))
 
   PersistentQueueSeq
-  (-pr-seq [coll opts] (pr-sequential pr-seq "(" " " ")" opts coll))
-
-  List
   (-pr-seq [coll opts] (pr-sequential pr-seq "(" " " ")" opts coll))
 
   Cons
@@ -2992,14 +3113,9 @@ reduces them without incurring seq initialization"
   Subvec
   (-pr-seq [coll opts] (pr-sequential pr-seq "[" " " "]" opts coll))
 
-  ObjMap
-  (-pr-seq [coll opts]
-    (let [pr-pair (fn [keyval] (pr-sequential pr-seq "" " " "" opts keyval))]
-      (pr-sequential pr-pair "{" ", " "}" opts coll)))
-
   HashMap
   (-pr-seq [coll opts]
-    (let [pr-pair (fn [keyval] (pr-sequential pr-seq "" " " "" opts keyval))]
+    (let [pr-pair (fn [keyval opts] (pr-sequential pr-seq "" " " "" opts keyval))]
       (pr-sequential pr-pair "{" ", " "}" opts coll)))
 
   Set
@@ -3029,9 +3145,11 @@ reduces them without incurring seq initialization"
     (doseq [[key f] watches]
       (f key this oldval newval)))
   (-add-watch [this key f]
-    (set! (.-watches this) (assoc watches key f)))
+    (let [nw (assoc watches key f)]
+      (scm* [this nw] (cljs.core/Atom-watches-set! this nw))))
   (-remove-watch [this key]
-    (set! (.-watches this) (dissoc watches key)))
+    (let [nw (dissoc watches key)]
+      (scm* [this nw] (cljs.core/Atom-watches-set! this nw))))
 
   IHash
   (-hash [this] (goog.getUid this)))
@@ -3213,7 +3331,7 @@ reduces them without incurring seq initialization"
   [d]
   (-realized? d))
 
-(defn js->clj
+#_(defn js->clj
   "Recursively transforms JavaScript arrays into ClojureScript
   vectors, and JavaScript objects into ClojureScript maps.  With
   option ':keywordize-keys true' will convert object fields from
@@ -3265,12 +3383,12 @@ reduces them without incurring seq initialization"
 (defn rand
   "Returns a random floating point number between 0 (inclusive) and
   n (default 1) (exclusive)."
-  ([] (rand 1))
-  ([n] (js* "Math.random() * ~{n}")))
+  ([] (rand 1.0))
+  ([n] (scm* [n] (rand-real n))))
 
 (defn rand-int
   "Returns a random integer between 0 (inclusive) and n (exclusive)."
-  [n] (js* "Math.floor(Math.random() * ~{n})"))
+  [n] (scm* [n] (random-integer n)))
 
 (defn rand-nth
   "Return a random element of the (sequential) collection. Will have
@@ -3405,13 +3523,14 @@ reduces them without incurring seq initialization"
 
 (defn- prefers*
   [x y prefer-table]
-  (let [xprefs (@prefer-table x)]
+  (throw "no prefers yet.")
+  #_(let [xprefs (@prefer-table x)] #_TODO
     (or
      (when (and xprefs (xprefs y))
        true)
      (loop [ps (parents y)]
        (when (pos? (count ps))
-         (when (prefers* x (first ps) prefer-table)
+         (when (prefers* x (first ps) prefer-table) 
            true)
          (recur (rest ps))))
      (loop [ps (parents x)]
@@ -3517,10 +3636,10 @@ reduces them without incurring seq initialization"
   IHash
   (-hash [this] (goog.getUid this)))
 
-(set! cljs.core.MultiFn.prototype.call
+#_(set! cljs.core.MultiFn.prototype.call
       (fn [_ & args] (-dispatch (js* "this") args)))
 
-(set! cljs.core.MultiFn.prototype.apply
+#_(set! cljs.core.MultiFn.prototype.apply
       (fn [_ args] (-dispatch (js* "this") args)))
 
 (defn remove-all-methods

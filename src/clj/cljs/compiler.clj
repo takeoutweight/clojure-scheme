@@ -11,7 +11,8 @@
 (ns cljs.compiler
   (:refer-clojure :exclude [munge macroexpand-1])
   (:require [clojure.java.io :as io]
-            [clojure.string :as string]))
+            [clojure.string :as string]
+            [clojure.walk :as walk]))
 
 (declare resolve-var)
 (require 'cljs.core)
@@ -42,7 +43,8 @@
   `(.println System/err (str ~@args)))
 
 (defn munge [s]
-  (let [ss (str s)
+  s
+  #_(let [ss (str s)
         ms (if (.contains ss "]")
              (let [idx (inc (.lastIndexOf ss "]"))]
                (str (subs ss 0 idx)
@@ -80,7 +82,7 @@
         step (fn [part] (str "['" part "']"))]
     (apply str first (map step (rest parts)))))
 
-(defn resolve-existing-var [env sym]
+(defn resolve-existing-var [env sym] ;;<--------- TODO: figure out namespaces.
   (if (= (namespace sym) "js")
     {:name (js-var sym)}
     (let [s (str sym)
@@ -94,7 +96,7 @@
                  ns (if (= "clojure.core" ns) "cljs.core" ns)
                  full-ns (resolve-ns-alias env ns)]
              (confirm-var-exists env full-ns (symbol (name sym)))
-             (symbol (str full-ns "." (munge (name sym)))))
+             (symbol (str full-ns "/" (munge (name sym)))))
 
            (.contains s ".")
            (munge (let [idx (.indexOf s ".")
@@ -108,71 +110,89 @@
                         sym))))
 
            (get-in @namespaces [(-> env :ns :name) :uses sym])
-           (symbol (str (get-in @namespaces [(-> env :ns :name) :uses sym]) "." (munge (name sym))))
+           (symbol (str (get-in @namespaces [(-> env :ns :name) :uses sym]) "/" (munge (name sym))))
 
            :else
            (let [full-ns (if (core-name? env sym)
                            'cljs.core
                            (-> env :ns :name))]
              (confirm-var-exists env full-ns sym)
-             (munge (symbol (str full-ns "." (munge (name sym)))))))]
+             (symbol (str (when full-ns (str full-ns "/")) (munge (name sym))))))]
       {:name nm})))
 
 (defn resolve-var [env sym]
-  (if (= (namespace sym) "js")
-    {:name (js-var sym)}
-    (let [s (str sym)
-          lb (-> env :locals sym)
-          nm
-          (cond
-           lb (:name lb)
+  (if (nil? sym)
+    {:name nil}
+    (if (= (namespace sym) "js")
+      {:name (js-var sym)}
+      (let [s (str sym)
+            lb (-> env :locals sym)
+            nm
+            (cond
+              lb (:name lb)
 
-           (namespace sym)
-           (let [ns (namespace sym)
-                 ns (if (= "clojure.core" ns) "cljs.core" ns)]
-             (symbol (str (resolve-ns-alias env ns) "." (munge (name sym)))))
+              (namespace sym)
+              (let [ns (namespace sym)
+                    ns (if (= "clojure.core" ns) "cljs.core" ns)]
+                (symbol (str (resolve-ns-alias env ns) "/" (munge (name sym)))))
 
-           (.contains s ".")
-           (munge (let [idx (.indexOf s ".")
-                        prefix (symbol (subs s 0 idx))
-                        suffix (subs s idx)
-                        lb (-> env :locals prefix)]
-                    (if lb
-                      (symbol (str (:name lb) suffix))
-                      sym)))
+              (.contains s ".")
+              (munge (let [idx (.indexOf s ".")
+                           prefix (symbol (subs s 0 idx))
+                           suffix (subs s idx)
+                           lb (-> env :locals prefix)]
+                       (if lb
+                         (symbol (str (:name lb) suffix))
+                         sym)))
 
-           :else
-           (munge (symbol (str
-                           (if (core-name? env sym)
-                             'cljs.core
-                             (-> env :ns :name))
-                           "." (munge (name sym))))))]
-      {:name nm})))
+              :else
+              (symbol (str
+                       (when-let [ns (cond
+                                       (get-in @namespaces [(-> env :ns :name) :defs sym])
+                                       , (-> env :ns :name)
+                                       (core-name? env sym) 'cljs.core
+                                       :else (-> env :ns :name))] 
+                         (str ns "/"))
+                       (munge (name sym)))))]
+        {:name nm}))))
 
+(defn strict-str
+  "recursively realizes any potentially lazy nested structure"
+  ([] "")
+  ([x] (str (walk/postwalk (fn [n] (cond (= clojure.lang.LazySeq (type n)) (apply list n)
+                                         (identical? x ()) "()" ;o/w clojure.lang.PersistentList$EmptyList@1
+                                         :else n)) x)))
+  ([x & ys] (str (strict-str x) (apply strict-str ys))))
+
+(declare emits)
 (defn- comma-sep [xs]
-  (apply str (interpose "," xs)))
+  (apply strict-str (interpose "," xs)))
+(defn- space-sep [xs]
+  (apply strict-str (interpose " " xs)))
+(defn- print-scm [fun-str & children]
+  (print (str "(" fun-str " " (space-sep (map emits children)) ")")))
 
 (defmulti emit-constant class)
-(defmethod emit-constant nil [x] (print "null"))
+(defmethod emit-constant nil [x] (print "#!void"))
 (defmethod emit-constant Long [x] (print x))
 (defmethod emit-constant Integer [x] (print x)) ; reader puts Integers in metadata
 (defmethod emit-constant Double [x] (print x))
 (defmethod emit-constant String [x] (pr x))
-(defmethod emit-constant Boolean [x] (print (if x "true" "false")))
-(defmethod emit-constant Character [x] (pr (str x)))
+(defmethod emit-constant Boolean [x] (print (if x "#t" "#f")))
+(defmethod emit-constant Character [x] (print (str "#\\" x)))
 
 (defmethod emit-constant java.util.regex.Pattern [x]
   (let [[_ flags pattern] (re-find #"^(?:\(\?([idmsux]*)\))?(.*)" (str x))]
     (print (str \/ (.replaceAll (re-matcher #"/" pattern) "\\\\/") \/ flags))))
 
 (defmethod emit-constant clojure.lang.Keyword [x]
-           (pr (str \uFDD0 \'
-                    (if (namespace x)
-                      (str (namespace x) "/") "")
-                    (name x))))
+  (print (str (if (namespace x)
+                (str (namespace x) "/") "")
+              (name x)
+              ":")))
 
 (defmethod emit-constant clojure.lang.Symbol [x]
-           (pr (str \uFDD1 \'
+           (print (str \'
                     (if (namespace x)
                       (str (namespace x) "/") "")
                     (name x))))
@@ -186,7 +206,7 @@
     (print string)))
 
 (defmethod emit-constant clojure.lang.PersistentList$EmptyList [x]
-  (emit-meta-constant x "cljs.core.List.EMPTY"))
+  (emit-meta-constant x "cljs.core/empty-list"))
 
 (defmethod emit-constant clojure.lang.PersistentList [x]
   (emit-meta-constant x
@@ -200,24 +220,24 @@
          (comma-sep (map #(with-out-str (emit-constant %)) x))
          ")")))
 
+(declare emit)
+(declare analyze)
 (defmethod emit-constant clojure.lang.IPersistentVector [x]
-  (emit-meta-constant x
-    (str "(new cljs.core.Vector(null, ["
-         (comma-sep (map #(with-out-str (emit-constant %)) x))
-         "]))")))
+  (emit (analyze nil (apply list (concat '(new cljs.core/Vector nil)
+                                         (list (apply list 'list x))))) ))
 
 (defmethod emit-constant clojure.lang.IPersistentMap [x]
   (emit-meta-constant x
-    (str "cljs.core.hash_map("
+    (str "(cljs.core/hash-map "
          (comma-sep (map #(with-out-str (emit-constant %))
                          (apply concat x)))
          ")")))
 
 (defmethod emit-constant clojure.lang.PersistentHashSet [x]
   (emit-meta-constant x
-    (str "cljs.core.set(["
-         (comma-sep (map #(with-out-str (emit-constant %)) x))
-         "])")))
+    (str "(cljs.core/set((list"
+         (space-sep (map #(with-out-str (emit-constant %)) x))
+         "))")))
 
 (defmulti emit :op)
 
@@ -227,8 +247,7 @@
 (defn emit-block
   [context statements ret]
   (if statements
-    (let [body (str (apply str (map emits statements)) (emits ret))]
-      (print body))
+    (apply print-scm "begin" (concat statements [ret]))
     (emit ret)))
 
 (defmacro emit-wrap [env & body]
@@ -239,7 +258,7 @@
 
 (defmethod emit :var
   [{:keys [info env] :as arg}]
-  (emit-wrap env (print (munge (:name info)))))
+  (print (:name info)))
 
 (defmethod emit :meta
   [{:keys [expr meta env]}]
@@ -248,49 +267,48 @@
 
 (defmethod emit :map
   [{:keys [children env simple-keys? keys vals]}]
-  (emit-wrap env
-    (if simple-keys?
-      (print (str "cljs.core.ObjMap.fromObject(["
-                  (comma-sep (map emits keys)) ; keys
-                  "],{"
-                  (comma-sep (map (fn [k v] (str (emits k) ":" (emits v)))
-                                  keys vals)) ; js obj
-                  "})"))
-      (print (str "cljs.core.HashMap.fromArrays(["
-                  (comma-sep (map emits keys))
-                  "],["
-                  (comma-sep (map emits vals))
-                  "])")))))
+  (let [sz (count keys)
+        table-name (gensym "table")]
+    (print (str "(let (("table-name" (make-table size: "sz")))"))
+    (doall (map (fn [k v] (print "(table-set!" table-name (emits k) (emits v)")")) keys vals))
+    (print table-name)
+    (print ")")))
 
 (defmethod emit :vector
   [{:keys [children env]}]
-  (emit-wrap env
-    (print (str "cljs.core.Vector.fromArray(["
-                (comma-sep (map emits children)) "])"))))
+  (apply print-scm "vector" children))
 
 (defmethod emit :set
   [{:keys [children env]}]
   (emit-wrap env
-    (print (str "cljs.core.set(["
-                (comma-sep (map emits children)) "])"))))
+    (print (str "(list"
+                (space-sep (map emits children)) ")"))))
 
 (defmethod emit :constant
   [{:keys [form env]}]
   (when-not (= :statement (:context env))
-    (emit-wrap env (emit-constant form))))
+    (emit-constant form)))
 
 (defmethod emit :if
   [{:keys [test then else env]}]
-  (let [context (:context env)]
-    (if (= :expr context)
-      (print (str "(cljs.core.truth_(" (emits test) ")?" (emits then) ":" (emits else) ")"))
-      (print (str "if(cljs.core.truth_(" (emits test) "))\n{" (emits then) "} else\n{" (emits else) "}\n")))))
+  (let [t (gensym "test")]
+    (print (str "(let ((" t " " (emits test) ")) (if (and "t" (not (eq? #!void "t"))) " (emits then) " " (emits else) "))"))))
+
+(defmethod emit :case
+  [{:keys [test clauses else]}]
+  (print "(case ")
+  (emit test)
+  (print " ")
+  (doall (for [[test result] clauses]
+           (print (str "(" (strict-str "("(space-sep (map emits test))")")
+                       " " (emits result) ")"))))
+  (when else
+    (print (str "(else " (emits else) ")")))
+  (print ")"))
 
 (defmethod emit :throw
   [{:keys [throw env]}]
-  (if (= :expr (:context env))
-    (print (str "(function(){throw " (emits throw) "})()"))
-    (print (str "throw " (emits throw) ";\n"))))
+  (print (str "(raise " (emits throw) ")")))
 
 (defn emit-comment
   "Emit a nicely formatted comment string."
@@ -299,155 +317,96 @@
         docs (if jsdoc (concat docs jsdoc) docs)
         docs (remove nil? docs)]
     (letfn [(print-comment-lines [e] (doseq [next-line (string/split-lines e)]
-                                       (println "*" (string/trim next-line))))]
+                                       (println ";" (string/trim next-line))))]
       (when (seq docs)
-        (println "/**")
         (doseq [e docs]
           (when e
-            (print-comment-lines e)))
-        (println "*/")))))
+            (print-comment-lines e)))))))
 
 (defmethod emit :def
   [{:keys [name init env doc export]}]
-  (when init
-    (emit-comment doc (:jsdoc init))
-    (print name)
-    (print (str " = " (emits init)))
-    (when-not (= :expr (:context env)) (print ";\n"))
-    (when export
-      (println (str "goog.exportSymbol('" export "', " name ");")))))
+  (if init
+    (do
+      (emit-comment doc (:jsdoc init))
+      (print-scm (str "define " name) init)
+      (println))
+    (println (str "(define " name")"))
+    #_(when export
+        (println (str "goog.exportSymbol('" export "', " name ");")))))
 
-(defn emit-apply-to
-  [{:keys [name params env]}]
-  (let [arglist (gensym "arglist__")
-        delegate-name (str name "__delegate")]
-    (println (str "(function (" arglist "){"))
-    (doseq [[i param] (map-indexed vector (butlast params))]
-      (print (str "var " param " = cljs.core.first("))
-      (dotimes [_ i] (print "cljs.core.next("))
-      (print (str arglist ")"))
-      (dotimes [_ i] (print ")"))
-      (println ";"))
-    (if (< 1 (count params))
-      (do
-        (print (str "var " (last params) " = cljs.core.rest("))
-        (dotimes [_ (- (count params) 2)] (print "cljs.core.next("))
-        (print arglist)
-        (dotimes [_ (- (count params) 2)] (print ")"))
-        (println ");")
-        (println (str "return " delegate-name ".call(" (string/join ", " (cons "this" params)) ");")))
-      (do
-        (print (str "var " (last params) " = "))
-        (print "cljs.core.seq(" arglist ");")
-        (println ";")
-        (println (str "return " delegate-name ".call(" (string/join ", " (cons "this" params)) ");"))))
-    (print "})")))
+(defn schemify-method-arglist
+  "analyzed method [a b & r] -> (a b . r) -- as symbols not as a string.
+   or [& r] -> r in the case of no fixed args."
+  [{:keys [variadic max-fixed-arity params]}]
+  (if variadic
+    (if (> max-fixed-arity 0)
+      (apply list (concat (take max-fixed-arity params)
+                          ['. (last  params)]))
+      (last params))
+    (apply list params)))
 
 (defn emit-fn-method
-  [{:keys [gthis name variadic params statements ret env recurs max-fixed-arity]}]
-  (emit-wrap env
-             (print (str "(function " name "(" (comma-sep params) "){\n"))
-             (when gthis
-               (println (str "var " gthis " = this;")))
-             (when recurs (print "while(true){\n"))
-             (emit-block :return statements ret)
-             (when recurs (print "break;\n}\n"))
-             (print "})")))
-
-(defn emit-variadic-fn-method
   [{:keys [gthis name variadic params statements ret env recurs max-fixed-arity] :as f}]
-  (emit-wrap env
-             (let [name (or name (gensym))
-                   delegate-name (str name "__delegate")]
-               (println "(function() { ")
-               (println (str "var " delegate-name " = function (" (comma-sep params) "){"))
-               (when recurs (print "while(true){\n"))
-               (emit-block :return statements ret)
-               (when recurs (print "break;\n}\n"))
-               (println "};")
-
-               (print (str "var " name " = function (" (comma-sep
-                                                        (if variadic
-                                                          (concat (butlast params) ['var_args])
-                                                          params)) "){\n"))
-               (when gthis
-                 (println (str "var " gthis " = this;")))
-               (when variadic
-                 (println (str "var " (last params) " = null;"))
-                 (println (str "if (goog.isDef(var_args)) {"))
-                 (println (str "  " (last params) " = cljs.core.array_seq(Array.prototype.slice.call(arguments, " (dec (count params)) "),0);"))
-                 (println (str "} ")))
-               (println (str "return " delegate-name ".call(" (string/join ", " (cons "this" params)) ");"))
-               (println "};")
-
-               (println (str name ".cljs$lang$maxFixedArity = " max-fixed-arity ";"))
-               (println (str name ".cljs$lang$applyTo = "
-                             (with-out-str
-                               (emit-apply-to (assoc f :name name)))
-                             ";"))
-               (println (str "return " name ";"))
-               (println "})()"))))
+  (let [lambda-str (strict-str "(lambda "
+                        (schemify-method-arglist f) " "
+                        (with-out-str (emit-block :return statements ret))
+                        ")")]
+    (if name
+      (print "(letrec ((" name lambda-str "))"name")")
+      (print lambda-str))))
 
 (defmethod emit :fn
   [{:keys [name env methods max-fixed-arity variadic recur-frames]}]
-  ;;fn statements get erased, serve no purpose and can pollute scope if named
   (when-not (= :statement (:context env))
-    (let [loop-locals (seq (mapcat :names (filter #(and % @(:flag %)) recur-frames)))]
-      (when loop-locals
+    (let [loop-locals (seq (mapcat :names (filter #(and % @(:flag %)) recur-frames)))
+          recur-name (:recur-name env)]
+      #_(when loop-locals
         (when (= :return (:context env))
-            (print "return "))
+          (print "return "))
         (println (str "((function (" (comma-sep loop-locals) "){"))
         (when-not (= :return (:context env))
-            (print "return ")))
+          (print "return ")))
       (if (= 1 (count methods))
-        (if variadic
-          (emit-variadic-fn-method (assoc (first methods) :name name))
-          (emit-fn-method (assoc (first methods) :name name)))
-        (let [name (or name (gensym))
-              maxparams (apply max-key count (map :params methods))
-              mmap (zipmap (repeatedly #(gensym (str name  "__"))) methods)
-              ms (sort-by #(-> % second :params count) (seq mmap))]
-          (when (= :return (:context env))
-            (print "return "))
-          (println "(function() {")
-          (println (str "var " name " = null;"))
-          (doseq [[n meth] ms]
-            (println (str "var " n " = " (with-out-str (if (:variadic meth)
-                                                         (emit-variadic-fn-method meth)
-                                                         (emit-fn-method meth))) ";")))
-          (println (str name " = function(" (comma-sep (if variadic
-                                                         (concat (butlast maxparams) ['var_args])
-                                                         maxparams)) "){"))
-          (when variadic
-            (println (str "var " (last maxparams) " = var_args;")))
-          (println "switch(arguments.length){")
-          (doseq [[n meth] ms]
-            (if (:variadic meth)
-              (do (println "default:")
-                  (println (str "return " n ".apply(this,arguments);")))
-              (let [pcnt (count (:params meth))]
-                (println "case " pcnt ":")
-                (println (str "return " n ".call(this" (if (zero? pcnt) nil
-                                                           (str "," (comma-sep (take pcnt maxparams)))) ");")))))
-          (println "}")
-          (println "throw('Invalid arity: ' + arguments.length);")
-          (println "};")
-          (when variadic
-            (println (str name ".cljs$lang$maxFixedArity = " max-fixed-arity ";"))
-            (println (str name ".cljs$lang$applyTo = " (some #(let [[n m] %] (when (:variadic m) n)) ms) ".cljs$lang$applyTo;")))
-          (println (str "return " name ";"))
-          (println "})()")))
-      (when loop-locals
+        (emit-fn-method (assoc (first methods) :name (or name recur-name)))
+        (throw (Exception. "Expected multiarity to be erased in macros.")))
+      #_(when loop-locals
         (println (str ";})(" (comma-sep loop-locals) "))"))))))
+
+(defmethod emit :extend
+  [{:keys [etype impls base-type?]}]
+  (doall
+   (for [[protocol meth-map] impls]
+     (do
+       (emit-comment (str "Implementing " (:name protocol)) nil)
+       (println "(table-set! "
+                "(table-ref cljs.core/protocol-impls" (:name etype) ")"
+                (:name protocol) "#t" ")")
+       (doall
+        (for [[meth-name meth-impl] meth-map]
+          (let [meth (first (:methods meth-impl))
+                fn-scm-args (schemify-method-arglist meth) ;FIXME may not be a seq.
+                rest? (some #{'.} fn-scm-args)
+                fun-str (emits meth-impl)]
+            (when (> (count (:methods meth-impl)) 1) (throw (Exception. "should have compiled variadic defn away.")))
+            (println
+             (if base-type?
+               (str "(define " (cons (symbol (str (:name (:info meth-name))
+                                                  "---" (name (:name etype))))
+                                     fn-scm-args))
+               (str "(define-method "
+                    (apply list (:name (:info meth-name))
+                           (list (first fn-scm-args) (:name etype)) (rest fn-scm-args))))
+             (if rest?
+               (str "(apply " fun-str " (append (list "
+                    (space-sep (butlast (:params meth))) ") "
+                    (last (:params meth)) "))")
+               (str "(" fun-str " " (space-sep (:params meth)) ")"))
+             ")")))))))) 
 
 (defmethod emit :do
   [{:keys [statements ret env]}]
   (let [context (:context env)]
-    (when (and statements (= :expr context)) (print "(function (){"))
-    ;(when statements (print "{\n"))
-    (emit-block context statements ret)
-    ;(when statements (print "}"))
-    (when (and statements (= :expr context)) (print "})()"))))
+    (emit-block context statements ret)))
 
 (defmethod emit :try*
   [{:keys [env try catch name finally]}]
@@ -455,91 +414,75 @@
         subcontext (if (= :expr context) :return context)]
     (if (or name finally)
       (do
-        (when (= :expr context) (print "(function (){"))
-        (print "try{")
-        (let [{:keys [statements ret]} try]
-          (emit-block subcontext statements ret))
-        (print "}")
+        (when finally (throw (Exception. (str "finally not yet implemented")))) ;TODO
+        (print "(with-exception-catcher ")
         (when name
-          (print (str "catch (" name "){"))
+          (print (str "(lambda (" name ") "))
           (when catch
             (let [{:keys [statements ret]} catch]
               (emit-block subcontext statements ret)))
-          (print "}"))
-        (when finally
-          (let [{:keys [statements ret]} finally]
-            (assert (not= :constant (:op ret)) "finally block cannot contain constant")
-            (print "finally {")
-            (emit-block subcontext statements ret)
-            (print "}")))
-        (when (= :expr context) (print "})()")))
+          (print ")"))
+        (print "(lambda () ")
+        (let [{:keys [statements ret]} try]
+          (emit-block subcontext statements ret))
+        (print "))"))
       (let [{:keys [statements ret]} try]
-        (when (and statements (= :expr context)) (print "(function (){"))
-        (emit-block subcontext statements ret)
-        (when (and statements (= :expr context)) (print "})()"))))))
+        (emit-block subcontext statements ret)))))
 
 (defmethod emit :let
-  [{:keys [bindings statements ret env loop]}]
-  (let [context (:context env)
-        bs (map (fn [{:keys [name init]}]
-                  (str "var " name " = " (emits init) ";\n"))
-                bindings)]
-    (when (= :expr context) (print "(function (){"))
-    (print (str (apply str bs) "\n"))
-    (when loop (print "while(true){\n"))
+  [{:keys [bindings statements ret env loop recur-name]}]
+  (let [bs (map (fn [{:keys [name init]}]
+                  (str "(" name " " (emits init) ")"))
+                bindings)
+        context (:context env)]
+    (print "(let* (" (apply strict-str bs) ")")
+    (when loop (print "(letrec ((" recur-name
+                      "(lambda (" (space-sep (map :name bindings)) ")" ))
     (emit-block (if (= :expr context) :return context) statements ret)
-    (when loop (print "break;\n}\n"))
-    ;(print "}")
-    (when (= :expr context) (print "})()"))))
+    (when loop (print ")))" (str "(" recur-name " " (space-sep (map :name bindings)) ")") ")"))
+    (print ")")))
 
 (defmethod emit :recur
   [{:keys [frame exprs env]}]
   (let [temps (vec (take (count exprs) (repeatedly gensym)))
-        names (:names frame)]
-    (print "{\n")
-    (dotimes [i (count exprs)]
-      (print (str "var " (temps i) " = " (emits (exprs i)) ";\n")))
-    (dotimes [i (count exprs)]
-      (print (str (names i) " = " (temps i) ";\n")))
-    (print "continue;\n")
-    (print "}\n")))
+        names (:names frame)
+        recur-name (:recur-name env)]
+    (print (str "(" recur-name " " (space-sep (map emits exprs))")"))))
 
 (defmethod emit :invoke
   [{:keys [f args env]}]
-  (emit-wrap env
-             (print (str (emits f) ".call("
-                         (comma-sep (cons "null" (map emits args)))
-                         ")"))))
+  (print (str "(" (emits f) " "
+              (space-sep (map emits args))
+              ")")))
 
 (defmethod emit :new
   [{:keys [ctor args env]}]
-  (emit-wrap env
-             (print (str "(new " (emits ctor) "("
-                         (comma-sep (map emits args))
-                         "))"))))
+  (print (str "(make-" (emits ctor) " "
+              (space-sep (map emits args))
+              ")")))
 
 (defmethod emit :set!
   [{:keys [target val env]}]
-  (emit-wrap env (print (str (emits target) " = "(emits val)))))
+  (if (= :dot (:op target))
+    (print  "(set-field-value!" (emits (:target target)) (emits val) (str "'" (:field target))")")
+    (print (str "(set! " (emits target) " " (emits val) ")"))))
 
 (defmethod emit :ns
   [{:keys [name requires uses requires-macros env]}]
-  (println (str "goog.provide('" (munge name) "');"))
+  #_(println (str "goog.provide('" (munge name) "');"))
   (when-not (= name 'cljs.core)
-    (println (str "goog.require('cljs.core');")))
+    (println (str "(load \"cljs.core\")")))
   (doseq [lib (into (vals requires) (distinct (vals uses)))]
-    (println (str "goog.require('" (munge lib) "');"))))
+    (println (str "(load \"" (munge lib) "\")"))))
 
 (defmethod emit :deftype*
   [{:keys [t fields]}]
   (let [fields (map munge fields)]
-    (println "\n/**\n* @constructor\n*/")
-    (println (str t " = (function (" (comma-sep (map str fields)) "){"))
-    (doseq [fld fields]
-      (println (str "this." fld " = " fld ";")))
-    (println "})")))
+    (println "(define-class" t "Object (" (space-sep fields) "))")
+    (println "(define" t (str t "-class") ")") ;meroon defines the -class extension, which we hijack.
+    (println "(table-set!" "cljs.core/protocol-impls" t "(make-table))" )))
 
-(defmethod emit :defrecord*
+#_(defmethod emit :defrecord*
   [{:keys [t fields]}]
   (let [fields (concat (map munge fields) '[__meta __extmap])]
     (println "\n/**\n* @constructor")
@@ -564,12 +507,12 @@
 
 (defmethod emit :dot
   [{:keys [target field method args env]}]
-  (emit-wrap env
-             (if field
-               (print (str (emits target) "." field))
-               (print (str (emits target) "." method "("
-                           (comma-sep (map emits args))
-                           ")")))))
+  (if field
+    (print (str "(field-value " (emits target) " "  field ")"))
+    (throw (Exception. (str "no special dot-method access: " (:line env))))
+    #_(print (str (emits target) "." method "("
+                (comma-sep (map emits args))
+                ")"))))
 
 (defmethod emit :js
   [{:keys [env code segs args]}]
@@ -579,14 +522,27 @@
                (print (apply str (interleave (concat segs (repeat nil))
                                              (concat (map emits args) [nil])))))))
 
+;form->form mapping (or a vector of candidate forms) that will be subject to analyze->emit in context.
+(defmethod emit :scm
+  [{:keys [env symbol-map form]}]
+  (let [symbol-map (if (and (coll? symbol-map) (not (map? symbol-map)))
+                     (into {} (map vector symbol-map symbol-map))
+                     symbol-map)
+        subbed-form (walk/prewalk
+                     (fn [t] (let [r (get symbol-map t ::not-found)]
+                               (if (= ::not-found r)
+                                 t
+                                 (symbol (emits (analyze (assoc env :context :return) r)))))) form)]
+    (print (space-sep subbed-form))))
+
 (declare analyze analyze-symbol analyze-seq)
 
-(def specials '#{if def fn* do let* loop* throw try* recur new set! ns deftype* defrecord* . js* & quote})
+(def specials '#{if case def fn* do let* loop* throw try* recur new set! ns deftype* defrecord* . extend js* scm* & quote})
 
 (def ^:dynamic *recur-frames* nil)
 
 (defmacro disallowing-recur [& body]
-  `(binding [*recur-frames* (cons nil *recur-frames*)] ~@body))
+  `(binding [*recur-frames* (cons nil *recur-frames*)]  ~@body))
 
 (defn analyze-block
   "returns {:statements .. :ret .. :children ..}"
@@ -608,6 +564,24 @@
     {:env env :op :if :form form
      :test test-expr :then then-expr :else else-expr
      :children [test-expr then-expr else-expr]}))
+
+(defmethod parse 'case
+  [op env [_ test & clauses :as form] _]
+  (let [test-expr (disallowing-recur (analyze (assoc env :context :expr) test))
+        [paired-clauses else] (if (odd? (count clauses))
+                                [(butlast clauses) (last clauses)]
+                                [clauses ::no-else])
+        clause-exprs (seq (map (fn [[test-constant result-expr]]                                 
+                                 [(let [analyzed-t (analyze (assoc env :context :expr) test-constant)]
+                                    (if (or (#{:vector :invoke} (:op analyzed-t)))
+                                      (map #(analyze (assoc env :context :expr) %) test-constant)
+                                      [analyzed-t]))
+                                  , (analyze (assoc env :context :expr) result-expr)])
+                               (partition 2 paired-clauses)))
+        else-expr (when (not= ::no-else else) (analyze (assoc env :context :expr) else))]
+    {:env env :op :case :form form
+     :test test-expr :clauses clause-exprs :else else-expr
+     :children (vec (concat [test-expr] clause-exprs))}))
 
 (defmethod parse 'throw
   [op env [_ throw :as form] name]
@@ -659,24 +633,26 @@
         args (apply pfn form)
         sym (:sym args)]
     (assert (not (namespace sym)) "Can't def ns-qualified name")
-    (let [name (munge (:name (resolve-var (dissoc env :locals) sym)))
+    (let [name (symbol (str (or (-> env :ns :name) 'user))
+                       (str sym)) #_(:name (resolve-var (dissoc env :locals) sym))
           init-expr (when (contains? args :init) (disallowing-recur
-                                                  (analyze (assoc env :context :expr) (:init args) sym)))
+                                                   (analyze (assoc env :context :expr) (:init args) sym)))
           export-as (when-let [export-val (-> sym meta :export)]
                       (if (= true export-val) name export-val))
-          doc (or (:doc args) (-> sym meta :doc))]
+          doc (or (:doc args) (-> sym meta :doc))
+          ret (merge {:env env :op :def :form form
+                      :name name :doc doc :init init-expr}
+                     (when init-expr {:children [init-expr]})
+                     (when export-as {:export export-as}))]
       (swap! namespaces update-in [(-> env :ns :name) :defs sym]
              (fn [m]
-               (let [m (assoc (or m {}) :name name)]
+               (let [m (assoc (or m {}) :name name :analysis ret)]
                  (if-let [line (:line env)]
                    (-> m
                        (assoc :file *cljs-file*)
                        (assoc :line line))
                    m))))
-      (merge {:env env :op :def :form form
-              :name name :doc doc :init init-expr}
-             (when init-expr {:children [init-expr]})
-             (when export-as {:export export-as})))))
+      ret)))
 
 (defn- analyze-fn-method [env locals meth]
   (letfn [(uniqify [[p & r]]
@@ -697,8 +673,9 @@
                                   :mutable (-> fld meta :mutable)}))
                         locals fields)
          locals (reduce (fn [m name] (assoc m name {:name (munge name)})) locals params)
-         recur-frame {:names (vec (map munge params)) :flag (atom nil)}
+         recur-frame {:names (vec (map munge params)) :flag (atom nil) :variadic variadic}
          block (binding [*recur-frames* (cons recur-frame *recur-frames*)]
+                 #_(println "recur-frames" *recur-frames*)
                  (analyze-block (assoc env :context :return :locals locals) body))]
 
      (merge {:env env :variadic variadic :params (map munge params) :max-fixed-arity fixed-arity :gthis gthis :recurs @(:flag recur-frame)} block))))
@@ -710,9 +687,10 @@
                        [name (seq args)])
         ;;turn (fn [] ...) into (fn ([]...))
         meths (if (vector? (first meths)) (list meths) meths)
-        mname (when name (munge name))
+        mname (when name (str (munge name)  "---recur"))
         locals (:locals env)
         locals (if name (assoc locals name {:name mname}) locals)
+        env (assoc env :recur-name (or mname (gensym "recurfn")))
         menv (if (> (count meths) 1) (assoc env :context :expr) env)
         methods (map #(analyze-fn-method menv locals %) meths)
         max-fixed-arity (apply max (map :max-fixed-arity methods))
@@ -732,24 +710,29 @@
   (let [context (:context encl-env)
         [bes env]
         (disallowing-recur
-         (loop [bes []
-                env (assoc encl-env :context :expr)
-                bindings (seq (partition 2 bindings))]
-           (if-let [[name init] (first bindings)]
-             (do
-               (assert (not (or (namespace name) (.contains (str name) "."))) (str "Invalid local name: " name))
-               (let [init-expr (analyze env init)
-                     be {:name (gensym (str (munge name) "__")) :init init-expr}]
-                 (recur (conj bes be)
-                        (assoc-in env [:locals name] be)
-                        (next bindings))))
-             [bes env])))
+          (loop [bes []
+                 env (assoc encl-env :context :expr)
+                 bindings (seq (partition 2 bindings))]
+            (if-let [[name init] (first bindings)]
+              (do
+                (assert (not (or (namespace name) (.contains (str name) "."))) (str "Invalid local name: " name))
+                (let [init-expr (analyze env init)
+                      be {:name (gensym (str (munge name) "__")) :init init-expr}]
+                  (recur (conj bes be)
+                         (assoc-in env [:locals name] be)
+                         (next bindings))))
+              [bes env])))
         recur-frame (when is-loop {:names (vec (map :name bes)) :flag (atom nil)})
+        recur-name (when is-loop (gensym "recurlet"))
         {:keys [statements ret children]}
         (binding [*recur-frames* (if recur-frame (cons recur-frame *recur-frames*) *recur-frames*)]
-          (analyze-block (assoc env :context (if (= :expr context) :return context)) exprs))]
-    {:env encl-env :op :let :loop is-loop
-     :bindings bes :statements statements :ret ret :form form :children (into [children] (map :init bes))}))
+          #_(println "recur-frames2" recur-frame *recur-frames*)
+          (analyze-block (into (assoc env :context (if (= :expr context) :return context))
+                               (when recur-name [[:recur-name recur-name]])) exprs))]
+    (into
+     {:env encl-env :op :let :loop is-loop
+      :bindings bes :statements statements :ret ret :form form :children (into [children] (map :init bes))}
+     (when recur-name [[:recur-name recur-name]]))))
 
 (defmethod parse 'let*
   [op encl-env form _]
@@ -763,8 +746,10 @@
   [op env [_ & exprs] _]
   (let [context (:context env)
         frame (first *recur-frames*)]
-    (assert frame "Can't recur here")
-    (assert (= (count exprs) (count (:names frame))) "recur argument count mismatch")
+    (assert frame (str  "Can't recur here: " (:line env)))
+    (assert (or (= (count exprs) (count (:names frame)))
+                (and (>= (count exprs) (dec (count (:names frame))))
+                     (:variadic frame))) (str "recur argument count mismatch: " (:line env) " " frame))
     (reset! (:flag frame) true)
     (assoc {:env env :op :recur}
       :frame frame
@@ -859,7 +844,7 @@
                  m))))
     {:env env :op :deftype* :t t :fields fields}))
 
-(defmethod parse 'defrecord*
+#_(defmethod parse 'defrecord*
   [_ env [_ tsym fields] _]
   (let [t (munge (:name (resolve-var (dissoc env :locals) tsym)))]
     (swap! namespaces update-in [(-> env :ns :name) :defs tsym]
@@ -954,6 +939,25 @@
                        :target targetexpr
                        :method method
                        :args argexprs})))))
+
+(def prim-types #{'cljs.core/Number 'cljs.core/Pair 'cljs.core/Boolean 'cljs.core/Nil 'cljs.core/Null
+                  'cljs.core/Char 'cljs.core/Array 'cljs.core/Table 'cljs.core/Symbol 'cljs.core/Keyword
+                  'cljs.core/Procedure 'cljs.core/String})
+(defmethod parse 'extend [op env [_ etype & impls] _]
+  (let [prot-impl-pairs (partition 2 impls)
+        e-type-rslvd (resolve-var env etype)
+        analyzed-impls (map (fn [[prot-name meth-map]]
+                              (let [prot-v (resolve-var env prot-name)] 
+                                [prot-v
+                                 (map (fn [[meth-key meth-impl]]
+                                        [(analyze env (symbol (namespace (:name prot-v)) (name meth-key)))
+                                         (analyze (assoc env :context :return) meth-impl)])
+                                      meth-map)]))
+                            prot-impl-pairs)]
+    {:env env :op :extend :etype e-type-rslvd :impls analyzed-impls :base-type? (prim-types (:name e-type-rslvd))}))
+
+(defmethod parse 'scm* [op env [_ symbol-map & form] _]
+  {:env env :op :scm :children [] :form form :symbol-map symbol-map})
 
 (defmethod parse 'js*
   [op env [_ form & args] _]
@@ -1098,7 +1102,8 @@
 
 (defn analyze-file
   [f]
-  (let [res (if (= \/ (first f)) f (io/resource f))]
+  (let [res (if (= \/ (first f)) f (io/resource f))
+        res (or res (java.net.URL. (str "file:/Users/nathansorenson/src/c-clojure/src/cljs/" f)))] ;TODO: can it be un-resource'd like so?
     (assert res (str "Can't find " f " in classpath"))
     (binding [*cljs-ns* 'cljs.user
               *cljs-file* (.getPath ^java.net.URL res)]
@@ -1121,11 +1126,11 @@
        (lazy-seq (cons form (forms-seq f rdr)))
        (.close rdr))))
 
-(defn rename-to-js
+(defn rename-to-scm
   "Change the file extension from .cljs to .js. Takes a File or a
   String. Always returns a String."
   [file-str]
-  (clojure.string/replace file-str #".cljs$" ".js"))
+  (clojure.string/replace file-str #".cljs$" ".scm"))
 
 (defn mkdirs
   "Create all parent directories for the passed file."
@@ -1180,7 +1185,7 @@
    Returns a map containing {:ns .. :provides .. :requires .. :file ..}.
    If the file was not compiled returns only {:file ...}"
   ([src]
-     (let [dest (rename-to-js src)]
+     (let [dest (rename-to-scm src)]
        (compile-file src dest)))
   ([src dest]
      (let [src-file (io/file src)
@@ -1212,7 +1217,7 @@
   ([parts]
      (to-path parts java.io.File/separator))
   ([parts sep]
-     (apply str (interpose sep parts))))
+     (apply strict-str (interpose sep parts))))
 
 (defn to-target-file
   "Given the source root directory, the output target directory and
@@ -1223,7 +1228,7 @@
         relative-path (drop (count dir-path) file-path)
         parents (butlast relative-path)
         parent-file (java.io.File. ^String (to-path (cons target parents)))]
-    (java.io.File. parent-file ^String (rename-to-js (last relative-path)))))
+    (java.io.File. parent-file ^String (rename-to-scm (last relative-path)))))
 
 (defn cljs-files-in
   "Return a sequence of all .cljs files in the given directory."
