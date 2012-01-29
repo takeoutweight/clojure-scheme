@@ -98,7 +98,6 @@
   ([x y & more] `(+ (+ ~x ~y) ~@more)))
 
 (defmacro -
-  ([] 0)
   ([x] (check-numbers "(- ~{})" '- x))
   ([x y] (check-numbers "(~{} - ~{})" '- x y))
   ([x y & more] `(- (- ~x ~y) ~@more)))
@@ -110,7 +109,6 @@
   ([x y & more] `(* (* ~x ~y) ~@more)))
 
 (defmacro /
-  ([] 1)
   ([x] `(/ 1 ~x))
   ([x y] (let [expr (check-numbers "(~{} / ~{})" '/ x y)]
            (if @*js-unchecked-arithmetic*
