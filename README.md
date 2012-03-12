@@ -1,4 +1,4 @@
-## clojure-scm ##
+## clojure-scheme ##
 
 Pervasive tail-call optimization anyone?
 
@@ -21,12 +21,14 @@ Gambit seems to be a promising compile target for Clojure:
 				(prn "fib 36:" (fib 36))
 
 ... in the Clojure REPL ...
+
 				cljs.compiler> (time (fib 36))
 				"Elapsed time: 1138.814 msecs"
 				24157817
 				cljs.compiler> (compile-file "bench.cljs")
 
 ... in the shell ...
+
 				$ gsc -exe bench.scm
 				$ time ./bench
 				[ Meroon V3 Paques2001+1 $Revision: 1.2 $ ]
