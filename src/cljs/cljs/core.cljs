@@ -216,10 +216,12 @@
         )))
 
 ;hijack existing scheme structure types
-(deftype Table [])
 (def Table (type {}))
-(deftype Class [])
+(scm* {} (table-set! cljs.core/protocol-impls cljs.core/Table (make-table)))
+(scm* {} (define (make-cljs.core/Table) (make-table)))
+
 (def Class (type (type {})))
+(scm* {} (table-set! cljs.core/protocol-impls cljs.core/Class (make-table)))
 
 (defn scm-equal?-hash [o]
   (scm* [o] (equal?-hash o)))
