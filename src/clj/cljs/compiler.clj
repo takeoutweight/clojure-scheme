@@ -55,6 +55,11 @@
       (symbol ms)
       ms)))
 
+(defn dispatch-munge [s]
+  (-> s
+      (clojure.string/replace "." "_")
+      (clojure.string/replace "/" "$")))
+
 (defn confirm-var-exists [env prefix suffix]
   (when *cljs-warn-on-undeclared*
     (let [crnt-ns (-> env :ns :name)]
@@ -386,22 +391,23 @@
           (let [meth (first (:methods meth-impl))
                 fn-scm-args (schemify-method-arglist meth) ;FIXME may not be a seq.
                 rest? (some #{'.} fn-scm-args)
-                fun-str (emits meth-impl)]
+                fun-str (emits meth-impl)
+                impl-name (symbol (str (:name (:info meth-name))
+                                       "---" (dispatch-munge (:name etype))))]
             (when (> (count (:methods meth-impl)) 1) (throw (Exception. "should have compiled variadic defn away.")))
             (println
-             (if base-type?
-               (str "(define " (cons (symbol (str (:name (:info meth-name))
-                                                  "---" (name (:name etype))))
-                                     fn-scm-args))
-               (str "(define-method "
-                    (apply list (:name (:info meth-name))
-                           (list (first fn-scm-args) (:name etype)) (rest fn-scm-args))))
+             (str "(define " (cons impl-name 
+                                   fn-scm-args)) 
              (if rest?
                (str "(apply " fun-str " (append (list "
                     (space-sep (butlast (:params meth))) ") "
                     (last (:params meth)) "))")
                (str "(" fun-str " " (space-sep (:params meth)) ")"))
-             ")")))))))) 
+             ")")
+            (when-not base-type?
+              (println (str "(table-set! " (:name (:info meth-name)) "---vtable")
+                       (:name etype)
+                       impl-name ")") )))))))) 
 
 (defmethod emit :do
   [{:keys [statements ret env]}]
@@ -464,7 +470,9 @@
 (defmethod emit :set!
   [{:keys [target val env]}]
   (if (= :dot (:op target))
-    (print  "(set-field-value!" (emits (:target target)) (emits val) (str "'" (:field target))")")
+    ;;TODO: we don't know the type here at the moment - need to write a dynamic member lookup.
+    (throw (Exception. "can't set fields on unknown type"))
+    #_(print  "(set-field-value!" (emits (:target target)) (emits val) (str "'" (:field target))")")
     (print (str "(set! " (emits target) " " (emits val) ")"))))
 
 (defmethod emit :ns
@@ -478,8 +486,8 @@
 (defmethod emit :deftype*
   [{:keys [t fields]}]
   (let [fields (map munge fields)]
-    (println "(define-class" t "Object (" (space-sep fields) "))")
-    (println "(define" t (str t "-class") ")") ;meroon defines the -class extension, which we hijack.
+    (println "(define-type" t (space-sep fields) ")")
+    (println "(define" t (str "##type-" (count fields)  "-" t) ")") 
     (println "(table-set!" "cljs.core/protocol-impls" t "(make-table))" )))
 
 #_(defmethod emit :defrecord*
@@ -941,7 +949,7 @@
                        :args argexprs})))))
 
 (def prim-types #{'cljs.core/Number 'cljs.core/Pair 'cljs.core/Boolean 'cljs.core/Nil 'cljs.core/Null
-                  'cljs.core/Char 'cljs.core/Array 'cljs.core/Table 'cljs.core/Symbol 'cljs.core/Keyword
+                  'cljs.core/Char 'cljs.core/Array 'cljs.core/Symbol 'cljs.core/Keyword
                   'cljs.core/Procedure 'cljs.core/String})
 (defmethod parse 'extend [op env [_ etype & impls] _]
   (let [prot-impl-pairs (partition 2 impls)

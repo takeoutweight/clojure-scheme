@@ -160,7 +160,6 @@
 
 ;;;;;;;;;;;;;;;;;;; fundamentals ;;;;;;;;;;;;;;;
 ;basic Scheme types-- do not instantiate.
-(def Class (scm* {} Class-class))
 (deftype Number [])
 (deftype Pair [])
 (deftype Boolean [])
@@ -168,7 +167,6 @@
 (deftype Null [])
 (deftype Char [])
 (deftype Array [])
-(deftype Table [])
 (deftype Symbol [])
 (deftype Keyword [])
 (deftype Procedure [])
@@ -210,14 +208,19 @@
     1 (case (cljs.core/scm-subtype-idx x)
         0 Array ; raw scheme vector
         (2 3 30 31) Number            ;Rational ;Complex ;Flonum, ;Bignum
-        4 Table
-        6 (scm-object->class x) ;Meroon object
+        4 (scm-unsafe-vector-ref x 0)
         8 Symbol
         9 Keyword
         14 Procedure
         19 String
         (20 21 22 23 24 25 26 27 28 29) Array ;Various numerically-typed scheme vectors
         )))
+
+;hijack existing scheme structure types
+(deftype Table [])
+(def Table (type {}))
+(deftype Class [])
+(def Class (type (type {})))
 
 (defn scm-equal?-hash [o]
   (scm* [o] (equal?-hash o)))
