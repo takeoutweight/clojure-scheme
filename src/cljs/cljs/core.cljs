@@ -1201,7 +1201,7 @@ reduces them without incurring seq initialization"
 
   IStack
   (-peek [coll] nil)
-  (-pop [coll] #_(throw (js/Error. "Can't pop empty list")))
+  (-pop [coll] #_(throw (Error. "Can't pop empty list")))
 
   ICollection
   (-conj [coll o] (Cons. meta o empty-list))
@@ -1348,6 +1348,10 @@ reduces them without incurring seq initialization"
        (ci-reduce string f))
     ([string f start]
        (ci-reduce string f start))))
+
+(deftype Error [msg]
+  IPrintable
+  (-pr-seq [obj opts] (list msg)))
 
 ; could use reify
 ;;; LazySeq ;;;
@@ -1513,7 +1517,7 @@ reduces them without incurring seq initialization"
   "Returns true if n is even, throws an exception if n is not an integer"
    [n] (if (integer? n)
         (zero? (bit-and n 1))
-        (throw (js/Error. (str "Argument must be an integer: " n)))))
+        (throw (Error. (str "Argument must be an integer: " n)))))
 
 (defn odd?
   "Returns true if n is odd, throws an exception if n is not an integer"
@@ -1990,7 +1994,7 @@ reduces them without incurring seq initialization"
       (let [new-array (aclone array)]
         (scm* [new-array] (subvector new-array 0 (vector-length new-array)))
         (Vector. meta new-array))
-      (throw (js/Error. "Can't pop empty vector"))))
+      (throw (Error. "Can't pop empty vector"))))
 
   ICollection
   (-conj [coll o]
@@ -2081,7 +2085,7 @@ reduces them without incurring seq initialization"
     (-nth v (dec end)))
   (-pop [coll]
     (if (= start end)
-      (throw (js/Error. "Can't pop empty vector"))
+      (throw (Error. "Can't pop empty vector"))
       (Subvec. meta v start (dec end))))
 
   ICollection
@@ -2679,7 +2683,7 @@ reduces them without incurring seq initialization"
     (string? x) x
     (keyword? x) (scm* [x] (keyword->string x))
     (symbol? x) (scm* [x] (symbol->string x))
-    :else (throw (js/Error. (str "Doesn't support name: " x)))))
+    :else (throw (Error. (str "Doesn't support name: " x)))))
 #_TODO
 #_(defn namespace
   "Returns the namespace String of a symbol or keyword, or nil if not present."
@@ -2688,7 +2692,7 @@ reduces them without incurring seq initialization"
     (let [i (.lastIndexOf x "/")]
       (when (> i -1)
         (subs x 2 i)))
-    (throw (js/Error. (str "Doesn't support namespace: " x)))))
+    (throw (Error. (str "Doesn't support namespace: " x)))))
 
 (defn zipmap
   "Returns a map with the keys mapped to the corresponding vals."
@@ -2776,7 +2780,7 @@ reduces them without incurring seq initialization"
          (+ start (* n step))
          (if (and (> start end) (= step 0))
            start
-           (throw (js/Error. "Index out of bounds")))))
+           (throw (Error. "Index out of bounds")))))
     ([rng n not-found]
        (if (< n (-count rng))
          (+ start (* n step))
@@ -3489,9 +3493,9 @@ reduces them without incurring seq initialization"
      (or
       (when-not (contains? (tp tag) parent)
         (when (contains? (ta tag) parent)
-          (throw (js/Error. (str tag "already has" parent "as ancestor"))))
+          (throw (Error. (str tag "already has" parent "as ancestor"))))
         (when (contains? (ta parent) tag)
-          (throw (js/Error. (str "Cyclic derivation:" parent "has" tag "as ancestor"))))
+          (throw (Error. (str "Cyclic derivation:" parent "has" tag "as ancestor"))))
         {:parents (assoc (:parents h) tag (conj (get tp tag #{}) parent))
          :ancestors (tf (:ancestors h) tag td parent ta)
          :descendants (tf (:descendants h) parent ta tag td)})
@@ -3554,7 +3558,7 @@ reduces them without incurring seq initialization"
                                            e
                                            be)]
                                  (when-not (dominates (first be2) k prefer-table)
-                                   (throw (js/Error.
+                                   (throw (Error.
                                            (str "Multiple methods in multimethod '" name
                                                 "' match dispatch value: " dispatch-val " -> " k
                                                 " and " (first be2) ", and neither is preferred"))))
@@ -3586,7 +3590,7 @@ reduces them without incurring seq initialization"
   (let [dispatch-val (apply dispatch-fn args)
         target-fn (-get-method mf dispatch-val)]
     (when-not target-fn
-      (throw (js/Error. (str "No method in multimethod '" name "' for dispatch value: " dispatch-val))))
+      (throw (Error. (str "No method in multimethod '" name "' for dispatch value: " dispatch-val))))
     (apply target-fn args)))
 
 (deftype MultiFn [name dispatch-fn default-dispatch-val hierarchy
@@ -3621,7 +3625,7 @@ reduces them without incurring seq initialization"
 
   (-prefer-method [mf dispatch-val-x dispatch-val-y]
     (when (prefers* dispatch-val-x dispatch-val-y prefer-table)
-      (throw (js/Error. (str "Preference conflict in multimethod '" name "': " dispatch-val-y
+      (throw (Error. (str "Preference conflict in multimethod '" name "': " dispatch-val-y
                    " is already preferred to " dispatch-val-x))))
     (swap! prefer-table
            (fn [old]
