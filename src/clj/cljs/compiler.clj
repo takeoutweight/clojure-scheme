@@ -195,52 +195,44 @@
                 (str (namespace x) "/") "")
               (name x)
               ":")))
-
+(def ^:dynamic *quoted* false)
 (defmethod emit-constant clojure.lang.Symbol [x]
-           (print (str \'
+           (print (str (when-not *quoted* \')
                     (if (namespace x)
                       (str (namespace x) "/") "")
                     (name x))))
 
-(defn- emit-meta-constant [x string]
-  (if (meta x)
-    (do
-      (print (str "cljs.core.with_meta(" string ","))
-      (emit-constant (meta x))
-      (print ")"))
-    (print string)))
-
 (defmethod emit-constant clojure.lang.PersistentList$EmptyList [x]
-  (emit-meta-constant x "cljs.core/empty-list"))
+  (print "'()"))
 
 (defmethod emit-constant clojure.lang.PersistentList [x]
-  (emit-meta-constant x
-    (str "cljs.core.list("
-         (comma-sep (map #(with-out-str (emit-constant %)) x))
-         ")")))
+  (print (str "'("
+              (binding [*quoted* true]
+                (space-sep (map #(with-out-str (emit-constant %)) x)))
+              ")")))
 
 (defmethod emit-constant clojure.lang.Cons [x]
-  (emit-meta-constant x
-    (str "cljs.core.list("
-         (comma-sep (map #(with-out-str (emit-constant %)) x))
-         ")")))
+  (print (str "'("
+              (binding [*quoted* true]
+                (space-sep (map #(with-out-str (emit-constant %)) x)))
+              ")")))
 
 (declare emit)
 (declare analyze)
 (defmethod emit-constant clojure.lang.IPersistentVector [x]
-  (emit (analyze nil (apply list (concat '(new cljs.core/Vector nil)
-                                         (list (apply list 'list x))))) ))
+  (print (str "'#("
+              (binding [*quoted* true]
+                (space-sep (map #(with-out-str (emit-constant %)) x)))
+              ")")))
 
 (defmethod emit-constant clojure.lang.IPersistentMap [x]
-  (emit-meta-constant x
-    (str "(cljs.core/hash-map "
-         (comma-sep (map #(with-out-str (emit-constant %))
-                         (apply concat x)))
-         ")")))
+  (print (str "(cljs.core/hash-map "
+              (space-sep (map #(with-out-str (emit-constant %))
+                              (apply concat x)))
+              ")")))
 
 (defmethod emit-constant clojure.lang.PersistentHashSet [x]
-  (emit-meta-constant x
-    (str "(cljs.core/set((list"
+  (print (str "(cljs.core/set (list "
          (space-sep (map #(with-out-str (emit-constant %)) x))
          "))")))
 
