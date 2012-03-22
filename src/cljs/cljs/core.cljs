@@ -14,7 +14,7 @@
   Strings which should be printed."}
   *print-fn*
   (fn [s]
-    (scm* [s] (show s))))
+    (scm* [s] (display s))))
 
 (def
   ^{:doc "bound in a repl thread to the most recent value printed"}
@@ -243,7 +243,7 @@
   (-conj [_ o] (list o))
 
   IPrintable
-  (-pr-seq [o _] (list "nil"))
+  (-pr-seq [o _] (list ""))
 
   IIndexed
   (-nth
@@ -2991,13 +2991,11 @@ reduces them without incurring seq initialization"
   options given in opts"
   [objs opts]
   (let [first-obj (first objs)
-        sb (gstring/StringBuffer.)]
-    (doseq [obj objs]
-      (when-not (identical? obj first-obj)
-        (str sb " "))
-      (doseq [string (pr-seq obj opts)]
-        (str sb string)))
-    (str sb)))
+        sb ""]
+    (reduce (fn [sb obj]
+              (apply str sb (when-not (identical? obj first-obj) " ") (pr-seq obj opts)))
+            sb
+            objs)))
 
 (defn pr-with-opts
   "Prints a sequence of objects using string-print, observing all
@@ -3067,11 +3065,11 @@ reduces them without incurring seq initialization"
 
   Pair
   (-pr-seq [a opts]
-    (pr-sequential pr-seq "#<Pair [" ", " "]>" opts a))
+    (pr-sequential pr-seq "(" " " ")" opts a))
   
   Array
   (-pr-seq [a opts]
-    (pr-sequential pr-seq "#<Array [" ", " "]>" opts a))
+    (pr-sequential pr-seq "[" " " "]" opts a))
 
   Table
   (-pr-seq [coll opts]

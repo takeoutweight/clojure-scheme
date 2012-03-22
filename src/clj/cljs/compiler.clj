@@ -463,7 +463,7 @@
   [{:keys [target val env]}]
   (if (= :dot (:op target))
     ;;TODO: we don't know the type here at the moment - need to write a dynamic member lookup.
-    (throw (Exception. "can't set fields on unknown type"))
+    (throw (Exception. (str "can't set fields on unknown type: " (:line env))))
     #_(print  "(set-field-value!" (emits (:target target)) (emits val) (str "'" (:field target))")")
     (print (str "(set! " (emits target) " " (emits val) ")"))))
 
