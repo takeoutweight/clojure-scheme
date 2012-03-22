@@ -65,7 +65,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; core protocols ;;;;;;;;;;;;;
 
-(scm* {} (load "cond-apply.scm"))
 (scm* {} (define cljs.core/protocol-impls (make-table)))
 (defprotocol IFn
   (-invoke [this args]))
