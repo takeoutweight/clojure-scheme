@@ -3181,7 +3181,7 @@ reduces them without incurring seq initialization"
   (when-let [validate (.-validator a)]
     (assert (validate new-value) "Validator rejected reference state"))
   (let [old-value (.-state a)]
-    (set! (.-state a) new-value)
+    ;(set! (.-state a) new-value) FIXME setting fields dynamically
     (-notify-watches a old-value new-value))
   new-value)
 
@@ -3225,7 +3225,7 @@ reduces them without incurring seq initialization"
   is not acceptable to the new validator, an Error will be thrown and the
   validator will not be changed."
   [iref val]
-  (set! (.-validator iref) val))
+  #_(set! (.-validator iref) val) #_"FIXME: setting field dynamically")
 
 (defn get-validator
   "Gets the validator-fn for a var/ref/agent/atom."
@@ -3239,12 +3239,12 @@ reduces them without incurring seq initialization"
 
   f must be free of side-effects"
   [iref f & args]
-  (set! (.-meta iref) (apply f (.-meta iref) args)))
+  #_(set! (.-meta iref) (apply f (.-meta iref) args)) #_"FIXME: setting fields dynamically")
 
 (defn reset-meta!
   "Atomically resets the metadata for an atom"
   [iref m]
-  (set! (.-meta iref) m))
+  #_(set! (.-meta iref) m) #_"Setting fields dynamically")
 
 (defn add-watch
   "Alpha - subject to change.
@@ -3288,7 +3288,7 @@ reduces them without incurring seq initialization"
   ([] (gensym "G__"))
   ([prefix-string]
      (when (nil? gensym_counter)
-       (set! gensym_counter (atom 0)))
+       #_(set! gensym_counter (atom 0)) #_"FIXME: set members dynamically")
      (symbol (str prefix-string (swap! gensym_counter inc)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Fixtures ;;;;;;;;;;;;;;;;
