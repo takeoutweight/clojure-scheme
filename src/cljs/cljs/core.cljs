@@ -480,12 +480,13 @@ reduces them without incurring seq initialization"
 
 (declare Vector)
 (extend-type Array
+  ISequential
   IEquiv
   (-equiv [a o] (equiv-sequential a o))
     
   IWithMeta
   (-with-meta [coll meta] (Vector. meta coll))
-  
+
   ISeqable
   (-seq [array] (array-seq array 0))
 
