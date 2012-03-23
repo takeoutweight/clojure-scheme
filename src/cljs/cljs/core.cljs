@@ -389,6 +389,9 @@
   (-hash [o] (scm-equal?-hash o)))
 
 (extend-type Boolean
+  IEquiv
+  (-equiv [x o] (identical? x o))
+  
   IHash
   (-hash [o] (scm-equal?-hash o)))
 
@@ -477,6 +480,9 @@ reduces them without incurring seq initialization"
 
 (declare Vector)
 (extend-type Array
+  IEquiv
+  (-equiv [a o] (equiv-sequential a o))
+    
   IWithMeta
   (-with-meta [coll meta] (Vector. meta coll))
   
