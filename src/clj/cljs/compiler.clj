@@ -244,7 +244,11 @@
 (defn emit-block
   [context statements ret]
   (if statements
-    (apply print-scm "begin" (concat statements [ret]))
+    (println (apply strict-str
+                    (concat ["(begin"]
+                            (interpose "\n  " (map #(with-out-str (emit %))
+                                                 (concat statements [ret])))
+                            [")"])))
     (emit ret)))
 
 (defmacro emit-wrap [env & body]
@@ -283,8 +287,7 @@
 
 (defmethod emit :constant
   [{:keys [form env]}]
-  (when-not (= :statement (:context env))
-    (emit-constant form)))
+  (emit-constant form))
 
 (defmethod emit :if
   [{:keys [test then else env]}]
