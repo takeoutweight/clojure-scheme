@@ -281,9 +281,8 @@
 
 (defmethod emit :set
   [{:keys [children env]}]
-  (emit-wrap env
-    (print (str "(list"
-                (space-sep (map emits children)) ")"))))
+  (print (str "(cljs.core/set (list "
+              (space-sep (map emits children)) "))")))
 
 (defmethod emit :constant
   [{:keys [form env]}]
