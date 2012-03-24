@@ -66,8 +66,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; core protocols ;;;;;;;;;;;;;
 
 (scm* {} (define cljs.core/protocol-impls (make-table)))
+;all proto defns need to be able to throw errors with str msgs- but errors themselves can implement protocols
+(scm* {} (define make-cljs.core/Error))
+(scm* {} (define cljs.core/str)) 
+
 (defprotocol IFn
   (-invoke [this args]))
+
+(scm* {} (include "polymorphic-apply.scm")) ;to trap non-proc exceptions and calls -invoke
 
 (defprotocol ICounted
   (-count [coll] "constant time count"))
@@ -364,6 +370,12 @@
       (scm* [coll n] (list-ref coll n))
       not-found))
 
+  Ifn
+  (-invoke [coll [k not-found]]
+    (if not-found
+      (-nth coll k not-found)
+      (-nth coll k)))
+
   ISeqable
   (-seq [coll] coll)
 
@@ -394,6 +406,28 @@
   
   IHash
   (-hash [o] (scm-equal?-hash o)))
+
+(extend-type Keyword
+  IEquiv
+  (-equiv [x o] (identical? x o))
+
+  IHash
+  (-hash [o] (scm-equal?-hash o))
+
+  IFn
+  (-invoke [k [coll not-found]]
+    (-lookup coll k not-found)))
+
+(extend-type Symbol
+  IEquiv
+  (-equiv [x o] (identical? x o))
+
+  IHash
+  (-hash [o] (scm-equal?-hash o))
+
+  IFn
+  (-invoke [k [coll not-found]]
+    (-lookup coll k not-found)))
 
 (extend-type Procedure
   IHash
@@ -523,6 +557,10 @@ reduces them without incurring seq initialization"
        (aget array k))
     ([array k not-found]
        (-nth array k not-found)))
+
+  IFn
+  (-invoke [coll [k not-found]]
+    (-lookup coll k not-found))
 
   IReduce
   (-reduce
@@ -2487,7 +2525,7 @@ reduces them without incurring seq initialization"
 
   ILookup
   (-lookup
-    ([table k] (scm* [table k] (table-ref table k)))
+    ([table k] (-lookup table k nil))
     ([table k not-found]
        (scm* [table k not-found]
              (with-exception-catcher

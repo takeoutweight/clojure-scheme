@@ -576,7 +576,7 @@
                  fn-name-sym (gensym fname)
                  fn-vtable-name (symbol (str fname "---vtable"))
                  prim-types [:Number :Pair :Boolean :Nil :Null
-                             :Char :Array :Table :Symbol :Keyword :Procedure :String]
+                             :Char :Array :Symbol :Keyword :Procedure :String]
                  prim-fnames (map #(symbol (str fname "---cljs_core$" (name %))) prim-types)
                  call-form (fn [p-fn]
                              (if variadic?
@@ -620,7 +620,7 @@
                                                  (map (fn [s] `(scm* {} ~s)) (remove #{'&} rst))))])
                                     prim-types specialized-fns)))]
              `(do
-                ~@(map (fn [sf] `(def ~sf)) prim-fnames)
+                ~@(map (fn [sf] `(defn ~sf [& args] (throw (cljs.core/Error. (str "Protocol/Type pair: " (quote ~sf) " not defined."))))) prim-fnames)
                 (def ~fn-vtable-name {})
                 ~(list 'scm*
                        {fn-name-sym fname

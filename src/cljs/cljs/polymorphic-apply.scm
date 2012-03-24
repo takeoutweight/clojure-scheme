@@ -20,7 +20,7 @@
 
 (define (polymorphic-raise-nonprocedure-operator-exception oper args code rte)
   (##declare (not interrupts-enabled))
-  (apply cljs.core/-invoke oper args))
+  (cljs.core/-invoke oper args))
 
 ;This seems to be necessary for interpreted code. Compiled code uses above procedures.
 (let ((old-handler (current-exception-handler)))
