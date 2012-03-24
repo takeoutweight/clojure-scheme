@@ -370,7 +370,7 @@
       (scm* [coll n] (list-ref coll n))
       not-found))
 
-  Ifn
+  IFn
   (-invoke [coll [k not-found]]
     (if not-found
       (-nth coll k not-found)
@@ -1367,6 +1367,9 @@ reduces them without incurring seq initialization"
 
   IHash
   (-hash [o] (scm-equal?-hash o))
+
+  IEquiv
+  (-equiv [s o] (scm* [s o] (equal? s o)))
 
   ISeqable
   (-seq [string] (prim-seq string 0))
