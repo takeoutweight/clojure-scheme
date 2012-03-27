@@ -1186,17 +1186,17 @@ reduces them without incurring seq initialization"
 (defn symbol
   "Returns a Symbol with the given namespace and name."
   ([name] (cond (symbol? name) name
-                (keyword? name) (str* "\uFDD1" "'" (subs name 2)))
-     :else (str* "\uFDD1" "'" name))
-  ([ns name] (symbol (str* ns "/" name))))
+                (keyword? name) (scm* [name] (string->symbol (keyword->string name)))
+                (string? name) (scm* [name] (string->symbol name))))
+  ([ns name] (symbol (str ns "/" name))))
 
 (defn keyword
   "Returns a Keyword with the given namespace and name.  Do not use :
   in the keyword strings, it will be added automatically."
   ([name] (cond (keyword? name) name
                 (symbol? name) (str* "\uFDD0" "'" (subs name 2))
-                :else (str* "\uFDD0" "'" name)))
-  ([ns name] (keyword (str* ns "/" name))))
+                :else (str "\uFDD0" "'" name)))
+  ([ns name] (keyword (str ns "/" name))))
 
 
 
@@ -2729,11 +2729,18 @@ reduces them without incurring seq initialization"
 (defn name
   "Returns the name String of a string, symbol or keyword."
   [x]
-  (cond
-    (string? x) x
-    (keyword? x) (scm* [x] (keyword->string x))
-    (symbol? x) (scm* [x] (symbol->string x))
-    :else (throw (Error. (str "Doesn't support name: " x)))))
+  (let [split-slash (scm* {::slashchar (symbol-macro "#\\/")}
+                          (lambda (str) (let* ((lst (string->list str))
+                                               (split (memq ::slashchar (reverse lst))))
+                                              (if split
+                                                (let* ((last-slash-idx (length split)))
+                                                      (list->string (list-tail lst last-slash-idx)))
+                                                str))))]
+    (cond
+      (string? x) x
+      (keyword? x) (split-slash (str x))
+      (symbol? x) (split-slash (str x))
+      :else (throw (Error. (str "Doesn't support name: " x))))))
 #_TODO
 #_(defn namespace
   "Returns the namespace String of a symbol or keyword, or nil if not present."

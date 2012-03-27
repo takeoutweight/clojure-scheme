@@ -648,6 +648,9 @@
                  (lambda () (table-ref (table-ref cljs.core/protocol-impls :tx)
                             :p)))))))
 
+(defmacro symbol-macro [str]
+  (symbol str))
+
 (defmacro scm-table-ref [table key]
   `(scm* {:table ~table :key ~key} ~(list 'table-ref :table :key)))
 
