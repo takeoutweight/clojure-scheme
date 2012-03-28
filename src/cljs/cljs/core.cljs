@@ -2741,15 +2741,24 @@ reduces them without incurring seq initialization"
       (keyword? x) (split-slash (str x))
       (symbol? x) (split-slash (str x))
       :else (throw (Error. (str "Doesn't support name: " x))))))
-#_TODO
-#_(defn namespace
+
+(defn namespace
   "Returns the namespace String of a symbol or keyword, or nil if not present."
   [x]
-  (if (or (keyword? x) (symbol? x))
-    (let [i (.lastIndexOf x "/")]
-      (when (> i -1)
-        (subs x 2 i)))
-    (throw (Error. (str "Doesn't support namespace: " x)))))
+  (let [keep-to-slash (scm* {::slashchar (symbol-macro "#\\/")}
+                         (lambda (str)
+                                 (let* ((lst (string->list str))
+                                        (split (memq ::slashchar (reverse lst))))
+                                       (if split
+                                         (let* ((last-slash-idx (- (length lst) (length split) -1)))
+                                               (list->string (reverse (list-tail (reverse lst) last-slash-idx)))
+                                               )
+                                         (void)))))]
+    (cond
+      (string? x) x
+      (keyword? x) (keep-to-slash (str x))
+      (symbol? x) (keep-to-slash (str x))
+      :else (throw (Error. (str "Doesn't support namespace: " x))))))
 
 (defn zipmap
   "Returns a map with the keys mapped to the corresponding vals."
