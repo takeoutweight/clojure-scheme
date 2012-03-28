@@ -45,7 +45,7 @@
   "Creates a raw scheme \"array\" (a mutable vector, distinct from persistent clojure Vector)
 @param {...*} var_args" ;;array is a special case, don't emulate this doc string
   ([] (scm* [] (vector)))
-  ([var-args] ;; [& items]
+  ([& var-args] ;; [& items]
      (scm* [var-args] (apply vector var-args))))
 
 (defn aget
