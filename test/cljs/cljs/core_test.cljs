@@ -175,7 +175,7 @@
   #_(assert (= (hash-map :foo 5)
              (assoc (cljs.core.ObjMap. nil (array) (js-obj)) :foo 5)))
 
-  (assert (= "[1 true {:a 2, :b 42} #<Array [3, 4]>]"
+  (assert (= "[1 true {:a 2, :b 42} [3 4]]" ;"[1 true {:a 2, :b 42} #<Array [3, 4]>]" I equate Scheme vectors with clojure vectors at the moment.
              (pr-str [1 true {:a 2 :b 42} (array 3 4)])))
 
   ;;this fails in v8 - why?
