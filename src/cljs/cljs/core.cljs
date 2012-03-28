@@ -1375,7 +1375,7 @@ reduces them without incurring seq initialization"
   (-seq [string] (prim-seq string 0))
   
   ICounted
-  (-count [s] (alength s))
+  (-count [s] (scm* [s] (string-length s)))
 
   IIndexed
   (-nth
