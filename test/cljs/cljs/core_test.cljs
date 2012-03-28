@@ -172,7 +172,7 @@
   (assert (= () (rest (array 1))))
   (assert (= {"x" "y"} (meta ^{"x" "y"} [])))
   (assert (= {:a :b} (dissoc {:a :b :c :d} :c)))
-  (assert (= (hash-map :foo 5)
+  #_(assert (= (hash-map :foo 5)
              (assoc (cljs.core.ObjMap. nil (array) (js-obj)) :foo 5)))
 
   (assert (= "[1 true {:a 2, :b 42} #<Array [3, 4]>]"

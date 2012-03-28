@@ -263,8 +263,7 @@
 
 (defmethod emit :meta
   [{:keys [expr meta env]}]
-  (emit-wrap env
-    (print (str "cljs.core.with_meta(" (emits expr) "," (emits meta) ")"))))
+  (print (str "(cljs.core/with-meta " (emits expr) " " (emits meta) ")")))
 
 (defmethod emit :map
   [{:keys [children env simple-keys? keys vals]}]
