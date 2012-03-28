@@ -237,7 +237,7 @@
 
 (defmacro bit-and-not
   [x y]
-  `(bit-and ~x (bit-not y)))
+  `(bit-and ~x (bit-not ~y)))
 
 #_(defmacro bit-clear [x n]
   (list 'js* "(~{} & ~(1 << ~{}))" x n))
