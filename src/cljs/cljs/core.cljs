@@ -429,6 +429,13 @@
   (-invoke [k [coll not-found]]
     (-lookup coll k not-found)))
 
+(extend-type Char
+  IEquiv
+  (-equiv [x o] (identical? x o))
+
+  IHash
+  (-hash [o] (scm-equal?-hash o)))
+
 (extend-type Procedure
   IHash
   (-hash [o] (scm-equal?-hash o)))
@@ -3145,6 +3152,9 @@ reduces them without incurring seq initialization"
 
   Symbol
   (-pr-seq [s opts] (list (scm* [n] (symbol->string s))))
+
+  Char
+  (-pr-seq [s opts] (list (scm* [n] (string s))))
 
   String ;TODO: I don't overload strings so need to break apart keywords etc.
   (-pr-seq [obj opts] (list obj)
