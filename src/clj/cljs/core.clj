@@ -411,7 +411,7 @@
                                        (mapcat
                                         (fn [f]
                                           `[~f
-                                            , (~(symbol (str t '- f)) ~(first args))]) fields))
+                                            , (~(symbol (str t '- f)) ~(first args))]) (remove (into #{} args) fields)))
                                   ~@body)))
                   meths)))
         ;;reshape for extend-type

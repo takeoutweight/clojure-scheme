@@ -397,6 +397,9 @@
   IPairable
   (-pair [coll] coll)
 
+  IWithMeta
+  (-with-meta [coll meta] (Cons. meta (first coll) (rest coll)))
+
   IReduce 
   (-reduce
     ([v f]

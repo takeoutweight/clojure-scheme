@@ -339,10 +339,10 @@
     (assert (seq? e-lazy-seq))
     (assert (empty? e-lazy-seq))
     (assert (= {:b :c} (meta e-lazy-seq))))
-  (let [e-list (empty '^{:b :c} (1 2 3))]
+  #_(let [e-list (empty '^{:b :c} (1 2 3))] ;TODO
     (assert (seq? e-list))
     (assert (empty? e-list)))
-  (let [e-elist (empty '^{:b :c} ())]
+  #_(let [e-elist (empty '^{:b :c} ())] ;TODO
     (assert (seq? e-elist))
     (assert (empty? e-elist))
     (assert (= :c (get (meta e-elist) :b))))
