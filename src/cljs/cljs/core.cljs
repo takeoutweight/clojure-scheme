@@ -1454,6 +1454,9 @@ reduces them without incurring seq initialization"
   IPairable
   (-pair [coll] (pair (-seq coll)))
 
+  ICounted
+  (-count [coll] (count (-pair coll)))
+
   ISeq
   (-first [coll] (first (lazy-seq-value coll)))
   (-rest [coll] (rest (lazy-seq-value coll)))
