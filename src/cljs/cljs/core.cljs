@@ -2475,8 +2475,7 @@ reduces them without incurring seq initialization"
 
   ISeqable
   (-seq [coll]
-    (map (fn [pr] [(scm* [pr] (car pr)) (scm* [pr] (cdr pr))])
-         (scm* [table] (table->list table))))
+    (seq table))
 
   IReduce 
   (-reduce
@@ -2543,8 +2542,11 @@ reduces them without incurring seq initialization"
 
   ISeqable
   (-seq [table]
-    (map (fn [pr] [(scm* [pr] (car pr)) (scm* [pr] (cdr pr))])
-         (scm* [table] (table->list table))))
+    (let [lst (map (fn [pr] [(scm* [pr] (car pr)) (scm* [pr] (cdr pr))])
+                   (scm* [table] (table->list table)))]
+      (if (empty? lst)
+        nil
+        lst)))
 
   IReduce 
   (-reduce
