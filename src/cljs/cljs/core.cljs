@@ -3334,12 +3334,12 @@ reduces them without incurring seq initialization"
 
   f must be free of side-effects"
   [iref f & args]
-  #_(set! (.-meta iref) (apply f (.-meta iref) args)) #_"FIXME: setting fields dynamically")
+  (set! (.-meta iref) (apply f (.-meta iref) args)) #_"FIXME: setting fields dynamically")
 
 (defn reset-meta!
   "Atomically resets the metadata for an atom"
   [iref m]
-  #_(set! (.-meta iref) m) #_"Setting fields dynamically")
+  (set! (.-meta iref) m) #_"Setting fields dynamically")
 
 (defn add-watch
   "Alpha - subject to change.
@@ -3383,7 +3383,7 @@ reduces them without incurring seq initialization"
   ([] (gensym "G__"))
   ([prefix-string]
      (when (nil? gensym_counter)
-       #_(set! gensym_counter (atom 0)) #_"FIXME: set members dynamically")
+       (set! gensym_counter (atom 0)))
      (symbol (str prefix-string (swap! gensym_counter inc)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Fixtures ;;;;;;;;;;;;;;;;
