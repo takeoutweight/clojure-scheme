@@ -1491,7 +1491,7 @@ reduces them without incurring seq initialization"
 
 (defn to-array
   [s]
-  (array s))
+  (apply array s))
 
 (defn- bounded-count [s n]
   (loop [s s i n sum 0]
