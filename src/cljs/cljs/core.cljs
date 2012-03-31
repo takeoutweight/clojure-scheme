@@ -452,6 +452,9 @@
   (-hash [o] (scm-equal?-hash o)))
 
 (extend-type Procedure
+  IEquiv
+  (-equiv [x o] (identical? x o))
+  
   IHash
   (-hash [o] (scm-equal?-hash o)))
 
