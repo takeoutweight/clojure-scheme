@@ -648,14 +648,14 @@
                  (lambda () (table-ref (table-ref cljs.core/protocol-impls :tx)
                             :p)))))))
 
-(defmacro symbol-macro [str]
-  (symbol str))
-
 (defmacro scm-table-ref [table key]
   `(scm* {:table ~table :key ~key} ~(list 'table-ref :table :key)))
 
 (defmacro scm-unsafe-vector-ref [vector idx]
   `(scm* {:vector ~vector :idx ~idx} ~(list (symbol "##vector-ref") :vector :idx)))
+
+(defmacro scm-unsafe-vector-set! [vector idx val]
+  `(scm* {:vector ~vector :idx ~idx :val ~val} ~(list (symbol "##vector-set!") :vector :idx :val)))
 
 (defmacro scm-type-idx [x]
   `(scm* {:x ~x} ~(list (symbol "##type") :x ) ))

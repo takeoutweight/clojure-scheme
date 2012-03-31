@@ -463,9 +463,7 @@
 (defmethod emit :set!
   [{:keys [target val env]}]
   (if (= :dot (:op target))
-    ;;TODO: we don't know the type here at the moment - need to write a dynamic member lookup.
-    (throw (Exception. (str "can't set fields on unknown type: " (:line env))))
-    #_(print  "(set-field-value!" (emits (:target target)) (emits val) (str "'" (:field target))")")
+    (print  "(cljs.core/record-set!" (emits (:target target)) (str "'" (:field target)) (emits val)")")
     (print (str "(set! " (emits target) " " (emits val) ")"))))
 
 (defmethod emit :ns
@@ -509,7 +507,7 @@
 (defmethod emit :dot
   [{:keys [target field method args env]}]
   (if field
-    (print (str "(field-value " (emits target) " "  field ")"))
+    (print (str "(cljs.core/record-ref  " (emits target) " '"  field ")"))
     (throw (Exception. (str "no special dot-method access: " (:line env))))
     #_(print (str (emits target) "." method "("
                 (comma-sep (map emits args))

@@ -67,8 +67,23 @@
 
 (scm* {} (define cljs.core/protocol-impls (make-table)))
 ;all proto defns need to be able to throw errors with str msgs- but errors themselves can implement protocols
-(scm* {} (define make-cljs.core/Error))
-(scm* {} (define cljs.core/str)) 
+;(scm* {} (define make-cljs.core/Error))
+;(declare str)
+(defn record-ref [obj field]
+  (let [field-params (pair (scm-unsafe-vector-ref (type obj) 5))
+        search (scm* [field field-params] (memq field field-params))]
+    (if search
+      (let [slot (inc (/ (- (count field-params) (count search)) 3))]
+        (scm-unsafe-vector-ref obj slot))
+      (throw (Error. (str "Field not defined: " field " on " field-params))))))
+
+(defn record-set! [obj field val]
+  (let [field-params (pair (scm-unsafe-vector-ref (type obj) 5))
+        search (scm* [field field-params] (memq field field-params))]
+    (if search
+      (let [slot (inc (/ (- (count field-params) (count search)) 3))]
+        (scm-unsafe-vector-set! obj slot val))
+      (throw (Error. (str "Field not defined: " field " on " field-params))))))
 
 (defprotocol IFn
   (-invoke [this args]))
@@ -2736,7 +2751,7 @@ reduces them without incurring seq initialization"
 (defn name
   "Returns the name String of a string, symbol or keyword."
   [x]
-  (let [split-slash (scm* {::slashchar (symbol-macro "#\\/")}
+  (let [split-slash (scm* {::slashchar (scm* [] "#\\/")}
                           (lambda (str) (let* ((lst (string->list str))
                                                (split (memq ::slashchar (reverse lst))))
                                               (if split
@@ -2752,7 +2767,7 @@ reduces them without incurring seq initialization"
 (defn namespace
   "Returns the namespace String of a symbol or keyword, or nil if not present."
   [x]
-  (let [keep-to-slash (scm* {::slashchar (symbol-macro "#\\/")}
+  (let [keep-to-slash (scm* {::slashchar (scm* {} "#\\/")}
                          (lambda (str)
                                  (let* ((lst (string->list str))
                                         (split (memq ::slashchar (reverse lst))))
@@ -3258,7 +3273,7 @@ reduces them without incurring seq initialization"
   (when-let [validate (.-validator a)]
     (assert (validate new-value) "Validator rejected reference state"))
   (let [old-value (.-state a)]
-    ;(set! (.-state a) new-value) FIXME setting fields dynamically
+    (set! (.-state a) new-value)
     (-notify-watches a old-value new-value))
   new-value)
 
