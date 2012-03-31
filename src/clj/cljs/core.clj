@@ -170,7 +170,7 @@
   `(let [ra# ~a]
      (scm* {:ra ra# :i ~i :v ~v}
            ~'(vector-set! :ra :i :v))
-     ra#))
+     ~v))
 
 (defmacro +
   ([& more] `(scm* ~more ~(cons '+ more))))

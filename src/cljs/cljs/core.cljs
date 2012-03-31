@@ -56,7 +56,7 @@
 (defn aset
   "Sets the value at the index."
   [array i val]
-  (cljs.core/aset array i val) (scm* [array i val] (vector-set! array i val)))
+  (cljs.core/aset array i val))
 
 (defn alength
   "Returns the length of the Java array. Works on arrays of all types."
