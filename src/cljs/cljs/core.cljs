@@ -855,7 +855,7 @@ reduces them without incurring seq initialization"
 (defn integer?
   "Returns true if n is an integer.  Warning: returns true on underflow condition."
   [n]
-  (scm* [n] (fixnum? n)))
+  (scm* [n] (integer? n)))
 
 (defn contains?
   "Returns true if key is present in the given collection, otherwise
@@ -2701,7 +2701,11 @@ reduces them without incurring seq initialization"
        (if (-contains-key? hash-map v)
          v
          not-found)))
-  
+
+  IReduce 
+  (-reduce
+    ([v f] (seq-reduce f v))
+    ([v f start] (seq-reduce f start v)))
 
   ISet
   (-disjoin [coll v]
