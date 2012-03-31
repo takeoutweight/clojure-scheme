@@ -203,16 +203,16 @@
                     (name x))))
 
 (defmethod emit-constant clojure.lang.PersistentList$EmptyList [x]
-  (print "'()"))
+  (print (when (not *quoted*) "'") "()"))
 
 (defmethod emit-constant clojure.lang.PersistentList [x]
-  (print (str "'("
+  (print (str (when (not *quoted*) "'") "("
               (binding [*quoted* true]
                 (space-sep (map #(with-out-str (emit-constant %)) x)))
               ")")))
 
 (defmethod emit-constant clojure.lang.Cons [x]
-  (print (str "'("
+  (print (str (when (not *quoted*) "'") "("
               (binding [*quoted* true]
                 (space-sep (map #(with-out-str (emit-constant %)) x)))
               ")")))
