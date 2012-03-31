@@ -335,6 +335,7 @@
    ([_ n] nil)
    ([_ n not-found] not-found))
 
+  ISequential
   ISeq
   (-first [_] nil)
   (-rest [_] (scm* [] '()))
@@ -1400,7 +1401,7 @@ reduces them without incurring seq initialization"
   (-equiv [s o] (scm* [s o] (equal? s o)))
 
   ISeqable
-  (-seq [string] (prim-seq string 0))
+  (-seq [string] (scm* [string] (string->list string)))
   
   ICounted
   (-count [s] (scm* [s] (string-length s)))
