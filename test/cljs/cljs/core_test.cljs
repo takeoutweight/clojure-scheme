@@ -488,8 +488,8 @@
   (assert (= (distinct '(1 2 3 1 1 1)) '(1 2 3)))
   (assert (= (distinct [1 1 1 2]) '(1 2)))
   (assert (= (distinct [1 2 1 2]) '(1 2)))
-  (assert (= (distinct "a") ["a"]))
-  (assert (= (distinct "abcabab") ["a" "b" "c"]))
+  (assert (= (distinct "a") [\a])) ; srings are lists of chars
+  (assert (= (distinct "abcabab") [\a \b \c]))
   (assert (= (distinct ["abc" "abc"]) ["abc"]))
   (assert (= (distinct [nil nil]) [nil]))
   (assert (= (distinct [0.0 0.0]) [0.0]))
