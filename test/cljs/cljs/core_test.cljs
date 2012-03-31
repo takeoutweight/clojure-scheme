@@ -562,7 +562,7 @@
     (assert (= (seq a) (seq (to-array [1 2 3]))))
     (assert (= 42 (aset a 0 42)))
     (assert (not= (seq a) (seq (to-array [1 2 3]))))
-    (assert (not= a (aclone a))))
+    (assert (not (identical? a (aclone a))))) ;scheme vectors use value equality
 
   ;; sort
   (assert (= [1 2 3 4 5] (sort [5 3 1 4 2])))
