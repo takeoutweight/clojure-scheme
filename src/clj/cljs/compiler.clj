@@ -346,9 +346,11 @@
 (defn emit-fn-method
   [{:keys [gthis name variadic params statements ret env recurs max-fixed-arity] :as f}]
   (let [lambda-str (strict-str "(lambda "
-                        (schemify-method-arglist f) " "
-                        (with-out-str (emit-block :return statements ret))
-                        ")")]
+                               (schemify-method-arglist f) " "
+                               (when variadic (str "(let (("(last params) " (cljs.core/-seq " (last params) "))) "))
+                               (with-out-str (emit-block :return statements ret))
+                               (when variadic ")")
+                               ")")]
     (if name
       (print "(letrec ((" name lambda-str "))"name")")
       (print lambda-str))))

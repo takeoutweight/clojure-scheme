@@ -135,7 +135,7 @@
                                                          `(~'scm* [~restparam] ~(nth (iterate #(list 'cdr %) restparam) (count fixed-args)))])]
                                    ~(second sig))))]
                    `(~(vec (concat (first smallest-sig) ['& restparam])) 
-                     (~'case (~'(scm* {} length) ~restparam)
+                     (~'case (count ~restparam)
                        0 ~(second smallest-sig)
                        ~@(apply concat
                                 (map-indexed

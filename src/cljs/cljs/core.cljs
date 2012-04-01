@@ -710,11 +710,13 @@ reduces them without incurring seq initialization"
    contains val at index."
   ([coll k v]
      (-assoc coll k v))
-  ([coll k v & kvs]
-     (let [ret (assoc coll k v)]
+  ([coll k v kvs]
+     (let [ret (-assoc coll k v)]
        (if kvs
          (recur ret (first kvs) (second kvs) (nnext kvs))
-         ret))))
+         ret)))
+  ([coll k v k2 v2 & kvs]
+     (assoc coll k v (concat [k2 v2] kvs))))
 
 (defn dissoc
   "dissoc[iate]. Returns a new map of the same (hashed/sorted) type,
