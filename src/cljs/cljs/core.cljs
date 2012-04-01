@@ -899,23 +899,60 @@ reduces them without incurring seq initialization"
   "Comparator. Returns a negative number, zero, or a positive number
   when x is logically 'less than', 'equal to', or 'greater than'
   y. Uses google.array.defaultCompare."
-  [x y] (garray/defaultCompare x y))
-
-(defn ^:private fn->comparator
-  "Given a fn that might be boolean valued or a comparator,
-   return a fn that is a comparator."
-  [f]
-  (if (= f compare)
-    compare
-    (fn [x y]
-      (let [r (f x y)]
-        (if (number? r)
-          r
-          (if r
-            -1
-            (if (f y x) 1 0)))))))
+  [x y]
+  (cond
+    (identical? Number (type x)) (< x y)
+    (identical? Char (type x)) (scm* [x y] (char<? x y))
+    (identical? String (type x)) (scm* [x y] (string<? x y))
+    :else (compare (str x) (str y))))
 
 (declare to-array)
+
+;;; File: "Sort.scm", Time-stamp: <2008-03-18 15:21:35 feeley>
+;;; Copyright (c) 2006-2008 by Marc Feeley, All Rights Reserved.
+(scm* []
+      (define (sort sequence less?)
+
+        (declare (standard-bindings) (not safe))
+
+        (define (sort-list lst less?)
+
+          (define (mergesort lst)
+
+            (define (merge lst1 lst2)
+              (cond ((not (pair? lst1))
+                     lst2)
+                    ((not (pair? lst2))
+                     lst1)
+                    (else
+                     (let ((e1 (car lst1)) (e2 (car lst2)))
+                       (if (less? e1 e2)
+                         (cons e1 (merge (cdr lst1) lst2))
+                         (cons e2 (merge lst1 (cdr lst2))))))))
+
+            (define (split lst)
+              (if (or (not (pair? lst)) (not (pair? (cdr lst))))
+                lst
+                (cons (car lst) (split (cddr lst)))))
+
+            (if (or (not (pair? lst)) (not (pair? (cdr lst))))
+              lst
+              (let* ((lst1 (mergesort (split lst)))
+                     (lst2 (mergesort (split (cdr lst)))))
+                    (merge lst1 lst2))))
+
+          (mergesort lst))
+
+        (cond ((not (procedure? less?))
+               (error "procedure expected"))
+              ((or (null? sequence)
+                   (pair? sequence))
+               (sort-list sequence less?))
+              ((vector? sequence)
+               (list->vector (sort-list (vector->list sequence) less?)))
+              (else
+               (error "vector or list expected")))))
+
 (defn sort
   "Returns a sorted sequence of the items in coll. Comp can be
    boolean-valued comparison funcion, or a -/0/+ valued comparator.
@@ -926,8 +963,7 @@ reduces them without incurring seq initialization"
    (if (seq coll)
      (let [a (to-array coll)]
        ;; matching Clojure's stable sort, though docs don't promise it
-       (garray/stableSort a (fn->comparator comp))
-       (seq a))
+       (seq (scm* [a comp] (sort a comp))))
      ())))
 
 (defn sort-by
@@ -938,7 +974,7 @@ reduces them without incurring seq initialization"
   ([keyfn coll]
    (sort-by keyfn compare coll))
   ([keyfn comp coll]
-     (sort (fn [x y] ((fn->comparator comp) (keyfn x) (keyfn y))) coll)))
+     (sort (fn [x y] (comp (keyfn x) (keyfn y))) coll)))
 
 (defn reduce
   "f should be a function of 2 arguments. If val is not supplied,
