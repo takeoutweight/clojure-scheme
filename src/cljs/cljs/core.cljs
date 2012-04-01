@@ -727,7 +727,7 @@ reduces them without incurring seq initialization"
   ([coll k & ks]
      (let [ret (dissoc coll k)]
        (if ks
-         (recur ret (first ks) (next ks))
+         (apply dissoc ret (first ks) (next ks))
          ret))))
 
 (defn with-meta
@@ -764,7 +764,7 @@ reduces them without incurring seq initialization"
   ([coll k & ks]
      (let [ret (disj coll k)]
        (if ks
-         (recur ret (first ks) (next ks))
+         (apply disj ret (first ks) (next ks))
          ret))))
 
 (defn hash [o]
