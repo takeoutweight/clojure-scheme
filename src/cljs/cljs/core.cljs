@@ -3532,8 +3532,8 @@ reduces them without incurring seq initialization"
 (defn rand
   "Returns a random floating point number between 0 (inclusive) and
   n (default 1) (exclusive)."
-  ([] (rand 1.0))
-  ([n] (scm* [n] (rand-real n))))
+  ([] (scm* [n] (random-real)))
+  ([n] (* (rand) n)))
 
 (defn rand-int
   "Returns a random integer between 0 (inclusive) and n (exclusive)."
