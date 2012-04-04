@@ -1130,14 +1130,12 @@ reduces them without incurring seq initialization"
 (defn quot
   "quot[ient] of dividing numerator by denominator."
   [n d]
-  (let [rem (mod n d)]
-    (fix (js* "((~{n} - ~{rem}) / ~{d})"))))
+  (cljs.core/quot n d))
 
 (defn rem
   "remainder of dividing numerator by denominator."
   [n d]
-  (let [q (quot n d)]
-    (js* "(~{n} - (~{d} * ~{q}))")))
+  (cljs.core/rem n d))
 
 (defn rand
   "Returns a random floating point number between 0 (inclusive) and n (default 1) (exclusive)."

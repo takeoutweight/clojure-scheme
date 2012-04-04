@@ -18,7 +18,7 @@
                             satisfies? identical? true? false?
 
                             aget aset
-                            + - * / < <= > >= == zero? pos? neg? inc dec max min mod
+                            + - * / < <= > >= == zero? pos? neg? inc dec max min mod quot rem 
                             bit-and bit-and-not bit-clear bit-flip bit-not bit-or bit-set 
                             bit-test bit-shift-left bit-shift-right bit-xor]))
 
@@ -222,6 +222,12 @@
 
 (defmacro mod [num div]
   `(scm* {:num ~num :div ~div} ~'(modulo :num :div)))
+
+(defmacro quot [num div]
+  `(scm* {:num ~num :div ~div} ~'(quotient :num :div)))
+
+(defmacro rem [num div]
+  `(scm* {:num ~num :div ~div} ~'(remainder :num :div)))
 
 (defmacro bit-not [x]
   `(scm* {:x ~x} ~'(bitwise-not :x)))
