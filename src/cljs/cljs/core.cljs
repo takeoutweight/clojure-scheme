@@ -460,7 +460,11 @@
   (-equiv [x o] (identical? x o))
   
   IHash
-  (-hash [o] (scm-equal?-hash o)))
+  (-hash [o] (scm-equal?-hash o))
+
+  IPrintable
+  (-pr-seq [a opts]
+    [(scm* [a] (object->string a))]))
 
 ;;this is primitive because & emits call to array-seq
 (defn inc
@@ -3285,7 +3289,7 @@ reduces them without incurring seq initialization"
 
   IPrintable
   (-pr-seq [a opts]
-    (concat  ["#<Atom: "] (-pr-seq state opts) ">"))
+    (concat  ["#<Atom: "] (pr-seq state opts) [">"]))
 
   IWatchable
   (-notify-watches [this oldval newval]
