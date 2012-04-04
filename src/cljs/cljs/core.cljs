@@ -466,6 +466,17 @@
   (-pr-seq [a opts]
     [(scm* [a] (object->string a))]))
 
+(extend-type Class
+  IEquiv
+  (-equiv [x o] (identical? x o))
+
+  IHash
+  (-hash [o] (scm-equal?-hash o))
+
+  IPrintable
+  (-pr-seq [a opts]
+    ["#<Class " (str (scm-unsafe-vector-ref a 2)) ">"]))
+
 ;;this is primitive because & emits call to array-seq
 (defn inc
   "Returns a number one greater than num."
