@@ -1,6 +1,11 @@
 (ns cljs.core-test)
 
-(defn test-stuff []
+;clojure-scheme supplemental tests
+(assert (= (or nil 0) 0))
+(assert (= ((fn ([] 0 1) ([a] 2 3))) 1))
+(assert (= ((fn ([] 0 1) ([a] 2 3)) 'a) 3))
+
+;defn test-stuff []
   ;; arithmetic
   (assert (= (+) 0))
   (assert (= (apply + []) 0))
@@ -748,32 +753,32 @@
   (swap! global-hierarchy (fn [_] (make-hierarchy))) ;ClojureScript is happy to call make-hierarchy with too many args.
 
   ;; hierarchy tests
-  (derive ::rect ::shape)
-  (derive ::square ::rect)
+  (derive :user/rect :user/shape)
+  (derive :user/square :user/rect)
 
-  (assert (= #{:user/shape} (parents ::rect)))
-  (assert (= #{:user/rect :user/shape} (ancestors ::square)))
-  (assert (= #{:user/rect :user/square} (descendants ::shape)))
+  (assert (= #{:user/shape} (parents :user/rect)))
+  (assert (= #{:user/rect :user/shape} (ancestors :user/square)))
+  (assert (= #{:user/rect :user/square} (descendants :user/shape)))
   (assert (true? (isa? 42 42)))
-  (assert (true? (isa? ::square ::shape)))
+  (assert (true? (isa? :user/square :user/shape)))
 
-  (derive cljs.core.ObjMap ::collection)
-  (derive cljs.core.Set ::collection)
-  (assert (true? (isa? cljs.core.ObjMap ::collection)))
-  (assert (true? (isa? cljs.core.Set ::collection)))
-  (assert (false? (isa? cljs.core.IndexedSeq ::collection)))
+  (derive cljs.core.ObjMap :user/collection)
+  (derive cljs.core.Set :user/collection)
+  (assert (true? (isa? cljs.core.ObjMap :user/collection)))
+  (assert (true? (isa? cljs.core.Set :user/collection)))
+  (assert (false? (isa? cljs.core.IndexedSeq :user/collection)))
   ;; ?? (isa? String Object)
-  (assert (true? (isa? [::square ::rect] [::shape ::shape])))
+  (assert (true? (isa? [:user/square :user/rect] [:user/shape :user/shape])))
   ;; ?? (ancestors java.util.ArrayList)
 
   ;; ?? isa? based dispatch tests
 
   ;; prefer-method test
   (defmulti bar (fn [x y] [x y]))
-  (defmethod bar [::rect ::shape] [x y] :rect-shape)
-  (defmethod bar [::shape ::rect] [x y] :shape-rect)
+  (defmethod bar [:user/rect :user/shape] [x y] :rect-shape)
+  (defmethod bar [:user/shape :user/rect] [x y] :shape-rect)
 
-  ;;(bar ::rect ::rect)
+  ;;(bar :user/rect :user/rect)
   ;; -> java.lang.IllegalArgumentException:
   ;;  Multiple methods match dispatch value:
   ;;  [:user/rect :user/rect] -> [:user/rect :user/shape]
@@ -781,10 +786,10 @@
   ;;  and neither is preferred
 
   (assert (zero? (count (prefers bar))))
-  (prefer-method bar [::rect ::shape] [::shape ::rect])
+  (prefer-method bar [:user/rect :user/shape] [:user/shape :user/rect])
   (assert (= 1 (count (prefers bar))))
-  (assert (= :rect-shape (bar ::rect ::rect)))
-  (assert (= :rect-shape (apply (-get-method bar [::rect ::shape]) [::rect ::shape])))
+  (assert (= :rect-shape (bar :user/rect :user/rect)))
+  (assert (= :rect-shape (apply (cljs.core/-get-method bar [:user/rect :user/shape]) [:user/rect :user/shape])))
 
   ;; nested data structures tests
   (defmulti nested-dispatch (fn [m] (-> m :a :b)))
@@ -819,7 +824,7 @@
 
   ;; remove method tests
   (assert (= 2 (count (methods bar))))
-  (remove-method bar [::rect ::shape])
+  (remove-method bar [:user/rect :user/shape])
   (assert (= 1 (count (methods bar))))
   (remove-all-methods bar)
   (assert (zero? (count (methods bar))))
