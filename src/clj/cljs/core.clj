@@ -133,10 +133,10 @@
                                                  (range) fixed-args)
                                        ~@(when rest-arg [rest-arg
                                                          `(~'scm* [~restparam] ~(nth (iterate #(list 'cdr %) restparam) (count fixed-args)))])]
-                                   ~(second sig))))]
+                                   ~@(rest sig))))]
                    `(~(vec (concat (first smallest-sig) ['& restparam])) 
                      (~'case (count ~restparam)
-                       0 ~(second smallest-sig)
+                       0 (do ~@(rest smallest-sig))
                        ~@(apply concat
                                 (map-indexed
                                  (fn* [i sig] [(clojure.core/inc i) (bind-rst sig)])

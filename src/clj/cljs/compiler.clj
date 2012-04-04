@@ -245,7 +245,7 @@
   [context statements ret]
   (if statements
     (println (apply strict-str
-                    (concat ["(begin"]
+                    (concat ["(begin "]
                             (interpose "\n  " (map #(with-out-str (emit %))
                                                  (concat statements [ret])))
                             [")"])))
