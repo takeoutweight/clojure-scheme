@@ -745,7 +745,7 @@
   (assert (= {:a 1 :b 2} (meta (vary-meta (with-meta [] {:b 2}) assoc :a 1))))
 
   ;; multi-methods
-  (swap! global-hierarchy make-hierarchy)
+  (swap! global-hierarchy (fn [_] (make-hierarchy))) ;ClojureScript is happy to call make-hierarchy with too many args.
 
   ;; hierarchy tests
   (derive ::rect ::shape)
