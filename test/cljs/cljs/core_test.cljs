@@ -25,8 +25,8 @@
   (assert (= (* 2 3) 6))
   (assert (= (apply * [2 3]) 6))
 
-  (assert (= (/ 2) 0.5))
-  (assert (= (apply / [2]) 0.5))
+  (assert (= (/ 2) (/ 1 2)))
+  (assert (= (apply / [2]) (/ 1 2)))
   (assert (= (/ 6 2) 3))
   (assert (= (apply / [6 2]) 3))
   (assert (= (/ 6 3 2) 1))
