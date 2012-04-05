@@ -864,15 +864,16 @@
     (assert (= s
                (-> v
                    (subvec 2)
-                   (subvec 0 6))
-               (->> v
+                   (subvec 0 6))))
+    (assert (= s (->> v
                     (drop 2)
                     (take 6))))
     (assert (= 6 (count s)))
     (assert (= [2 3 4 5 6] (pop s)))
     (assert (= 7 (peek s)))
     (assert (= [2 3 4 5 6 7 1]
-               (assoc s 6 1)
+               (assoc s 6 1)))
+    (assert (= [2 3 4 5 6 7 1]
                (conj s 1)))
     (assert (= 27 (reduce + s)))
     (assert (= s (vec s))) ; pour into plain vector
