@@ -450,85 +450,102 @@
          ~t))))
 
 (defn- emit-defrecord
-   "Do not use this directly - use defrecord"
+  "Do not use this directly - use defrecord"
   [tagname rname fields impls]
-  (let [hinted-fields fields
+  (let [hinted-fields (conj fields '__meta '__extmap)
         fields (vec (map #(with-meta % nil) fields))
         base-fields fields
-	fields (conj fields '__meta '__extmap)
-	adorn-params (core/fn [sig]
-                       (cons (vary-meta (second sig) assoc :cljs.compiler/fields fields)
-                             (nnext sig)))
+        #_"depends on Gambit's record lookup i.e. cljs.core/MyRecord-__meta"
+        accessorize (fn [this fld] `(~(symbol (str tagname "-" fld)) ~this))
+        fields (conj fields '__meta '__extmap)
+        adorn-params (core/fn [sig]
+                              (cons (vary-meta (second sig) assoc :cljs.compiler/fields fields)
+                                    (nnext sig)))
         ;;reshape for extend-type
         dt->et (core/fn [specs]
-                 (loop [ret [] s specs]
-                   (if (seq s)
-                     (recur (-> ret
-                                (conj (first s))
-                                (into
-                                 (reduce (core/fn [v [f sigs]]
-                                           (conj v (cons f (map adorn-params sigs))))
-                                         []
-                                         (group-by first (take-while seq? (next s))))))
-                            (drop-while seq? (next s)))
-                     ret)))]
+                        (loop [ret [] s specs]
+                          (if (seq s)
+                            (recur (-> ret
+                                       (conj (first s))
+                                       (into
+                                        (reduce (core/fn [v [f sigs]]
+                                                         (conj v (cons f (map adorn-params sigs))))
+                                                []
+                                                (group-by first (take-while seq? (next s))))))
+                                   (drop-while seq? (next s)))
+                            ret)))]
     (let [gs (gensym)
-	  impls (concat
-		 impls
-		 ['IRecord
-		  'IHash
-		  `(~'-hash [this#] (hash-coll this#))
-		  'IEquiv
-		  `(~'-equiv [this# other#]
-         (and (identical? (.-constructor this#)
-                          (.-constructor other#))
-              (equiv-map this# other#)))
-		  'IMeta
-		  `(~'-meta [this#] ~'__meta)
-		  'IWithMeta
-		  `(~'-with-meta [this# ~gs] (new ~tagname ~@(replace {'__meta gs} fields)))
-		  'ILookup
-		  `(~'-lookup [this# k#] (-lookup this# k# nil))
-		  `(~'-lookup [this# k# else#]
-			      (get (merge (hash-map ~@(mapcat (core/fn [fld] [(keyword fld) fld]) 
-							      base-fields))
-					  ~'__extmap)
-				   k# else#))
-		  'ICounted
-		  `(~'-count [this#] (+ ~(count base-fields) (count ~'__extmap)))
-		  'ICollection
-		  `(~'-conj [this# entry#]
-      		       (if (vector? entry#)
-      			 (-assoc this# (-nth entry# 0) (-nth entry# 1))
-      			 (reduce -conj
-      				 this#
-      				 entry#)))
-		  'IAssociative
-		  `(~'-assoc [this# k# ~gs]
-                     (condp identical? k#
-                       ~@(mapcat (core/fn [fld]
-                                   [(keyword fld) (list* `new tagname (replace {fld gs} fields))])
-                                 base-fields)
-                       (new ~tagname ~@(remove #{'__extmap} fields) (assoc ~'__extmap k# ~gs))))
-		  'IMap
-		  `(~'-dissoc [this# k#] (if (contains? #{~@(map keyword base-fields)} k#)
-                                            (dissoc (with-meta (into {} this#) ~'__meta) k#)
-                                            (new ~tagname ~@(remove #{'__extmap} fields) 
-                                                 (not-empty (dissoc ~'__extmap k#)))))
-		  'ISeqable
-		  `(~'-seq [this#] (seq (concat [~@(map #(list `vector (keyword %) %) base-fields)] 
-                                              ~'__extmap)))
-		  'IPrintable
-		  `(~'-pr-seq [this# opts#]
-			      (let [pr-pair# (core/fn [keyval#] (pr-sequential pr-seq "" " " "" opts# keyval#))]
-				(pr-sequential
-				 pr-pair# (str "#" ~(name rname) "{") ", " "}" opts#
-				 (concat [~@(map #(list `vector (keyword %) %) base-fields)] 
-					 ~'__extmap))))
-		  ])]
+          gthis (gensym 'this)
+          impls (concat
+                 impls
+                 ['IRecord
+                  'IHash
+                  `(~'-hash [this#] (hash-coll this#))
+                  'IEquiv
+                  `(~'-equiv [this# other#]
+                             (and (identical? (type this#)
+                                              (type other#))
+                                  (equiv-map this# other#)))
+                  'IMeta
+                  `(~'-meta [~gthis] ~(accessorize gthis '__meta))
+                  'IWithMeta
+                  `(~'-with-meta [~gthis ~gs] (new ~tagname ~@(map #(accessorize gthis %) base-fields) ~gs ~(accessorize gthis '__extmap)))
+                  'ILookup
+                  `(~'-lookup [this# k#] (-lookup this# k# nil))
+                  `(~'-lookup [~gthis k# else#]
+                              (get (merge (hash-map ~@(mapcat
+                                                       (core/fn [fld] [(keyword fld) (accessorize gthis fld)]) 
+                                                       base-fields))
+                                          ~(accessorize gthis '__extmap))
+                                   k# else#))
+                  'ICounted
+                  `(~'-count [~gthis] (+ ~(count base-fields) (count ~(accessorize gthis '__extmap))))
+                  'ICollection
+                  `(~'-conj [this# entry#]
+                            (if (vector? entry#)
+                              (-assoc this# (-nth entry# 0) (-nth entry# 1))
+                              (reduce -conj
+                                      this#
+                                      entry#)))
+                  'IAssociative
+                  `(~'-assoc [~gthis k# ~gs]
+                             (condp identical? k#
+                               ~@(mapcat (core/fn [fld]
+                                                  [(keyword fld) (list* `new tagname (map #(get {fld gs} % (accessorize gthis %)) fields))])
+                                         base-fields)
+                               (new ~tagname ~@(map #(accessorize gthis %) (remove #{'__extmap} fields)) (assoc ~(accessorize gthis '__extmap) k# ~gs))))
+                  'IMap
+                  `(~'-dissoc [~gthis k#] (if (contains? #{~@(map keyword base-fields)} k#)
+                                            (dissoc (with-meta (into {} ~gthis) ~(accessorize gthis '__meta)) k#)
+                                            (new ~tagname ~@(map #(accessorize gthis %) (remove #{'__extmap} fields)) 
+                                                 (not-empty (dissoc ~(accessorize gthis '__extmap) k#)))))
+                  'ISeqable
+                  `(~'-seq [~gthis] (seq (concat [~@(map #(list `vector (keyword %) (accessorize gthis %)) base-fields)] 
+                                                 ~(accessorize gthis '__extmap))))
+                  'IPrintable
+                  `(~'-pr-seq [gthis opts#]
+                              (let [pr-pair# (core/fn [keyval#] (pr-sequential pr-seq "" " " "" opts# keyval#))]
+                                (pr-sequential
+                                 pr-pair# (str "#" ~(name rname) "{") ", " "}" opts#
+                                 (concat [~@(map #(list `vector (keyword %) (accessorize gthis %)) base-fields)] 
+                                         ~(accessorize gthis '__extmap)))))
+                  ])
+          extended-constructor-name (symbol (str "make-" cljs.compiler/*cljs-ns* "/" tagname "-extended"))
+          poly-constructor-name (symbol (str "make-" cljs.compiler/*cljs-ns* "/" tagname))
+          poly-constructor `(fn
+                              ([~@base-fields] (~extended-constructor-name ~@base-fields nil nil))
+                              ([~@fields] (~extended-constructor-name ~@fields)))]
       `(do
-	 (~'deftype* ~tagname ~hinted-fields)
-	 (extend-type ~tagname ~@(dt->et impls))))))
+         (~'scm* {::tagname ~tagname
+                  ::constructor :constructor
+                  ::init :init
+                  ::nil nil}
+                 (~'define-type ::tagname ::constructor ~extended-constructor-name
+                   ~@fields))
+         (~'scm* {::poly-constructor ~poly-constructor} (~'define ~poly-constructor-name ::poly-constructor))
+         (def ~tagname (type (new ~tagname ~@(map (constantly nil) base-fields)))) ;hack in lieu of compiler hook to capture ##type-2-ns/tagname in scheme
+         (~'scm* {::tagname ~tagname} (~'table-set! ~'cljs.core/protocol-impls ::tagname ~'(make-table)))
+         (extend-type ~tagname ~@(dt->et impls))))))
 
 (defn- build-positional-factory
   [rsym rname fields]
@@ -549,9 +566,8 @@
 
 (defmacro defrecord [rsym fields & impls]
   (let [r (:name (cljs.compiler/resolve-var (dissoc &env :locals) rsym))]
-    `(let []
+    `(do
        ~(emit-defrecord rsym r fields impls)
-       (set! (.-cljs$core$IPrintable$_pr_seq ~r) (core/fn [this#] (list ~(str r))))
        ~(build-positional-factory rsym r fields)
        ~(build-map-factory rsym r fields)
        ~r)))

@@ -880,6 +880,7 @@
     (let [m {:x 1}] (assert (= m (meta (with-meta s m))))))
 
   ;; defrecord
+  
   (defrecord Person [firstname lastname])
   (def fred (Person. "Fred" "Mertz"))
   (assert (= (:firstname fred) "Fred"))
@@ -901,6 +902,7 @@
   (assert (= {:foo 'bar} (meta (with-meta (A.) {:foo 'bar}))))
   (assert (= 'bar (:foo (assoc (A.) :foo 'bar))))
 
+(comment
   ;; dot
   (let [s "abc"]
     (assert (= 3 (.-length s)))
