@@ -2926,7 +2926,7 @@ reduces them without incurring seq initialization"
   (-count [rng]
     (if-not (-seq rng)
       0
-      (scm* [end start step] (flceiling (/ (- end start) step)))))
+      (scm* [end start step] (ceiling (/ (- end start) step)))))
   
   IIndexed
   (-nth
