@@ -979,7 +979,7 @@
 	       cached-hierarchy# (atom {})
 	       hierarchy# (get ~options :hierarchy cljs.core/global-hierarchy)
 	       ]
-	   (cljs.core.MultiFn. ~(name mm-name) ~dispatch-fn ~default hierarchy#
+	   (cljs.core/MultiFn. ~(name mm-name) ~dispatch-fn ~default hierarchy#
 			       method-table# prefer-table# method-cache# cached-hierarchy#))))))
 
 (defmacro defmethod

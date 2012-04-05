@@ -3685,8 +3685,7 @@ reduces them without incurring seq initialization"
 
 (defn- prefers*
   [x y prefer-table]
-  (throw "no prefers yet.")
-  #_(let [xprefs (@prefer-table x)] #_TODO
+  (let [xprefs (@prefer-table x)]
     (or
      (when (and xprefs (xprefs y))
        true)
@@ -3796,7 +3795,10 @@ reduces them without incurring seq initialization"
   (-dispatch [mf args] (do-dispatch mf dispatch-fn args))
 
   IHash
-  (-hash [this] (goog.getUid this)))
+  (-hash [this] (scm-equal?-hash this))
+
+  IFn
+  (-invoke [coll args] (-dispatch coll args)))
 
 #_(set! cljs.core.MultiFn.prototype.call
       (fn [_ & args] (-dispatch (js* "this") args)))
