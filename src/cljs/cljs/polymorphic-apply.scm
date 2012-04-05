@@ -10,15 +10,15 @@
   (##declare (not interrupts-enabled))
   (if (##procedure? oper)
     (##apply oper args)
-    (polymorphic-raise-nonprocedure-operator-exception oper args #f #f)))
+    (polymorphic-invoke oper args)))
 
 (define (polymorphic-apply-with-procedure-check oper args)
   (##declare (not interrupts-enabled))
   (if (##procedure? oper)
     (##apply oper args)
-    (polymorphic-raise-nonprocedure-operator-exception oper args #f #f)))
+    (polymorphic-invoke oper args)))
 
-(define (polymorphic-raise-nonprocedure-operator-exception oper args code rte)
+(define (polymorphic-invoke oper args)
   (##declare (not interrupts-enabled))
   (cljs.core/-invoke oper args))
 
@@ -29,5 +29,5 @@
            (if (nonprocedure-operator-exception? e) 
              (let  ((oper (nonprocedure-operator-exception-operator e))
                     (args (nonprocedure-operator-exception-arguments e)))
-               (polymorphic-raise-nonprocedure-operator-exception oper args 0 0))
+               (polymorphic-invoke oper args))
              (old-handler e)))))
