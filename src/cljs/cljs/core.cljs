@@ -2253,9 +2253,9 @@ reduces them without incurring seq initialization"
   IIndexed
   (-nth
     ([coll n]
-       (-nth v (+ start n)))
+       (nth v (+ start n)))
     ([coll n not-found]
-           (-nth v (+ start n) not-found)))
+           (nth v (+ start n) not-found)))
 
   ILookup
   (-lookup
@@ -2266,7 +2266,7 @@ reduces them without incurring seq initialization"
   IAssociative
   (-assoc [coll key val]
     (let [v-pos (+ start key)]
-      (Subvec. meta (-assoc v v-pos val)
+      (Subvec. meta (assoc v v-pos val)
                start (max end (inc v-pos)))))
 
   IVector
