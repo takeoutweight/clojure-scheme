@@ -34,7 +34,6 @@
 (defonce namespaces (atom '{cljs.core {:name cljs.core}
                             cljs.user {:name cljs.user}}))
 
-(def ^:dynamic *cljs-ns* 'cljs.user)
 (def ^:dynamic *cljs-file* nil)
 (def ^:dynamic *cljs-warn-on-undeclared* false)
 
@@ -815,7 +814,7 @@
                                                    (map vector expr (repeat lib)))))
                                            libs))))
                 {} (remove (fn [[r]] (= r :refer-clojure)) args))]
-    (set! *cljs-ns* name)
+    (set! cljs.core/*cljs-ns* name)
     (require 'cljs.core)
     (doseq [nsym (concat (vals requires-macros) (vals uses-macros))]
       (clojure.core/require nsym))
@@ -1106,14 +1105,14 @@
   (let [res (if (= \/ (first f)) f (io/resource f))
         res (or res (java.net.URL. (str "file:/Users/nathansorenson/src/c-clojure/src/cljs/" f)))] ;TODO: can it be un-resource'd like so?
     (assert res (str "Can't find " f " in classpath"))
-    (binding [*cljs-ns* 'cljs.user
+    (binding [cljs.core/*cljs-ns* 'cljs.user
               *cljs-file* (.getPath ^java.net.URL res)]
       (with-open [r (io/reader res)]
-        (let [env {:ns (@namespaces *cljs-ns*) :context :statement :locals {}}
+        (let [env {:ns (@namespaces cljs.core/*cljs-ns*) :context :statement :locals {}}
               pbr (clojure.lang.LineNumberingPushbackReader. r)
               eof (Object.)]
           (loop [r (read pbr false eof false)]
-            (let [env (assoc env :ns (@namespaces *cljs-ns*))]
+            (let [env (assoc env :ns (@namespaces cljs.core/*cljs-ns*))]
               (when-not (identical? eof r)
                 (analyze env r)
                 (recur (read pbr false eof false))))))))))
@@ -1149,13 +1148,13 @@
   (with-core-cljs
     (with-open [out ^java.io.Writer (io/make-writer dest {})]
       (binding [*out* out
-                *cljs-ns* 'cljs.user
+                cljs.core/*cljs-ns* 'cljs.user
                 *cljs-file* (.getPath ^java.io.File src)]
         (loop [forms (forms-seq src)
                ns-name nil
                deps nil]
           (if (seq forms)
-            (let [env {:ns (@namespaces *cljs-ns*) :context :statement :locals {}}
+            (let [env {:ns (@namespaces cljs.core/*cljs-ns*) :context :statement :locals {}}
                   ast (analyze env (first forms))]
               (do (emit ast)
                   (if (= (:op ast) :ns)

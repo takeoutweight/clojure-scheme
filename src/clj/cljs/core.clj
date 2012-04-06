@@ -42,6 +42,8 @@
   or 
   when when-first when-let when-not while])
 
+(def ^:dynamic *cljs-ns* 'cljs.user)
+
 (def compare-arglist
   (comparator
    (fn* [arglist-a arglist-b]
@@ -530,8 +532,8 @@
                                  (concat [~@(map #(list `vector (keyword %) (accessorize gthis %)) base-fields)] 
                                          ~(accessorize gthis '__extmap)))))
                   ])
-          extended-constructor-name (symbol (str "make-" cljs.compiler/*cljs-ns* "/" tagname "-extended"))
-          poly-constructor-name (symbol (str "make-" cljs.compiler/*cljs-ns* "/" tagname))
+          extended-constructor-name (symbol (str "make-" *cljs-ns* "/" tagname "-extended"))
+          poly-constructor-name (symbol (str "make-" *cljs-ns* "/" tagname))
           poly-constructor `(fn
                               ([~@base-fields] (~extended-constructor-name ~@base-fields nil nil))
                               ([~@fields] (~extended-constructor-name ~@fields)))]
