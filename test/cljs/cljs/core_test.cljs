@@ -440,7 +440,7 @@
   (assert (= 1 (min 5 4 3 2 1)))
   (assert (= 1 (min 1 2 3 4 5)))
   (assert (= 0.5 (min 5 4 3 0.5 2 1)))
-  (let [x (array 1 2 3)]
+  #_(let [x (array 1 2 3)] ;no arbitrary fields on arrays.
     (set! (.-foo x) :hello)
     (assert (= (.-foo x) :hello)))
 
@@ -455,13 +455,13 @@
   (assert (= (count #{nil [] {} 0 #{}}) 5))
   (assert (= (conj #{1} 1) #{1}))
   (assert (= (conj #{1} 2) #{2 1}))
-  (assert (= #{} (-empty #{1 2 3 4})))
+  (assert (= #{} (cljs.core/-empty #{1 2 3 4})))
   (assert (= (reduce + #{1 2 3 4 5}) 15))
   (assert (= 4 (get #{1 2 3 4} 4)))
   (assert (contains? #{1 2 3 4} 4))
   (assert (contains? #{[] nil 0 {} #{}} {}))
   (assert (contains? #{[1 2 3]} [1 2 3]))
-  (assert (not (contains? (-disjoin #{1 2 3} 3) 3)))
+  (assert (not (contains? (cljs.core/-disjoin #{1 2 3} 3) 3)))
   (assert (neg? -1))
   (assert (not (neg? 1)))
   (assert (neg? -1.765))
@@ -580,12 +580,12 @@
   (assert (= ["foo" [1 2] "a"] (sort-by count > ["foo" "a" [1 2]])))
 
   ;; js->clj
-  (assert (= {"a" 1, "b" 2} (js->clj (js* "{\"a\":1,\"b\":2}"))))
+#_( (assert (= {"a" 1, "b" 2} (js->clj (js* "{\"a\":1,\"b\":2}"))))
   (assert (= {:a 1, :b 2} (js->clj (js* "{\"a\":1,\"b\":2}") :keywordize-keys true)))
   (assert (= [[{:a 1, :b 2} {:a 1, :b 2}]]
-               (js->clj (js* "[[{\"a\":1,\"b\":2}, {\"a\":1,\"b\":2}]]") :keywordize-keys true)))
+             (js->clj (js* "[[{\"a\":1,\"b\":2}, {\"a\":1,\"b\":2}]]") :keywordize-keys true)))
   (assert (= [[{:a 1, :b 2} {:a 1, :b 2}]]
-               (js->clj [[{:a 1, :b 2} {:a 1, :b 2}]])))
+             (js->clj [[{:a 1, :b 2} {:a 1, :b 2}]]))))
 
   ;; last
   (assert (= nil (last nil)))
