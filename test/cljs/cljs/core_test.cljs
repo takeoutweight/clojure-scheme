@@ -201,10 +201,10 @@
   (assert (= 20 (cljs.core/-reduce (array 1 2 3 4) + 10)))
   (assert (= "cabd" (let
                         [jumble (fn [a b] (str (apply str (reverse (str a))) b))]
-                      (reduce  jumble "abcd"))))
+                      (cljs.core/-reduce "abcd" jumble))))
   (assert (= "cafrogbd" (let
                             [jumble (fn [a b] (str (apply str (reverse (str a))) b))]
-                          (reduce jumble "frog" "abcd"))))
+                          (cljs.core/-reduce "abcd" jumble "frog"))))
   (assert (= [0 0 1 0 1]
                [(bit-and 1 0)
                 (bit-and 0 0)
