@@ -3365,7 +3365,7 @@ reduces them without incurring seq initialization"
   current value of the atom is identical to oldval. Returns true if
   set happened, else false."
   [a oldval newval]
-  (if (= a.state oldval)
+  (if (= (.-state a) oldval)
     (do (reset! a newval) true)
     false))
 
