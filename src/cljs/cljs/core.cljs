@@ -3797,6 +3797,9 @@ reduces them without incurring seq initialization"
   IHash
   (-hash [this] (scm-equal?-hash this))
 
+  IEquiv
+  (-equiv [s o] (scm* [s o] (equal? s o)))
+
   IFn
   (-invoke [coll args] (-dispatch coll args)))
 
