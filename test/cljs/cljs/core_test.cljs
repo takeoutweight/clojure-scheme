@@ -902,9 +902,9 @@
   (assert (= {:foo 'bar} (meta (with-meta (A.) {:foo 'bar}))))
   (assert (= 'bar (:foo (assoc (A.) :foo 'bar))))
 
-(comment
+
   ;; dot
-  (let [s "abc"]
+  #_(let [s "abc"]
     (assert (= 3 (.-length s)))
     (assert (= 3 (. s -length)))
     (assert (= 3 (. (str 138) -length)))
@@ -935,17 +935,21 @@
   (defrecord B [x])
   (assert (not= (A. nil) (B. nil)))
 
-  (assert (instance? js/Object 1))
-  (assert (instance? js/Number 1))
-  (assert (instance? js/Object "foo"))
-  (assert (instance? js/String "foo"))
-  (assert (instance? js/Object (array)))
-  (assert (instance? js/Array (array)))
-  (assert (instance? js/Object (fn [])))
-  (assert (instance? js/Function (fn [])))
+
+
+  #_(assert (instance? js/Object 1))
+  (assert (instance? cljs.core/Number 1))
+  #_(assert (instance? js/Object "foo"))
+  (assert (instance? cljs.core/String "foo"))
+  #_(assert (instance? js/Object (array)))
+  (assert (instance? cljs.core/Array (array)))
+  #_(assert (instance? js/Object (fn [])))
+  (assert (instance? cljs.core/Procedure (fn [])))
+
+
 
   (defprotocol IFoo (foo [this]))
-  (assert (= (meta (with-meta (reify IFoo (foo [this] :foo)) {:foo :bar}))
+  #_(assert (= (meta (with-meta (reify IFoo (foo [this] :foo)) {:foo :bar}))
              {:foo :bar}))
 
   (defmulti foo identity)
@@ -957,15 +961,20 @@
   
   (deftype Mutate [^:mutable a]
     IMutate
-    (mutate [_]
-      (set! a 'foo)))
+    (mutate [this]
+      (set! (.-a this) 'foo))) ;(set! a 'foo) ;;TODO -- we must manually set via member form for now. (fields are values-not mutable locations)
+
+  (def m (Mutate. 4))
+  (mutate m)
+  (assert (= 'foo (.-a m)))
   
   ;; IFn
   (deftype FnLike []
     IFn
-    (-invoke [_] :a)
-    (-invoke [_ a] :b)
-    (-invoke [_ a b] :c))
+    (-invoke [_ args] (case (count args)
+                        0 :a
+                        1 :b
+                        2 :c)))
   
   (assert (= :a ((FnLike.))))
   (assert (= :b ((FnLike.) 1)))
@@ -975,7 +984,7 @@
 
   (deftype FnLikeB [a]
     IFn
-    (-invoke [_] a))
+    (-invoke [_ args] a))
 
   (assert (= 1 ((FnLikeB. 1))))
   
@@ -983,6 +992,3 @@
   (let [g #{(conj #{:2} :alt)}
         h #{#{:2 :alt}}]
     (assert (= g h)))
-
-  :ok
-  )
