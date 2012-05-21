@@ -595,7 +595,7 @@
            [[fname & sigs]]
            (let [single-sig (gather-polysigs (take-while vector? sigs))
                  [o & rst] single-sig
-                 _ (when (= o '&) (throw "Can't have polyvariadic protocol methods with no fixed args."))
+                 _ (when (= o '&) (throw (Exception. "Can't have polyvariadic protocol methods with no fixed args.")))
                  captd-args (map (core/fn [s] `(scm* {} ~s))
                                  (remove #{'&} rst))
                  fx-a (concat [`(scm* {} ~'list)
