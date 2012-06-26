@@ -1,6 +1,8 @@
+;TODO: this is a prime example where datalog should be used to query different orders of class/method/ etc. so we don't have to fix the nested maps of lists of maps of lists of maps etc...!!! 
 (ns wrapper
   #_(:use [cljs.core :only scm*])
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [clojure.set :as set]))
 
 (defn valid-method?
   "rpythonic strips anything with template arguments, leaving templatted return values for us to avoid on our own."
@@ -9,6 +11,7 @@
        (not (re-find #"std::" (:returns meth)))
        (not (some #(re-find #"std::" (:type %)) (:arguments meth)))))
 
+;created via ~/src/rpythonic/scripts/generate-wrappers.py --ogre
 (def pbr (java.io.PushbackReader. (clojure.java.io/reader (clojure.java.io/file "/tmp/debug.clj"))))
 (def class-specs (read pbr))
 ;todo Can't create ones that are argument-polymorphic -- those we need to fail on.
@@ -48,20 +51,28 @@
 (defn protocol-methname [methname]
   (symbol (str "-" methname)))
 
+(defn clj-args
+  "names for arguments"
+  [c]
+  (let [reg-args (vec (map (comp symbol :name) (:arguments c)))
+        self-arg (first (filter (complement (set reg-args))
+                                (map #(symbol (str "self" %)) (concat [nil] (range)))))]
+    (vec (cons self-arg reg-args))))
+
 ;{:keys [name arguments returns class]}
 (defn create-protocol [methname argnametypes]
   (let [protosym (protocol-name methname)
         methsym (protocol-methname methname)]
     `(defprotocol ~protosym
-       (~methsym ~@(map #(vec (map symbol %)) argnametypes)))))
+       (~methsym ~@argnametypes #_(map #(vec (map symbol %)) argnametypes)))))
 
 ;TODO: define methods that just call the protocols.
 (def foreign-protocols
   (for [[nm fm0] foreign-methods :when (polymorphic? fm0)]
-    (let [argnametypes (for [[arity fm1] fm0]
-                         (first (for [[classpath meths] fm1]
-                                  (map :name (:arguments (first meths))))))]
-      (create-protocol nm argnametypes))))
+    (let [argnames (for [[arity fm1] fm0]
+                     (first (for [[classpath meths] fm1]
+                              (clj-args (first meths)))))]
+      (create-protocol nm argnames))))
 
 (defn c-stub-name [classpath method]
   (str (str/replace classpath #"::" "_") "_" method))
@@ -70,21 +81,32 @@
   (let [ss (str/split classpath #"::")]
     (symbol (first ss) (str/join "$" (rest ss)))))
 
-;TODO: proper size_t wrapper.
+;TODO: proper size_t wrapper, time_t, etc.
+;TODO: is uint8 a typedef we can expand on our own?
+;seems like it has a uint.
+;TODO: unfortunately arguments are just considered void when they're really void* by our rpythonic.
 (defn fundamental-type-alias
   "for the 'fundamental' types
 unsigned long long int -> unsigned long long,
-for now: size_t -> unsigned long"
-  [c-type-string]
+for now: size_t -> unsigned long
+"
+  [c-type-string & pointerize-voids?]
   (if (re-find #"std::" c-type-string)    
     (throw (Exception. (str "--ERROR: un-massaged std type argument--" c-type-string)))
     (let [long? (re-find  #"long" c-type-string)
           int? (re-find #" int$" c-type-string )
+          unsigned-int? (re-find #"^uint" c-type-string )
           cstr (cond
+                 unsigned-int? (str/replace c-type-string #"^uint" "unsigned int")
                  (and long? int?) (str/replace c-type-string #" int$" "")
                  (= "size_t" c-type-string) "unsigned long"
+                 (= "time_t" c-type-string) "unsigned long"
                  :else c-type-string)]
-      (symbol (str/replace cstr #" " "-")))))
+      (if (and (= "void" cstr ) pointerize-voids?)
+        '(pointer void)
+        (symbol (str/replace cstr #" " "-"))))))
+
+(def alias-map)
 
 (defn type-alias
   "takes a Class to be given a c-define-type stub"
@@ -110,28 +132,26 @@ for now: size_t -> unsigned long"
   (for [c class-specs]
     (create-class c)))
 
-(defn clj-args
-  "names for arguments"
-  [c]
-  (let [reg-args (vec (map (comp symbol :name) (:arguments c)))
-        self-arg (first (filter (complement (set reg-args))
-                                (map #(symbol (str "self" %)) (concat [nil] (range)))))]
-    (vec (concat [self-arg] reg-args))))
-
+(defn predefined-type-alias
+  "returns only a previously c-define-typed alias if it exists -- if not, void*"
+  [classpath]
+  (get @defined-classes classpath '(pointer void)))
 
 ;TODO: c-types -> scheme aliases.
+;TODO: rpythonic sometimes gives us :fundamental 0 --- confusingly but also false a lot of the time... (returns_fundamental seems ok throughout)
 (defn c-lambda
   ":returns assumed to be not-namespaced due to rpythonic. strip off the classpath's namespace, use that, and hope for the best."
   [c]
   `(~'scm-str* ~(cljs.compiler/strict-str
-                 "(c-lambda "(cons (type-alias (:classpath c))
-                                   (map #(if (:fundamental %)
-                                           (fundamental-type-alias (:type %))
-                                           (type-alias (:type %)))
+                 "(c-lambda "(cons (predefined-type-alias (:classpath c))
+                                   (map #(if (and (:fundamental %)
+                                                  (not= 0 (:fundamental %)))
+                                           (fundamental-type-alias (:type %) :pointerize-voids)
+                                           (predefined-type-alias (:type %)))
                                         (:arguments c)))
                  " " (if (:returns_fundamental c)
                        (fundamental-type-alias (:returns c))
-                       (type-alias (str (first (str/split (:classpath c) #"::")) "::" (:returns c))))
+                       (predefined-type-alias (str (first (str/split (:classpath c) #"::")) "::" (:returns c))))
                  " \""(c-stub-name (:classpath c) (:name c))"\")")))
 
 (defn create-funtion-stub
@@ -179,22 +199,26 @@ for now: size_t -> unsigned long"
 
 (defn write-stubs [filename]
   (spit filename "(ns Ogre)\n")
-  (doall
-   (for [p foreign-protocols]
-     (spit filename (cljs.compiler/strict-str p "\n") :append true)))
+  #_(doall
+     (for [p foreign-protocols]
+       (spit filename (cljs.compiler/strict-str p "\n") :append true)))
   (doall
    (for [p foreign-types]
      (spit filename (cljs.compiler/strict-str p "\n") :append true)))
-  (doall
-   (for [e extensions]
-     (spit filename (cljs.compiler/strict-str e "\n") :append true)))
+  #_(doall
+     (for [e extensions]
+       (spit filename (cljs.compiler/strict-str e "\n") :append true)))
+  #_(doall
+     (for [m foreign-monomorphs]
+       (spit filename (cljs.compiler/strict-str m "\n") :append true)))
   nil)
 
-;TODO - a nice fn that calls the proto method with the right arity.
+;TODO - a nice fn that calls the protocol methods with the right arity.
 ;TODO - generate constructors, destructors
 ;TODO - operator equality
+;TODO - docstrings wtih rpythonic info carried through.
 
-
-
+;(cljs.compiler/compile-file "/tmp/ogre-stubs.cljs")
+;(wrapper/write-stubs "/tmp/ogre-stubs.cljs")
 
 
