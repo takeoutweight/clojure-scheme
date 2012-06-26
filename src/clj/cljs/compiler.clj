@@ -31,8 +31,8 @@
     "transient" "try" "typeof" "var" "void"
     "volatile" "while" "with" "yield" "methods"})
 
-(defonce namespaces (atom '{cljs.core {:name cljs.core}
-                            cljs.user {:name cljs.user}}))
+(def namespaces (atom '{cljs.core {:name cljs.core}
+                        cljs.user {:name cljs.user}}))
 
 (def ^:dynamic *cljs-file* nil)
 (def ^:dynamic *cljs-warn-on-undeclared* false)
