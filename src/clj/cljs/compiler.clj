@@ -514,13 +514,12 @@
                 (comma-sep (map emits args))
                 ")"))))
 
-(defmethod emit :js
+(defmethod emit :scm-str
   [{:keys [env code segs args]}]
-  (emit-wrap env
-             (if code
-               (print code)
-               (print (apply str (interleave (concat segs (repeat nil))
-                                             (concat (map emits args) [nil])))))))
+  (if code
+    (print code)
+    (print (apply str (interleave (concat segs (repeat nil))
+                                  (concat (map emits args) [nil]))))))
 
 ;form->form mapping (or a vector of candidate forms) that will be subject to analyze->emit in context.
 (defmethod emit :scm
@@ -537,7 +536,7 @@
 
 (declare analyze analyze-symbol analyze-seq)
 
-(def specials '#{if case def fn* do let* loop* throw try* recur new set! ns deftype* defrecord* . extend js* scm* & quote})
+(def specials '#{if case def fn* do let* loop* throw try* recur new set! ns deftype* defrecord* . extend scm-str* scm* & quote})
 
 (def ^:dynamic *recur-frames* nil)
 
@@ -697,7 +696,7 @@
         variadic (boolean (some :variadic methods))]
     ;;todo - validate unique arities, at most one variadic, variadic takes max required args
     {:env env :op :fn :name mname :methods methods :variadic variadic :recur-frames *recur-frames*
-     :jsdoc [(when variadic "@param {...*} var_args")]
+     :jsdoc []
      :max-fixed-arity max-fixed-arity}))
 
 (defmethod parse 'do
@@ -959,7 +958,7 @@
 (defmethod parse 'scm* [op env [_ symbol-map & form] _]
   {:env env :op :scm :children [] :form form :symbol-map symbol-map})
 
-(defmethod parse 'js*
+(defmethod parse 'scm-str*
   [op env [_ form & args] _]
   (assert (string? form))
   (if args
@@ -972,7 +971,7 @@
                        (cons (subs s 0 idx) (seg (subs s (inc end))))))))
            enve (assoc env :context :expr)
            argexprs (vec (map #(analyze enve %) args))]
-       {:env env :op :js :segs (seg form) :args argexprs :children argexprs}))
+       {:env env :op :scm-str :segs (seg form) :args argexprs :children argexprs}))
     (let [interp (fn interp [^String s]
                    (let [idx (.indexOf s "~{")]
                      (if (= -1 idx)
@@ -980,7 +979,7 @@
                        (let [end (.indexOf s "}" idx)
                              inner (:name (resolve-existing-var env (symbol (subs s (+ 2 idx) end))))]
                          (cons (subs s 0 idx) (cons inner (interp (subs s (inc end)))))))))]
-      {:env env :op :js :code (apply str (interp form))})))
+      {:env env :op :scm-str :code (apply str (interp form))})))
 
 (defn parse-invoke
   [env [f & args]]

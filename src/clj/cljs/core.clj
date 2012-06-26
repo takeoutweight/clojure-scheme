@@ -54,6 +54,8 @@
          (core/< (count arglist-a) (count arglist-b)))))))
 
 (defmacro js* [& forms])
+(defmacro scm-str* [& forms]
+  `(~'scm-str* ~@forms))
 (defmacro scm* [& forms]
     `(~'scm* ~@forms))
 
