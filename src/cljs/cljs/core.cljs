@@ -64,8 +64,8 @@
   (cljs.core/alength array))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; core protocols ;;;;;;;;;;;;;
-
 (scm* {} (define cljs.core/protocol-impls (make-table)))
+(scm* {} (define cljs.core/foreign-tags (make-table)))
 ;all proto defns need to be able to throw errors with str msgs- but errors themselves can implement protocols
 ;(scm* {} (define make-cljs.core/Error))
 ;(declare str)
@@ -232,6 +232,7 @@
         8 Symbol
         9 Keyword
         14 Procedure
+        18 (get foreign-type-table (first (scm* [x] (foreign-tags x)))) ;Foreign ptr.
         19 String
         (20 21 22 23 24 25 26 27 28 29) Array ;Various numerically-typed scheme vectors
         )))
