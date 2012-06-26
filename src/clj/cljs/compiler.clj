@@ -476,9 +476,9 @@
     (println (str "(load \"" (munge lib) "\")"))))
 
 (defmethod emit :deftype*
-  [{:keys [t fields]}]
+  [{:keys [t fields no-constructor]}]
   (let [fields (map munge fields)]
-    (println "(define-type" t (space-sep fields) ")")
+    (println "(define-type" t (space-sep fields) (if no-constructor "constructor: #f" "") ")")
     (println "(define" t (str "##type-" (count fields)  "-" t) ")") 
     (println "(table-set!" "cljs.core/protocol-impls" t "(make-table))" )))
 
@@ -831,8 +831,9 @@
      :uses-macros uses-macros :requires-macros requires-macros :excludes excludes}))
 
 (defmethod parse 'deftype*
-  [_ env [_ tsym fields] _]
-  (let [t (munge (:name (resolve-var (dissoc env :locals) tsym)))]
+  [_ env [_ tsym fields & opts] _]
+  (let [t (munge (:name (resolve-var (dissoc env :locals) tsym)))
+        no-constructor ((set opts) :no-constructor)]
     (swap! namespaces update-in [(-> env :ns :name) :defs tsym]
            (fn [m]
              (let [m (assoc (or m {}) :name t)]
@@ -841,7 +842,8 @@
                      (assoc :file *cljs-file*)
                      (assoc :line line))
                  m))))
-    {:env env :op :deftype* :t t :fields fields}))
+    (conj {:env env :op :deftype* :t t :fields fields}
+          (when no-constructor [:no-constructor true]))))
 
 #_(defmethod parse 'defrecord*
   [_ env [_ tsym fields] _]
