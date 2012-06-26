@@ -119,11 +119,15 @@ for now: size_t -> unsigned long
 
 (defn implement-method [classpath method])
 
+(def defined-classes
+  (atom {}))
+
 ;TODO: file-per-namespace gather.
 ;TODO: tags is a list of the known SUB classes (not the parents!) -- types whose primary tag can inhabit "us"
 (defn create-class [{:keys [classname classpath] :as class-spec}]
   (let [clj-name (classpath-to-clojurename classpath)
         ta (type-alias classpath)]
+    (swap! defined-classes merge {classpath ta})
     `(do (~'scm* {} (~'c-define-type ~ta (~'pointer (~'type ~classpath) ~clj-name)))
          (deftype* ~clj-name [] :no-constructor)
          (~'scm* {} (~'table-set! cljs.core/foreign-tags (quote ~clj-name) ~clj-name)))))
@@ -183,7 +187,7 @@ for now: size_t -> unsigned long
 ;we expect only one impl per arity-- if not we're multimethodic
 ;meant to be unquote-spliced as it returns a list of impls.
 (defn implement-protocols [method arity->impls]
-  `[~(protcol-name method)
+  `[~(protocol-name method)
     (~(protocol-methname method)
      ~@(for [[arity impls] arity->impls]
          (do
