@@ -55,9 +55,9 @@ CLJ
 if [ ! -f "cljs.core" ]
 then
     echo "ClojureScript Scheme Core not found. Generating new..."
-    scheme_compile src/cljs/cljs/core.cljs
-    mv src/cljs/cljs/core.scm cljs.core
-    ln -s src/cljs/cljs/polymorphic-apply.scm .
+    scheme_compile $CLOJURESCRIPT_HOME/src/cljs/cljs/core.cljs
+    mv $CLOJURESCRIPT_HOME/src/cljs/cljs/core.scm cljs.core
+    ln -s $CLOJURESCRIPT_HOME/src/cljs/cljs/polymorphic-apply.scm .
 fi
 
 echo "Starting... please wait"
