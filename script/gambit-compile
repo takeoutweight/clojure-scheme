@@ -1,0 +1,109 @@
+#!/bin/bash
+if [ "$1" == "" ]
+ then echo "No input! Quiting..."
+    exit
+fi
+
+if [ "$CLOJURESCRIPT_HOME" = "" ]; then
+  CLOJURESCRIPT_HOME="`dirname $0`/.."
+fi
+
+CLJSC_CP=''
+for next in lib/*: src/clj: src/cljs: test/cljs; do
+  CLJSC_CP=$CLJSC_CP$CLOJURESCRIPT_HOME'/'$next
+done
+
+function name_and_ext () {
+    without_cljs=`echo $1 | sed 's/.cljs$//'`
+    without_clj=`echo $1 | sed 's/.clj$//'`
+    if [ $1 != ${without_cljs} ]
+        then
+        name=${without_cljs}
+        ext="cljs"
+    elif [ $1 != ${without_clj} ]
+        then
+        name=${without_clj}
+        ext="clj"
+    else
+        if [ -f ${1}.clj ]
+            then
+            name=${1}
+            ext="clj"
+        elif [ -f ${1}.cljs ]
+            then
+            name=${1}
+            ext="cljs"
+        else
+            echo "No valid input file! Quiting..."
+            exit
+        fi
+    fi
+}
+
+name_and_ext $1
+
+function scheme_compile () {
+java -server -cp $CLJSC_CP clojure.main - <<CLJ
+(require '[cljs.compiler :as comp])
+(println "Compiling to gambit...")
+(comp/compile-file "$1")
+(println "Completed!")
+CLJ
+}
+
+# Bootstraping scheme
+if [ ! -f "cljs.core" ]
+then
+    echo "ClojureScript Scheme Core not found. Generating new..."
+    scheme_compile src/cljs/cljs/core.cljs
+    mv src/cljs/cljs/core.scm cljs.core
+    ln -s src/cljs/cljs/polymorphic-apply.scm .
+fi
+
+echo "Starting... please wait"
+scheme_compile "${name}.${ext}"
+echo "Compiling to scheme completed! Now running the script to test it."
+
+echo '----------------------------------------------'
+echo 'Does your program has a \"main\" function?'
+echo '(So that it can take command-line arguments.)'
+echo '[y/n]'
+read x
+echo '----------------------------------------------'
+if [ "$x" = "y" ]
+then
+    echo '---------------------------------------------------------------------'
+    echo "If the namespace is \"${name}\", just \"Enter\" to skip this message."
+    echo "But if the namespace is something other than \"${name}\","
+    echo "then type it here:"
+    read ns
+    echo '---------------------------------------------------------------------'
+
+    if [ "${ns}" == "" ]
+    then ns=${name}
+    fi
+
+    echo '#!/usr/bin/env gsi-script' > ${name}.tmp
+    echo >> ${name}.tmp
+
+    cat "${name}.scm" >> ${name}.tmp
+
+    echo "(define (main . arg) (apply ${ns}/main arg))" >> ${name}.tmp
+
+    mv ${name}.tmp ${name}.scm
+
+   chmod +x ${name}.scm
+    ./${name}.scm
+else
+    gsi ${name}.scm
+fi
+
+echo '//////////////////////////////////////////'
+echo "Done testing."
+echo "Do you want to compile it to binary? [y/n]"
+read x
+
+if [ $x == "y" ]
+  then gsc -exe ${name}.scm
+  echo "All done! Bye"
+fi
