@@ -34,6 +34,7 @@
    JavaScript or a deps file for use during development.
   "
   (:require [cljs.compiler :as comp]
+            [cljs.analyzer :as ana]
             [clojure.java.io :as io]
             [clojure.string :as string])
   (:import java.io.File
@@ -108,7 +109,7 @@
   (doall
     (map #(io/resource %)
          (filter #(do
-                    (and
+                    (and 
                       (.startsWith % lib-path)
                       (.endsWith % ".js")))
                  (jar-entry-names jar-path)))))
@@ -121,8 +122,9 @@
       (map to-url (filter #(.endsWith (.getName %) ".js") (file-seq (io/file path)))))))
 
 
-(defn find-js-classpath [path]
+(defn find-js-classpath 
   "finds all js files on the classpath matching the path provided"
+  [path]
   (let [process-entry #(if (.endsWith % ".jar")
                            (find-js-jar % path)
                            (find-js-fs (str % "/" path)))
@@ -150,20 +152,24 @@
   Options may contain an :externs key with a list of file paths to
   load. The :use-only-custom-externs flag may be used to indicate that
   the default externs should be excluded."
-  [{:keys [externs use-only-custom-externs target]}]
-  (letfn [(filter-js [paths]
-            (for [p paths u (find-js-resources p)] u))
-          (add-target [ext]
-            (if (= :nodejs target)
-              (cons (io/resource "cljs/nodejs_externs.js")
-                    (or ext []))
-              ext))
-          (load-js [ext]
-            (map #(js-source-file (.getFile %) (slurp %)) ext))]
-    (let [js-sources (-> externs filter-js add-target load-js)]
+  [{:keys [externs use-only-custom-externs target ups-externs]}]
+  (let [filter-cp-js (fn [paths]
+                       (for [p paths u (find-js-classpath p)] u))
+        filter-js (fn [paths]
+                    (for [p paths u (find-js-resources p)] u))
+        add-target (fn [ext]
+                     (if (= :nodejs target)
+                       (cons (io/resource "cljs/nodejs_externs.js")
+                             (or ext []))
+                       ext))
+        load-js (fn [ext]
+                  (map #(js-source-file (.getFile %) (slurp %)) ext))]
+    (let [js-sources (-> externs filter-js add-target load-js)
+          ups-sources (-> ups-externs filter-cp-js load-js)
+          all-sources (concat js-sources ups-sources)] 
       (if use-only-custom-externs
-        js-sources
-        (into js-sources (CommandLineRunner/getDefaultExterns))))))
+        all-sources
+        (into all-sources (CommandLineRunner/getDefaultExterns))))))
 
 (defn ^com.google.javascript.jscomp.Compiler make-closure-compiler []
   (let [compiler (com.google.javascript.jscomp.Compiler.)]
@@ -188,7 +194,7 @@
     (->> (for [line lines x (string/split line #";")] x)
          (map string/trim)
          (take-while #(not (re-matches #".*=[\s]*function\(.*\)[\s]*[{].*" %)))
-         (map #(re-matches #".*goog\.(provide|require)\('(.*)'\)" %))
+         (map #(re-matches #".*goog\.(provide|require)\(['\"](.*)['\"]\)" %))
          (remove nil?)
          (map #(drop 1 %))
          (reduce (fn [m ns]
@@ -287,26 +293,36 @@
             state (reduce dependency-order-visit state deps)]
         (assoc state :order (conj (:order state) file))))))
 
+(defn- pack-string [s]
+  (if (string? s)
+    {:provides (-provides s)
+     :requires (-requires s)
+     :file (str "from_source_" (gensym) ".clj")
+     ::original s}
+    s))
+
+(defn- unpack-string [m]
+  (or (::original m) m))
+
 (defn dependency-order
   "Topologically sort a collection of dependencies."
   [coll]
-  (let [state (build-index coll)]
-    (distinct (:order (reduce dependency-order-visit (assoc state :order []) (keys state))))))
+  (let [state (build-index (map pack-string coll))]
+    (map unpack-string
+         (distinct
+          (:order (reduce dependency-order-visit (assoc state :order []) (keys state)))))))
 
 ;; Compile
 ;; =======
-
-(defn empty-env []
-  {:ns (@comp/namespaces comp/*cljs-ns*) :context :statement :locals {}})
 
 (defn compile-form-seq
   "Compile a sequence of forms to a JavaScript source string."
   [forms]
   (comp/with-core-cljs
     (with-out-str
-      (binding [comp/*cljs-ns* 'cljs.user]
+      (binding [ana/*cljs-ns* 'cljs.user]
         (doseq [form forms]
-          (comp/emit (comp/analyze (empty-env) form)))))))
+          (comp/emit (ana/analyze (ana/empty-env) form)))))))
 
 (defn output-directory [opts]
   (or (:output-dir opts) "out"))
@@ -342,12 +358,11 @@
 
 (defn compile-dir
   "Recursively compile all cljs files under the given source
-  directory. Return a list of JavaScriptFiles in dependency order."
+  directory. Return a list of JavaScriptFiles."
   [^File src-dir opts]
   (let [out-dir (output-directory opts)]
-    (dependency-order
-     (map compiled-file
-          (comp/compile-root src-dir out-dir)))))
+    (map compiled-file
+         (comp/compile-root src-dir out-dir))))
 
 (defn path-from-jarfile
   "Given the URL of a file within a jar, return the path of the file
@@ -437,9 +452,11 @@
   "Given a library spec (a map containing the keys :file
   and :provides), returns a map containing :provides, :requires, :file
   and :url"
-  [lib-spec]
-  (merge lib-spec {:foreign true
-                   :url (find-url (:file lib-spec))}))
+  ([lib-spec] (load-foreign-library* lib-spec false))
+  ([lib-spec cp-only?] 
+    (let [find-func (if cp-only? io/resource find-url)]
+      (merge lib-spec {:foreign true
+                       :url (find-func (:file lib-spec))}))))
 
 (def load-foreign-library (memoize load-foreign-library*))
 
@@ -447,20 +464,25 @@
   "Given a path to a JavaScript library, which is a directory
   containing Javascript files, return a list of maps
   containing :provides, :requires, :file and :url."
-  [path]
-  (letfn [(graph-node [u]
-            (-> (io/reader u)
-                line-seq
-                parse-js-ns
-                (assoc :url u)))]
+  ([path] (load-library* path false))
+  ([path cp-only?]
+    (let [find-func (if cp-only? find-js-classpath find-js-resources)
+          graph-node (fn [u]
+                       (-> (io/reader u)
+                         line-seq
+                         parse-js-ns
+                         (assoc :url u)))]
     (let [js-sources (find-js-resources path)]
-      (filter #(seq (:provides %)) (map graph-node js-sources)))))
+      (filter #(seq (:provides %)) (map graph-node js-sources))))))
 
 (def load-library (memoize load-library*))
 
-(defn library-dependencies [{:keys [libs foreign-libs]}]
+(defn library-dependencies [{libs :libs foreign-libs :foreign-libs
+                             ups-libs :ups-libs ups-flibs :ups-foreign-libs}]
   (concat
+   (mapcat #(load-library % true) ups-libs) ;upstream deps
    (mapcat load-library libs)
+   (mapcat #(load-foreign-library % true) ups-flibs) ;upstream deps
    (map load-foreign-library foreign-libs)))
 
 (comment
@@ -502,8 +524,8 @@
 
 (defn js-dependencies
   "Given a sequence of Closure namespace strings, return the list of
-  all dependencies in dependency order. The returned list includes all
-  Google and third-party library dependencies.
+  all dependencies. The returned list includes all Google and
+  third-party library dependencies.
 
   Third-party libraries are configured using the :libs option where
   the value is a list of directories containing third-party
@@ -519,7 +541,7 @@
           (recur (into (rest requires) new-req)
                  (into visited new-req)
                  (conj deps node)))
-        (cons (get index "goog/base.js") (dependency-order deps))))))
+        (remove nil? deps)))))
 
 (comment
   ;; find dependencies
@@ -537,11 +559,10 @@
 
 (defn cljs-dependencies
   "Given a list of all required namespaces, return a list of
-  IJavaScripts which are the cljs dependencies in dependency
-  order. The returned list will not only include the explicitly
-  required files but any transitive depedencies as well. JavaScript
-  files will be compiled to the working directory if they do not
-  already exist.
+  IJavaScripts which are the cljs dependencies. The returned list will
+  not only include the explicitly required files but any transitive
+  depedencies as well. JavaScript files will be compiled to the
+  working directory if they do not already exist.
 
   Only load dependencies from the classpath."
   [opts requires]
@@ -562,7 +583,7 @@
             (recur (into (rest required-files) new-req)
                    (into visited new-req)
                    (conj js-deps js)))
-          (dependency-order js-deps))))))
+          (remove nil? js-deps))))))
 
 (comment
   ;; only get cljs deps
@@ -579,15 +600,17 @@
   plus all dependencies in dependency order."
   [opts & inputs]
   (let [requires (mapcat -requires inputs)
-        required-cljs (cljs-dependencies opts requires)
+        required-cljs (remove (set inputs) (cljs-dependencies opts requires))
         required-js (js-dependencies opts (set (concat (mapcat -requires required-cljs) requires)))]
-    (distinct (concat (map #(-> (javascript-file (:foreign %)
-                                                 (or (:url %) (io/resource (:file %)))
-                                                 (:provides %)
-                                                 (:requires %))
-                                (assoc :group (:group %))) required-js)
-                      required-cljs
-                      inputs))))
+    (cons (javascript-file nil (io/resource "goog/base.js") ["goog"] nil)
+          (dependency-order
+           (concat (map #(-> (javascript-file (:foreign %)
+                                              (or (:url %) (io/resource (:file %)))
+                                              (:provides %)
+                                              (:requires %))
+                             (assoc :group (:group %))) required-js)
+                   required-cljs
+                   inputs)))))
 
 (comment
   ;; add dependencies to literal js
@@ -816,6 +839,18 @@
                       "goog.provide('test');\ngoog.require('cljs.core');\nalert('hello');\n")
   )
 
+
+(defn get-upstream-deps* 
+  "returns a merged map containing all upstream dependencies defined by libraries on the classpath"
+  []
+  (let [classloader (. (Thread/currentThread) (getContextClassLoader))
+        upstream-deps (map #(read-string (slurp %)) (enumeration-seq (. classloader (findResources "deps.cljs"))))]
+    (doseq [dep upstream-deps]
+      (println (str "Upstream deps.cljs found on classpath. " dep " This is an EXPERIMENTAL FEATURE and is not guarenteed to remain stable in future versions.")))
+    (apply merge-with concat upstream-deps)))
+
+(def get-upstream-deps (memoize get-upstream-deps*))
+
 (defn add-header [{:keys [hashbang target]} js]
   (if (= :nodejs target)
     (str "#!" (or hashbang "/usr/bin/nodejs") "\n" js)
@@ -824,23 +859,37 @@
 (defn build
   "Given a source which can be compiled, produce runnable JavaScript."
   [source opts]
+  (ana/reset-namespaces!)
   (let [opts (if (= :nodejs (:target opts))
                (merge {:optimizations :simple} opts)
                opts)
-        compiled (-compile source opts)
-        compiled (concat
-                   (if (coll? compiled) compiled [compiled])
-                   (when (= :nodejs (:target opts))
-                     [(-compile (io/resource "cljs/nodejscli.cljs") opts)]))
-        js-sources (if (coll? compiled)
-                     (apply add-dependencies opts compiled)
-                     (add-dependencies opts compiled))]
-    (if (:optimizations opts)
-      (->> js-sources
-           (apply optimize opts)
-           (add-header opts)
-           (output-one-file opts))
-      (apply output-unoptimized opts js-sources))))
+        ups-deps (get-upstream-deps)
+        all-opts (assoc opts 
+                   :ups-libs (:libs ups-deps)
+                   :ups-foreign-libs (:foreign-libs ups-deps)
+                   :ups-externs (:externs ups-deps))]
+    (binding [ana/*cljs-static-fns*
+              (or (and (= (opts :optimizations) :advanced))
+                  (:static-fns opts)
+                  ana/*cljs-static-fns*)
+              ana/*cljs-warn-on-undeclared*
+              (true? (opts :warnings))]
+      (let [compiled (-compile source all-opts)
+            compiled (concat
+                      (if (coll? compiled) compiled [compiled])
+                      (when (= :nodejs (:target all-opts))
+                        [(-compile (io/resource "cljs/nodejscli.cljs") all-opts)]))
+            js-sources (if (coll? compiled)
+                         (binding []
+                           (apply add-dependencies all-opts compiled))
+                         (add-dependencies all-opts compiled))
+            optim (:optimizations all-opts)]
+        (if (and optim (not= optim :none))
+          (->> js-sources
+               (apply optimize all-opts)
+               (add-header all-opts)
+               (output-one-file all-opts))
+          (apply output-unoptimized all-opts js-sources))))))
 
 (comment
 
