@@ -12,7 +12,8 @@
   (:refer-clojure :exclude [macroexpand-1])
   (:require [clojure.java.io :as io]
             [clojure.string :as string]
-            [cljs.tagged-literals :as tags])
+;            [cljs.tagged-literals :as tags]
+            )
   (:import java.lang.StringBuilder))
 
 (declare resolve-var)
@@ -194,7 +195,7 @@
 
 (declare analyze analyze-symbol analyze-seq)
 
-(def specials '#{if def fn* do let* loop* letfn* throw try* recur new set! ns deftype* defrecord* . js* & quote})
+(def specials '#{if case def fn* do let* loop* throw try* recur new set! ns deftype* defrecord* . extend scm-str* scm* & quote})
 
 (def ^:dynamic *recur-frames* nil)
 (def ^:dynamic *loop-lets* nil)
@@ -223,6 +224,24 @@
      :test test-expr :then then-expr :else else-expr
      :unchecked @*unchecked-if*
      :children [test-expr then-expr else-expr]}))
+
+(defmethod parse 'case
+  [op env [_ test & clauses :as form] _]
+  (let [test-expr (disallowing-recur (analyze (assoc env :context :expr) test))
+        [paired-clauses else] (if (odd? (count clauses))
+                                [(butlast clauses) (last clauses)]
+                                [clauses ::no-else])
+        clause-exprs (seq (map (fn [[test-constant result-expr]]                                 
+                                 [(let [analyzed-t (analyze (assoc env :context :expr) test-constant)]
+                                    (if (or (#{:vector :invoke} (:op analyzed-t)))
+                                      (map #(analyze (assoc env :context :expr) %) test-constant)
+                                      [analyzed-t]))
+                                  , (analyze (assoc env :context :expr) result-expr)])
+                               (partition 2 paired-clauses)))
+        else-expr (when (not= ::no-else else) (analyze (assoc env :context :expr) else))]
+    {:env env :op :case :form form
+     :test test-expr :clauses clause-exprs :else else-expr
+     :children (vec (concat [test-expr] clause-exprs))}))
 
 (defmethod parse 'throw
   [op env [_ throw :as form] name]
@@ -340,6 +359,32 @@
              (when export-as {:export export-as})
              (when init-expr {:children [init-expr]})))))
 
+(comment (defn- analyze-fn-method [env locals meth]
+  (letfn [(uniqify [[p & r]]
+            (when p
+              (cons (if (some #{p} r) (gensym (str p)) p)
+                    (uniqify r))))]
+   (let [params (first meth)
+         fields (-> params meta ::fields)
+         variadic (boolean (some '#{&} params))
+         params (uniqify (remove '#{&} params))
+         fixed-arity (count (if variadic (butlast params) params))
+         body (next meth)
+         gthis (and fields (gensym "this__"))
+         locals (reduce (fn [m fld]
+                          (assoc m fld
+                                 {:name (symbol (str gthis "." (munge fld)))
+                                  :field true
+                                  :mutable (-> fld meta :mutable)}))
+                        locals fields)
+         locals (reduce (fn [m name] (assoc m name {:name (munge name)})) locals params)
+         recur-frame {:names (vec (map munge params)) :flag (atom nil) :variadic variadic}
+         block (binding [*recur-frames* (cons recur-frame *recur-frames*)]
+                 #_(println "recur-frames" *recur-frames*)
+                 (analyze-block (assoc env :context :return :locals locals) body))]
+
+     (merge {:env env :variadic variadic :params (map munge params) :max-fixed-arity fixed-arity :gthis gthis :recurs @(:flag recur-frame)} block)))))
+
 (defn- analyze-fn-method [env locals meth gthis]
   (letfn [(uniqify [[p & r]]
             (when p
@@ -360,6 +405,26 @@
      (merge {:env env :variadic variadic :params params :max-fixed-arity fixed-arity
              :gthis gthis :recurs @(:flag recur-frame)}
             block))))
+
+(comment (defmethod parse 'fn*
+  [op env [_ & args] name]
+  (let [[name meths] (if (symbol? (first args))
+                       [(first args) (next args)]
+                       [name (seq args)])
+        ;;turn (fn [] ...) into (fn ([]...))
+        meths (if (vector? (first meths)) (list meths) meths)
+        mname (when name (str (munge name)  "---recur"))
+        locals (:locals env)
+        locals (if name (assoc locals name {:name mname}) locals)
+        env (assoc env :recur-name (or mname (gensym "recurfn")))
+        menv (if (> (count meths) 1) (assoc env :context :expr) env)
+        methods (map #(analyze-fn-method menv locals %) meths)
+        max-fixed-arity (apply max (map :max-fixed-arity methods))
+        variadic (boolean (some :variadic methods))]
+    ;;todo - validate unique arities, at most one variadic, variadic takes max required args
+    {:env env :op :fn :name mname :methods methods :variadic variadic :recur-frames *recur-frames*
+     :jsdoc []
+     :max-fixed-arity max-fixed-arity})))
 
 (defmethod parse 'fn*
   [op env [_ & args :as form] name]
@@ -449,6 +514,36 @@
   (let [block (analyze-block env exprs)]
     (merge {:env env :op :do :form form :children (block-children block)} block)))
 
+(comment (defn analyze-let
+  [encl-env [_ bindings & exprs :as form] is-loop]
+  (assert (and (vector? bindings) (even? (count bindings))) "bindings must be vector of even number of elements")
+  (let [context (:context encl-env)
+        [bes env]
+        (disallowing-recur
+          (loop [bes []
+                 env (assoc encl-env :context :expr)
+                 bindings (seq (partition 2 bindings))]
+            (if-let [[name init] (first bindings)]
+              (do
+                (assert (not (or (namespace name) (.contains (str name) "."))) (str "Invalid local name: " name))
+                (let [init-expr (analyze env init)
+                      be {:name (gensym (str (munge name) "__")) :init init-expr}]
+                  (recur (conj bes be)
+                         (assoc-in env [:locals name] be)
+                         (next bindings))))
+              [bes env])))
+        recur-frame (when is-loop {:names (vec (map :name bes)) :flag (atom nil)})
+        recur-name (when is-loop (gensym "recurlet"))
+        {:keys [statements ret children]}
+        (binding [*recur-frames* (if recur-frame (cons recur-frame *recur-frames*) *recur-frames*)]
+          #_(println "recur-frames2" recur-frame *recur-frames*)
+          (analyze-block (into (assoc env :context (if (= :expr context) :return context))
+                               (when recur-name [[:recur-name recur-name]])) exprs))]
+    (into
+     {:env encl-env :op :let :loop is-loop
+      :bindings bes :statements statements :ret ret :form form :children (into [children] (map :init bes))}
+     (when recur-name [[:recur-name recur-name]])))))
+
 (defn analyze-let
   [encl-env [_ bindings & exprs :as form] is-loop]
   (assert (and (vector? bindings) (even? (count bindings))) "bindings must be vector of even number of elements")
@@ -491,6 +586,19 @@
 (defmethod parse 'loop*
   [op encl-env form _]
   (analyze-let encl-env form true))
+
+(comment (defmethod parse 'recur
+  [op env [_ & exprs] _]
+  (let [context (:context env)
+        frame (first *recur-frames*)]
+    (assert frame (str  "Can't recur here: " (:line env)))
+    (assert (or (= (count exprs) (count (:names frame)))
+                (and (>= (count exprs) (dec (count (:names frame))))
+                     (:variadic frame))) (str "recur argument count mismatch: " (:line env) " " frame))
+    (reset! (:flag frame) true)
+    (assoc {:env env :op :recur}
+      :frame frame
+      :exprs (disallowing-recur (vec (map #(analyze (assoc env :context :expr) %) exprs)))))))
 
 (defmethod parse 'recur
   [op env [_ & exprs :as form] _]
@@ -654,6 +762,21 @@
     {:env env :op :ns :form form :name name :uses uses :requires requires
      :uses-macros uses-macros :requires-macros requires-macros :excludes excludes}))
 
+(comment see no constructor (defmethod parse 'deftype*
+  [_ env [_ tsym fields & opts] _]
+  (let [t (munge (:name (resolve-var (dissoc env :locals) tsym)))
+        no-constructor ((set opts) :no-constructor)]
+    (swap! namespaces update-in [(-> env :ns :name) :defs tsym]
+           (fn [m]
+             (let [m (assoc (or m {}) :name t)]
+               (if-let [line (:line env)]
+                 (-> m
+                     (assoc :file *cljs-file*)
+                     (assoc :line line))
+                 m))))
+    (conj {:env env :op :deftype* :t t :fields fields}
+          (when no-constructor [:no-constructor true])))))
+
 (defmethod parse 'deftype*
   [_ env [_ tsym fields pmasks :as form] _]
   (let [t (:name (resolve-var (dissoc env :locals) tsym))]
@@ -670,6 +793,8 @@
                     :line line})))))
     {:env env :op :deftype* :form form :t t :fields fields :pmasks pmasks}))
 
+(comment NOTE I commented out defrecord* previously.)
+
 (defmethod parse 'defrecord*
   [_ env [_ tsym fields pmasks :as form] _]
   (let [t (:name (resolve-var (dissoc env :locals) tsym))]
@@ -682,6 +807,19 @@
                    {:file *cljs-file*
                     :line line})))))
     {:env env :op :defrecord* :form form :t t :fields fields :pmasks pmasks}))
+
+(defmethod parse 'extend [op env [_ etype & impls] _]
+  (let [prot-impl-pairs (partition 2 impls)
+        e-type-rslvd (resolve-var env etype)
+        analyzed-impls (map (fn [[prot-name meth-map]]
+                              (let [prot-v (resolve-var env prot-name)] 
+                                [prot-v
+                                 (map (fn [[meth-key meth-impl]]
+                                        [(analyze env (symbol (namespace (:name prot-v)) (name meth-key)))
+                                         (analyze (assoc env :context :return) meth-impl)])
+                                      meth-map)]))
+                            prot-impl-pairs)]
+    {:env env :op :extend :etype e-type-rslvd :impls analyzed-impls :base-type? (prim-types (:name e-type-rslvd))}))
 
 ;; dot accessor code
 
@@ -759,7 +897,14 @@
                        :children (into [targetexpr] argexprs)
                        :tag (-> form meta :tag)})))))
 
-(defmethod parse 'js*
+(def prim-types #{'cljs.core/Number 'cljs.core/Pair 'cljs.core/Boolean 'cljs.core/Nil 'cljs.core/Null
+                  'cljs.core/Char 'cljs.core/Array 'cljs.core/Symbol 'cljs.core/Keyword
+                  'cljs.core/Procedure 'cljs.core/String})
+
+(defmethod parse 'scm* [op env [_ symbol-map & form] _]
+  {:env env :op :scm :children [] :form form :symbol-map symbol-map})
+
+(defmethod parse 'scm-str*
   [op env [_ jsform & args :as form] _]
   (assert (string? jsform))
   (if args
@@ -772,7 +917,7 @@
                        (cons (subs s 0 idx) (seg (subs s (inc end))))))))
            enve (assoc env :context :expr)
            argexprs (vec (map #(analyze enve %) args))]
-       {:env env :op :js :segs (seg jsform) :args argexprs
+       {:env env :op :scm-str :segs (seg jsform) :args argexprs
         :tag (-> form meta :tag) :form form :children argexprs}))
     (let [interp (fn interp [^String s]
                    (let [idx (.indexOf s "~{")]
@@ -781,7 +926,7 @@
                        (let [end (.indexOf s "}" idx)
                              inner (:name (resolve-existing-var env (symbol (subs s (+ 2 idx) end))))]
                          (cons (subs s 0 idx) (cons inner (interp (subs s (inc end)))))))))]
-      {:env env :op :js :form form :code (apply str (interp jsform))
+      {:env env :op :scm-str :form form :code (apply str (interp jsform))
        :tag (-> form meta :tag)})))
 
 (defn parse-invoke
@@ -922,7 +1067,7 @@
 
 (defn analyze-file
   [f]
-  (let [res (if (= \/ (first f)) f (io/resource f))]
+  (let [res (if (= \/ (first f)) f (io/resource f))] ;res (or res (java.net.URL. (str "file:/Users/nathansorenson/src/c-clojure/src/cljs/" f)))
     (assert res (str "Can't find " f " in classpath"))
     (binding [*cljs-ns* 'cljs.user
               *cljs-file* (.getPath ^java.net.URL res)]
