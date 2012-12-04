@@ -564,7 +564,7 @@
     (emitln "(define " t " ##type-" (count fields)  "-" t ")") 
     (emitln "(table-set! cljs.core/protocol-impls " t " (make-table))" )))
 
-(defmethod emit :defrecord*
+(comment (defmethod emit :defrecord*
   [{:keys [t fields pmasks]}]
   (let [fields (concat (map munge fields) '[__meta __extmap])]
     (emitln "")
@@ -591,7 +591,7 @@
     (emit-constant nil)
     (emitln ";")
     (emitln "}")
-    (emitln "})")))
+    (emitln "})"))))
 
 (defmethod emit :dot
   [{:keys [target field method args env]}]
