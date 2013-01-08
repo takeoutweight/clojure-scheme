@@ -38,18 +38,10 @@
     "volatile" "while" "with" "yield" "methods"})
 
 (def ^:dynamic *position* nil)
+(def ^:dynamic *emitted-provides* nil)
+(def ^:dynamic *lexical-renames* {})
 (def cljs-reserved-file-names #{"deps.cljs"})
 
-#_(defn munge ;TODO any munging necessary for scheme?
-  ([s] (munge s js-reserved))
-  ([s reserved]
-    (let [ss (string/replace (str s) #"\/(.)" ".$1") ; Division is special
-          ss (apply str (map #(if (reserved %) (str % "$") %)
-                             (string/split ss #"(?<=\.)|(?=\.)")))
-          ms (clojure.lang.Compiler/munge ss)]
-      (if (symbol? s)
-        (symbol ms)
-        ms))))
 (defn munge ([s] s) ([s r] s))
 
 (defn dispatch-munge [s]
@@ -64,6 +56,36 @@
                                          (identical? x ()) "()" ;o/w clojure.lang.PersistentList$EmptyList@1
                                          :else n)) x)))
   ([x & ys] (str (strict-str x) (apply strict-str ys))))
+
+(defonce ns-first-segments (atom '#{"cljs" "clojure"}))
+
+#_(defn munge
+  ([s] (munge s js-reserved))
+  ([s reserved]
+    (if (map? s)
+      ; Unshadowing
+      (let [{:keys [name field] :as info} s
+            depth (loop [d 0, {:keys [shadow]} info]
+                    (cond
+                      shadow (recur (inc d) shadow)
+                      (@ns-first-segments (str name)) (inc d)
+                      :else d))
+            renamed (*lexical-renames* (System/identityHashCode s))
+            munged-name (munge (cond field (str "self__." name)
+                                     renamed renamed
+                                     :else name)
+                               reserved)]
+        (if (or field (zero? depth))
+          munged-name
+          (symbol (str munged-name "__$" depth))))
+      ; String munging
+      (let [ss (string/replace (str s) #"\/(.)" ".$1") ; Division is special
+            ss (apply str (map #(if (reserved %) (str % "$") %)
+                               (string/split ss #"(?<=\.)|(?=\.)")))
+            ms (clojure.lang.Compiler/munge ss)]
+        (if (symbol? s)
+          (symbol ms)
+          ms)))))
 
 (defn- comma-sep [xs]
   (interpose "," xs))
@@ -129,6 +151,14 @@
     (swap! *position* (fn [[line column]]
                         [(inc line) 0])))
   nil)
+
+(defn ^String emit-str [expr]
+  (with-out-str (emit expr)))
+
+(defn emit-provide [sym]
+  (when-not (or (nil? *emitted-provides*) (contains? @*emitted-provides* sym))
+    (swap! *emitted-provides* conj sym)
+    (emitln "goog.provide('" (munge sym) "');")))
 
 (defmulti emit-constant class)
 (defmethod emit-constant nil [x] (emits "#!void"))
@@ -220,16 +250,16 @@
      ~@body
      (when-not (= :expr (:context env#)) (emitln ";"))))
 
-(defmethod emit :no-op
-  [m] (emits "void 0;"))
+(defmethod emit :no-op [m])
 
 (defmethod emit :var
   [{:keys [info env] :as arg}]
   (let [n (:name info)
         n (if (= (namespace n) "js")
             (name n)
-            n)]
-    (emits (munge n))))
+            info)]
+    (when-not (= :statement (:context env))
+      (emit-wrap env (emits (munge n))))))
 
 (defmethod emit :meta
   [{:keys [expr meta env]}]
@@ -328,12 +358,11 @@
   (if init
     (do
       (emit-comment doc (:jsdoc init))
-      (emits "(define " name init))
+      (emits "(define " name init)
       (emits "\n"))
     (emits "(define " name")\n")
     #_(when export
         (println (str "goog.exportSymbol('" export "', " name ");")))))
-
 (defn schemify-method-arglist
   "analyzed method [a b & r] -> (a b . r) -- as symbols not as a string.
    or [& r] -> r in the case of no fixed args."
@@ -360,7 +389,10 @@
 (defmethod emit :fn
   [{:keys [name env methods max-fixed-arity variadic recur-frames]}]
   (when-not (= :statement (:context env))
-    (let [loop-locals (seq (mapcat :names (filter #(and % @(:flag %)) recur-frames)))
+    (let [loop-locals (->> (concat (mapcat :params (filter #(and % @(:flag %)) recur-frames))
+                                   (mapcat :params loop-lets))
+                           (map munge)
+                           seq)
           recur-name (:recur-name env)]
       (if (= 1 (count methods))
         (emit-fn-method (assoc (first methods) :name (or name recur-name)))
@@ -396,7 +428,7 @@
             (when-not base-type?
               (println (str "(table-set! " (:name (:info meth-name)) "---vtable")
                        (:name etype)
-                       impl-name ")") )))))))) 
+                       impl-name ")") ))))))))
 
 (defmethod emit :do
   [{:keys [statements ret env]}]
@@ -430,17 +462,22 @@
                   (str "(" name " " (emits init) ")"))
                 bindings)
         context (:context env)]
-    (emits "(let* (" bs ")")
-    (when loop (emits "(letrec ((" recur-name
-                      "(lambda (" (space-sep (map :name bindings)) ")" ))
-    (emit-block (if (= :expr context) :return context) statements ret)
-    (when loop (emits ")))" "(" recur-name " " (space-sep (map :name bindings)) "))"))
-    (emits ")")))
+    (binding [*lexical-renames* (into *lexical-renames*
+                                      (when (= :statement context)
+                                        (map #(vector (System/identityHashCode %)
+                                                      (gensym (str (:name %) "-")))
+                                             bindings)))]
+      (emits "(let* (" bs ")")
+      (when loop (emits "(letrec ((" recur-name
+                        "(lambda (" (space-sep (map :name bindings)) ")" ))
+      (emit-block (if (= :expr context) :return context) statements ret)
+      (when loop (emits ")))" "(" recur-name " " (space-sep (map :name bindings)) "))"))
+      (emits ")"))))
 
 (defmethod emit :recur
   [{:keys [frame exprs env]}]
   (let [temps (vec (take (count exprs) (repeatedly gensym)))
-        names (:names frame)
+        params (:params frame)
         recur-name (:recur-name env)]
     (emits "(" recur-name " " (space-sep (map emits exprs))")")))
 
@@ -450,13 +487,13 @@
   [{:keys [bindings statements ret env]}]
   (let [context (:context env)]
     (when (= :expr context) (emits "(function (){"))
-    (doseq [{:keys [name init]} bindings]
-      (emitln "var " (munge name) " = " init ";"))
+    (doseq [{:keys [init] :as binding} bindings]
+      (emitln "var " (munge binding) " = " init ";"))
     (emit-block (if (= :expr context) :return context) statements ret)
     (when (= :expr context) (emits "})()"))))
 
 (defn protocol-prefix [psym]
-  (str (-> (str psym) (.replace \. \$) (.replace \/ \$)) "$"))
+  (symbol (str (-> (str psym) (.replace \. \$) (.replace \/ \$)) "$")))
 
 (defmethod emit :invoke ; TODO -- this is ignoring all new protocol stuff.
   [{:keys [f args env] :as expr}]
@@ -515,7 +552,7 @@
        (emits "!(" (first args) ")")
 
        proto?
-       (let [pimpl (str (protocol-prefix protocol)
+       (let [pimpl (str (munge (protocol-prefix protocol))
                         (munge (name (:name info))) "$arity$" (count args))]
          (emits (first args) "." pimpl "(" (comma-sep args) ")"))
 
@@ -552,6 +589,7 @@
 
 (defmethod emit :ns
   [{:keys [name requires uses requires-macros env]}]
+  (swap! ns-first-segments conj (first (string/split (str name) #"\.")))
   (when-not (= name 'cljs.core)
     (emits "(load \"cljs.core\")"))
   (doseq [lib (into (vals requires) (distinct (vals uses)))]
@@ -560,13 +598,16 @@
 (defmethod emit :deftype*
   [{:keys [t fields no-constructor]}]
   (let [fields (map munge fields)]
+    #_(emit-provide t)
     (emitln "(define-type " t " " (space-sep fields) (if no-constructor " constructor: #f" "") ")")
     (emitln "(define " t " ##type-" (count fields)  "-" t ")") 
     (emitln "(table-set! cljs.core/protocol-impls " t " (make-table))" )))
 
+
 (comment (defmethod emit :defrecord*
   [{:keys [t fields pmasks]}]
   (let [fields (concat (map munge fields) '[__meta __extmap])]
+    (emit-provide t)
     (emitln "")
     (emitln "/**")
     (emitln "* @constructor")
@@ -628,7 +669,7 @@
   ([f]
      (forms-seq f (clojure.lang.LineNumberingPushbackReader. (io/reader f))))
   ([f ^java.io.PushbackReader rdr]
-     (if-let [form (read rdr nil nil)]
+     (if-let [form (binding [*ns* ana/*reader-ns*] (read rdr nil nil))]
        (lazy-seq (cons form (forms-seq f rdr)))
        (.close rdr))))
 
@@ -657,7 +698,8 @@
                 ana/*cljs-ns* 'cljs.user
                 ana/*cljs-file* (.getPath ^java.io.File src)
                 *data-readers* tags/*cljs-data-readers*
-                *position* (atom [0 0])]
+                *position* (atom [0 0])
+                *emitted-provides* (atom #{})]
         (loop [forms (forms-seq src)
                ns-name nil
                deps nil]
@@ -678,6 +720,24 @@
   [^java.io.File src ^java.io.File dest]
   (or (not (.exists dest))
       (> (.lastModified src) (.lastModified dest))))
+
+(defn parse-ns [src dest]
+  (with-core-cljs
+    (binding [ana/*cljs-ns* 'cljs.user]
+      (loop [forms (forms-seq src)]
+        (if (seq forms)
+          (let [env (ana/empty-env)
+                ast (ana/analyze env (first forms))]
+            (if (= (:op ast) :ns)
+              (let [ns-name (:name ast)
+                    deps    (merge (:uses ast) (:requires ast))]
+                {:ns (or ns-name 'cljs.user)
+                 :provides [ns-name]
+                 :requires (if (= ns-name 'cljs.core)
+                             (set (vals deps))
+                             (conj (set (vals deps)) 'cljs.core))
+                 :file dest})
+              (recur (rest forms)))))))))
 
 (defn compile-file
   "Compiles src to a file of the same name, but with a .js extension,
@@ -702,7 +762,7 @@
          (if (requires-compilation? src-file dest-file)
            (do (mkdirs dest-file)
                (compile-file* src-file dest-file))
-           {:file dest-file})
+           (parse-ns src-file dest-file))
          (throw (java.io.FileNotFoundException. (str "The file " src " does not exist.")))))))
 
 (comment

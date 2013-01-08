@@ -23,7 +23,7 @@
   (assert (not (= 1 1 2)))
   (assert (not (= 1 1 2 1)))
   (assert (not (= 1 1 1 2)))
-  
+
   ;; arithmetic
   (assert (= (+) 0))
   (assert (= (apply + []) 0))
@@ -163,6 +163,7 @@
   (assert (= (apply mod [4 2]) 0))
   (assert (= (mod 3 2) 1))
   (assert (= (apply mod [3 2]) 1))
+  (assert (= (mod -2 5) 3))
 
   (assert (= [4 3 2 1 0] (loop [i 0 j ()]
                  (if (< i 5)
@@ -171,6 +172,15 @@
 
   (assert (= [[1 1] [1 2] [1 3] [2 1] [2 2] [2 3]]
              (map #(%) (for [i [1 2] j [1 2 3]] (fn [] [i j])))))
+
+  (assert (integer? 0))
+  (assert (integer? 42))
+  (assert (integer? -42))
+  (assert (not (integer? "")))
+  (assert (not (integer? 1e308)))
+  (assert (not (integer? js/Infinity)))
+  (assert (not (integer? (- js/Infinity))))
+  (assert (not (integer? js/NaN)))
 
   (assert (= 42 (int 42.5)))
   (assert (integer? (int 42.5)))
@@ -185,7 +195,13 @@
   (assert (= 2 ('b '{:a 1 b 2})))
   (assert (= 2 ({:a 1 :b 2} :b)))
   (assert (= 2 ({1 1 2 2} 2)))
+  (assert (= 2 (:a {:b 1} 2)))
+  (assert (= 2 (:a {} 2)))
+  (assert (= 2 ({:b 1} :a 2)))
+  (assert (= 2 ({} :a 2)))
+  (assert (= nil (:a {})))
   (assert (= 2 (#{1 2 3} 2)))
+  (assert (zero? (hash (aget (js-obj) "foo"))))
 
   (assert (= 1 (apply :a '[{:a 1 a 2}])))
   (assert (= 1 (apply 'a '[{a 1 :b 2}])))
@@ -196,12 +212,23 @@
   (assert (= "foo/bar" (namespace 'foo/bar/baz)))
   (assert (= "baz" (name :foo/bar/baz)))
   ;(assert (= "foo/bar" (namespace :foo/bar/baz)))
+  (assert (nil? (namespace '/)))
+  (assert (= "/" (name '/)))
+  ;;TODO: These next two tests need Clojure 1.5
+  ;(assert (= "foo" (namespace 'foo//)))
+  ;(assert (= "/" (name 'foo//)))
 
   ; str
   (assert (= ":hello" (str :hello)))
   (assert (= "hello" (str 'hello)))
   (assert (= "hello:world" (str "hello" :world)))
   (assert (= ":helloworld" (str :hello 'world)))
+
+  ; symbol
+  (assert (= 'a (symbol 'a)))
+
+  ;; format
+  (assert (= "01: 2.000000" (format "%02d: %.6f" 1 2)))
 
   (assert (= {:a :b} (get {[1 2 3] {:a :b}, 4 5} [1 2 3])))
   (assert (= :a (nth [:a :b :c :d] 0)))
@@ -221,7 +248,7 @@
 
   (assert (= "[1 true {:a 2, :b 42} [3 4]]" ;"[1 true {:a 2, :b 42} #<Array [3, 4]>]" I equate Scheme vectors with clojure vectors at the moment.
              (pr-str [1 true {:a 2 :b 42} (array 3 4)])))
-  (assert (= "\"asdf\"" (pr-str "asdf")))
+  (assert (= "\"asdf\" \"asdf\"" (pr-str "asdf" "asdf")))
   (assert (= "[1 true {:a 2, :b #\"x\\\"y\"} #<Array [3, 4]>]"
              (pr-str [1 true {:a 2 :b #"x\"y"} (array 3 4)])))
 
@@ -231,6 +258,11 @@
 
   (assert (= "asdf" (print-str "asdf")))
   (assert (= "asdf\n" (println-str "asdf")))
+
+  (assert (= "" (pr-str)))
+  (assert (= "\n" (prn-str)))
+  (assert  (= "12" (with-out-str (print 1) (print 2))))
+  (assert  (= "12" (with-out-str (*print-fn* 1) (*print-fn* 2))))
 
   ;;this fails in v8 - why?
   ;(assert (= "symbol\"'string" (pr-str (str 'symbol \" \' "string"))))
@@ -369,8 +401,27 @@
     (assert (= [[3 4 5] 2 1] (apply multiple-arity-variadic 1 2 [3 4 5])))
     (assert (= [[3 4 5] 2 1] (apply multiple-arity-variadic 1 2 3 [4 5])))
     (assert (= [[3 4 5] 2 1] (apply multiple-arity-variadic 1 2 3 4 [5])))
-    #_(assert (= [3 4 5] (take 3 (first (apply multiple-arity-variadic (iterate inc 1)))))) ;TODO
-    #_(assert (= [2 1] (rest (apply multiple-arity-variadic (iterate inc 1)))))) ;TODO
+    #_(assert (= [3 4 5] (take 3 (first (apply multiple-arity-variadic (iterate inc 1))))))
+    #_(assert (= [2 1] (rest (apply multiple-arity-variadic (iterate inc 1))))))
+
+  ;; CLJS-383
+  (let [f1 (fn f1 ([] 0) ([a] 1) ([a b] 2) ([a b c & more] 3))
+        f2 (fn f2 ([x] :foo) ([x y & more] (apply f1 y more)))]
+    (assert (= 1 (f2 1 2))))
+  (let [f (fn ([]) ([a & more] more))]
+    (assert (nil? (f :foo))))
+  (assert (nil? (array-seq (array 1) 1)))
+
+  ;; Functions with metadata
+  (let [f (fn [x] (* x 2))
+        m {:foo "bar"}
+        mf (with-meta f m)]
+    (assert (nil? (meta f)))
+    (assert (fn? mf))
+    (assert (= 4 (mf 2)))
+    (assert (= 4 (apply mf [2])))
+    (assert (= (meta mf) m)))
+
   (let [a (atom 0)]
     (assert (= 0 (deref a)))
     (assert (= 1 (swap! a inc)))
@@ -655,6 +706,24 @@
   (assert (= [[{:a 1, :b 2} {:a 1, :b 2}]]
              (js->clj [[{:a 1, :b 2} {:a 1, :b 2}]]))))
 
+  ;; clj->js
+  (assert (= (clj->js 'a) "a"))
+  (assert (= (clj->js :a) "a"))
+  (assert (= (clj->js "a") "a"))
+  (assert (= (clj->js 1) 1))
+  (assert (= (clj->js nil) (js* "null")))
+  (assert (= (clj->js true) (js* "true")))
+  (assert (goog/isArray (clj->js [])))
+  (assert (goog/isArray (clj->js #{})))
+  (assert (goog/isArray (clj->js '())))
+  (assert (goog/isObject (clj->js {})))
+  (assert (= (aget (clj->js {:a 1}) "a") 1))
+  (assert (= (-> (clj->js {:a {:b {{:k :ey} :d}}})
+                 (aget "a")
+                 (aget "b")
+                 (aget "{:k :ey}"))
+             "d"))
+
   ;; last
   (assert (= nil (last nil)))
   (assert (= 3 (last [1 2 3])))
@@ -829,9 +898,9 @@
   (derive :user/rect :user/shape)
   (derive :user/square :user/rect)
 
-  (assert (= #{:user/shape} (parents :user/rect)))
-  (assert (= #{:user/rect :user/shape} (ancestors :user/square)))
-  (assert (= #{:user/rect :user/square} (descendants :user/shape)))
+  (assert (= #{:cljs.core-test/shape} (parents ::rect)))
+  (assert (= #{:cljs.core-test/rect :cljs.core-test/shape} (ancestors ::square)))
+  (assert (= #{:cljs.core-test/rect :cljs.core-test/square} (descendants ::shape)))
   (assert (true? (isa? 42 42)))
   (assert (true? (isa? :user/square :user/shape)))
 
@@ -854,8 +923,8 @@
   ;;(bar :user/rect :user/rect)
   ;; -> java.lang.IllegalArgumentException:
   ;;  Multiple methods match dispatch value:
-  ;;  [:user/rect :user/rect] -> [:user/rect :user/shape]
-  ;;  and [:user/shape :user/rect],
+  ;;  [:cljs.core-test/rect :cljs.core-test/rect] -> [:cljs.core-test/rect :cljs.core-test/shape]
+  ;;  and [:cljs.core-test/shape :cljs.core-test/rect],
   ;;  and neither is preferred
 
   (assert (zero? (count (prefers bar))))
@@ -944,20 +1013,21 @@
                    pop
                    (conj 31)
                    (conj 32)))))
-  
+
   (let [stack1 (pop (vec (range 97)))
         stack2 (pop stack1)]
     (assert (= 95 (peek stack1)))
     (assert (= 94 (peek stack2))))
 
   ;; subvec
-  (let [v (vec (range 10))
-        s (subvec v 2 8)]
+  (let [v1 (vec (range 10))
+        v2 (vec (range 5))
+        s (subvec v1 2 8)]
     (assert (= s
-               (-> v
+               (-> v1
                    (subvec 2)
-                   (subvec 0 6))))
-    (assert (= s (->> v
+                   (subvec 0 6))
+               (->> v1
                     (drop 2)
                     (take 6))))
     (assert (= 6 (count s)))
@@ -969,7 +1039,13 @@
                (conj s 1)))
     (assert (= 27 (reduce + s)))
     (assert (= s (vec s))) ; pour into plain vector
-    (let [m {:x 1}] (assert (= m (meta (with-meta s m))))))
+    (let [m {:x 1}] (assert (= m (meta (with-meta s m)))))
+    ;; go outside ranges
+    (assert (= :fail (try (subvec v2 0 6) (catch js/Error e :fail))))
+    (assert (= :fail (try (subvec v2 6 10) (catch js/Error e :fail))))
+    (assert (= :fail (try (subvec v2 6 10) (catch js/Error e :fail))))
+    (assert (= :fail (try (subvec v2 3 6) (catch js/Error e :fail))))
+    )
 
   ;; TransientVector
   (let [v1 (vec (range 15 48))
@@ -1205,7 +1281,6 @@
     (assert (identical? cljs.core.PersistentTreeMap (type m1)))
     (assert (identical? cljs.core.PersistentTreeMap (type m2)))
     (assert (identical? compare (.-comp m1)))
-    (assert (identical? c2 (.-comp m2)))
     (assert (zero? (count m1)))
     (assert (zero? (count m2)))
     (let [m1 (assoc m1 :foo 1 :bar 2 :quux 3)
@@ -1245,15 +1320,19 @@
   ;; PersistentTreeSet
   (let [s1 (sorted-set)
         c2 (comp - compare)
-        s2 (sorted-set-by c2)]
+        s2 (sorted-set-by c2)
+        c3 #(compare (quot %1 2) (quot %2 2))
+        s3 (sorted-set-by c3)
+        s4 (sorted-set-by <)]
     (assert (identical? cljs.core.PersistentTreeSet (type s1)))
     (assert (identical? cljs.core.PersistentTreeSet (type s2)))
     (assert (identical? compare (-comparator s1)))
-    (assert (identical? c2 (-comparator s2)))
     (assert (zero? (count s1)))
     (assert (zero? (count s2)))
     (let [s1 (conj s1 1 2 3)
-          s2 (conj s2 1 2 3)]
+          s2 (conj s2 1 2 3)
+          s3 (conj s3 1 2 3 7 8 9)
+          s4 (conj s4 1 2 3)]
       (assert (= (hash s1) (hash s2)))
       (assert (= (hash s1) (hash #{1 2 3})))
       (assert (= (seq s1)  (list 1 2 3)))
@@ -1262,6 +1341,18 @@
       (assert (= (rseq s2) (list 1 2 3)))
       (assert (= (count s1) 3))
       (assert (= (count s2) 3))
+      (assert (= (count s3) 4))
+      (assert (= (get s3 0) 1))
+      (assert (= (subseq s3 > 5) (list 7 8)))
+      (assert (= (subseq s3 > 6) (list 8)))
+      (assert (= (subseq s3 >= 6) (list 7 8)))
+      (assert (= (subseq s3 >= 12) nil))
+      (assert (= (subseq s3 < 0) (list)))
+      (assert (= (subseq s3 < 5) (list 1 2)))
+      (assert (= (subseq s3 < 6) (list 1 2)))
+      (assert (= (subseq s3 <= 6) (list 1 2 7)))
+      (assert (= (subseq s3 >= 2 <= 6) (list 2 7)))
+      (assert (= (subseq s4 >= 2 < 3) (list 2)))
       (let [s1 (disj s1 2)
             s2 (disj s2 2)]
         (assert (= (seq s1)  (list 1 3)))
@@ -1296,6 +1387,14 @@
   (assert (= {:foo 'bar} (meta (with-meta (A.) {:foo 'bar}))))
   (assert (= 'bar (:foo (assoc (A.) :foo 'bar))))
 
+  (defrecord C [a b c])
+  (def letters (C. "a" "b" "c"))
+  (assert (= (set (keys letters)) #{:a :b :c}))
+  (def more-letters (assoc letters :d "d" :e "e" :f "f"))
+  (assert (= (set (keys more-letters)) #{:a :b :c :d :e :f}))
+  (assert (= (set (keys (dissoc more-letters :d))) #{:a :b :c :e :f}))
+  (assert (= (set (keys (dissoc more-letters :d :e))) #{:a :b :c :f}))
+  (assert (= (set (keys (dissoc more-letters :d :e :f))) #{:a :b :c}))
 
   ;; ObjMap
   (let [ks (map (partial str "foo") (range 500))
@@ -1465,6 +1564,30 @@
                  [:a :b] :ok)
                :ok)))
 
+  (let [a 'a]
+    (assert (= (case a
+                 nil nil
+                 & :amp
+                 :none)
+               :none)))
+
+  (let [a '&]
+    (assert (= (case a
+                 nil nil
+                 & :amp
+                 :none)
+               :amp)))
+
+  (let [foo 'a]
+    (assert (= (case foo
+                 (a b c) :sym
+                 :none)
+               :sym))
+    (assert (= (case foo
+                 (b c d) :sym
+                 :none)
+               :none)))
+
   ;; IComparable
   (assert (=  0 (compare false false)))
   (assert (= -1 (compare false true)))
@@ -1518,6 +1641,7 @@
 
   ;; Chunked Sequences
 
+  (assert (= (hash (seq [1 2])) (hash (seq [1 2]))))
   (assert (= 6 (reduce + (array-chunk (array 1 2 3)))))
   (assert (instance? ChunkedSeq (seq [1 2 3])))
   (assert (= '(1 2 3) (seq [1 2 3])))
@@ -1578,5 +1702,103 @@
   (assert (= 42
              (get {#uuid "550e8400-e29b-41d4-a716-446655440000" 42}
                   #uuid "550e8400-e29b-41d4-a716-446655440000")))
+
+  ;; pr-str
+
+  (assert (= (pr-str 1) "1"))
+  (assert (= (pr-str -1) "-1"))
+  (assert (= (pr-str -1.5) "-1.5"))
+  (assert (= (pr-str [3 4]) "[3 4]"))
+  (assert (= (pr-str "foo") "\"foo\""))
+  (assert (= (pr-str :hello) ":hello"))
+  (assert (= (pr-str 'goodbye) "goodbye"))
+  (assert (= (pr-str #{1 2 3}) "#{1 2 3}"))
+  (assert (= (pr-str '(7 8 9)) "(7 8 9)"))
+  (assert (= (pr-str '(deref foo)) "(deref foo)"))
+  (assert (= (pr-str '(quote bar)) "(quote bar)"))
+  (assert (= (pr-str 'foo/bar) "foo/bar"))
+  (assert (= (pr-str \a) "\"a\""))
+  (assert (= (pr-str :foo/bar) ":foo/bar"))
+  (assert (= (pr-str nil) "nil"))
+  (assert (= (pr-str true) "true"))
+  (assert (= (pr-str false) "false"))
+  (assert (= (pr-str "string") "\"string\""))
+  (assert (= (pr-str ["üñîçó∂£" :ทดสอบ/你好 'こんにちは]) "[\"üñîçó∂£\" :ทดสอบ/你好 こんにちは]"))
+  (assert (= (pr-str "escape chars \t \r \n \\ \" \b \f") "\"escape chars \\t \\r \\n \\\\ \\\" \\b \\f\""))
+
+  ;;; pr-str records
+
+  (defrecord PrintMe [a b])
+  (assert (= (pr-str (PrintMe. 1 2)) "#PrintMe{:a 1, :b 2}"))
+
+  ;;; pr-str backwards compatibility
+
+  (deftype PrintMeBackwardsCompat [a b]
+    IPrintable
+    (-pr-seq [_ _] (list (str "<<<" a " " b ">>>"))))
+
+  (assert (= (pr-str (PrintMeBackwardsCompat. 1 2)) "<<<1 2>>>"))
+
+  ;;; pr-str inst
+
+  (assert (= (pr-str (js/Date. "2010-11-12T13:14:15.666-05:00"))
+             "#inst \"2010-11-12T18:14:15.666-00:00\""))
+
+  (doseq [month (range 1 13) day (range 1 29) hour (range 1 23)]
+    (let [pad (fn [n]
+                (if (< n 10)
+                  (str "0" n)
+                  n))
+          inst (str "2010-" (pad month) "-" (pad day) "T" (pad hour) ":14:15.666-00:00")]
+      (assert (= (pr-str (js/Date. inst)) (str "#inst \"" inst "\"")))))
+
+  ;;; pr-str uuid
+
+  (let [uuid-str "550e8400-e29b-41d4-a716-446655440000"
+        uuid (UUID. uuid-str)]
+    (assert (= (pr-str uuid) (str "#uuid \"" uuid-str "\""))))
+
+  ;; CLJS-405
+
+  (defprotocol IBar (-bar [this x]))
+
+  (defn baz [f]
+    (reify
+      IBar
+      (-bar [_ x]
+        (f x))))
+
+  (assert (= 2 (-bar (baz inc) 1)))
+
+  ;; CLJS-401 / CLJS-411
+
+  (let [x "original"]
+    (defn original-closure-stmt [] x))
+
+  (let [x "overwritten"]
+    (assert (= "original" (original-closure-stmt))))
+
+  (assert (= "original" (let [x "original"
+                              oce (fn [] x)
+                              x "overwritten"]
+                          (oce))))
+
+
+  (letfn [(x [] "original")
+          (y [] (x))]
+    (let [x (fn [] "overwritten")]
+      (assert (= "original" (y)))))
+
+  ;; Test builtin implementations of IKVReduce
+  (letfn [(kvr-test [data expect]
+            (assert (= :reduced (reduce-kv (fn [_ _ _] (reduced :reduced))
+                                           [] data)))
+            (assert (= expect (reduce-kv (fn [r k v] (-> r (conj k) (conj v)))
+                                         [] data))))]
+    (kvr-test (obj-map :k0 :v0 :k1 :v1) [:k0 :v0 :k1 :v1])
+    (kvr-test (hash-map :k0 :v0 :k1 :v1) [:k0 :v0 :k1 :v1])
+    (kvr-test (array-map :k0 :v0 :k1 :v1) [:k0 :v0 :k1 :v1])
+    (kvr-test [:v0 :v1] [0 :v0 1 :v1]))
+
   :ok
   )

@@ -45,6 +45,8 @@
            com.google.common.collect.ImmutableList
            com.google.javascript.jscomp.CompilerOptions
            com.google.javascript.jscomp.CompilationLevel
+           com.google.javascript.jscomp.SourceMap$Format
+           com.google.javascript.jscomp.SourceMap$DetailLevel
            com.google.javascript.jscomp.ClosureCodingConvention
            com.google.javascript.jscomp.JSSourceFile
            com.google.javascript.jscomp.Result
@@ -86,11 +88,18 @@
   "Create a CompilerOptions object and set options from opts map."
   [opts]
   (let [level (case (:optimizations opts)
-                    :advanced CompilationLevel/ADVANCED_OPTIMIZATIONS
-                    :whitespace CompilationLevel/WHITESPACE_ONLY
-                    :simple CompilationLevel/SIMPLE_OPTIMIZATIONS)
+                :advanced CompilationLevel/ADVANCED_OPTIMIZATIONS
+                :whitespace CompilationLevel/WHITESPACE_ONLY
+                :simple CompilationLevel/SIMPLE_OPTIMIZATIONS)
         compiler-options (doto (CompilerOptions.)
                            (.setCodingConvention (ClosureCodingConvention.)))]
+    (when (contains? opts :source-map)
+      (set! (.sourceMapOutputPath compiler-options)
+            (:source-map opts))
+      (set! (.sourceMapDetailLevel compiler-options)
+            SourceMap$DetailLevel/ALL)
+      (set! (.sourceMapFormat compiler-options)
+            SourceMap$Format/V3))
     (do (.setOptionsForCompilationLevel level compiler-options)
         (set-options opts compiler-options)
         compiler-options)))
@@ -533,7 +542,7 @@
   [opts requires]
   (let [index (js-dependency-index opts)]
     (loop [requires requires
-           visited requires
+           visited (set requires)
            deps #{}]
       (if (seq requires)
         (let [node (get index (first requires))
@@ -668,10 +677,19 @@
   (let [closure-compiler (make-closure-compiler)
         externs (load-externs opts)
         compiler-options (make-options opts)
+        sources (if (= :whitespace (:optimizations opts))
+                  (cons "var CLOSURE_NO_DEPS = true;" sources)
+                  sources)
         inputs (map #(js-source-file (javascript-name %) %) sources)
         result ^Result (.compile closure-compiler externs inputs compiler-options)]
     (if (.success result)
-      (.toSource closure-compiler)
+      ;; compiler.getSourceMap().reset()
+      (let [source (.toSource closure-compiler)]
+        (when-let [name (:source-map opts)]
+          (let [out (io/writer name)]
+            (.appendTo (.getSourceMap closure-compiler) out name)
+            (.close out)))
+        source)
       (report-failure result))))
 
 (comment
@@ -853,8 +871,13 @@
 
 (defn add-header [{:keys [hashbang target]} js]
   (if (= :nodejs target)
-    (str "#!" (or hashbang "/usr/bin/nodejs") "\n" js)
+    (str "#!" (or hashbang "/usr/bin/env node") "\n" js)
     js))
+
+(defn add-wrapper [{:keys [output-wrapper] :as opts} js]
+  (if output-wrapper
+   (str ";(function(){\n" js "\n})();\n")
+   js))
 
 (defn build
   "Given a source which can be compiled, produce runnable JavaScript."
@@ -875,19 +898,19 @@
               ana/*cljs-warn-on-undeclared*
               (true? (opts :warnings))]
       (let [compiled (-compile source all-opts)
-            compiled (concat
-                      (if (coll? compiled) compiled [compiled])
-                      (when (= :nodejs (:target all-opts))
-                        [(-compile (io/resource "cljs/nodejscli.cljs") all-opts)]))
-            js-sources (if (coll? compiled)
-                         (binding []
-                           (apply add-dependencies all-opts compiled))
-                         (add-dependencies all-opts compiled))
+            js-sources (concat
+                         (apply add-dependencies all-opts
+                            (concat (if (coll? compiled) compiled [compiled])
+                                    (when (= :nodejs (:target all-opts))
+                                      [(-compile (io/resource "cljs/nodejs.cljs") all-opts)])))
+                         (when (= :nodejs (:target all-opts))
+                           [(-compile (io/resource "cljs/nodejscli.cljs") all-opts)]))
             optim (:optimizations all-opts)]
         (if (and optim (not= optim :none))
           (->> js-sources
                (apply optimize all-opts)
                (add-header all-opts)
+               (add-wrapper all-opts)
                (output-one-file all-opts))
           (apply output-unoptimized all-opts js-sources))))))
 

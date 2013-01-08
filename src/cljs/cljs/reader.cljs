@@ -234,7 +234,7 @@ nil if the end of stream has been reached")
   [delim rdr recursive?]
   (loop [a (transient [])]
     (let [ch (read-past whitespace? rdr)]
-      (when-not ch (reader-error rdr "EOF"))
+      (when-not ch (reader-error rdr "EOF while reading"))
       (if (identical? delim ch)
         (persistent! a)
         (if-let [macrofn (macros ch)]
@@ -303,7 +303,7 @@ nil if the end of stream has been reached")
   (loop [buffer (gstring/StringBuffer.)
          ch (read-char reader)]
     (cond
-     (nil? ch) (reader-error reader "EOF while reading string")
+     (nil? ch) (reader-error reader "EOF while reading")
      (identical? "\\" ch) (recur (do (.append buffer (escape-char buffer reader)) buffer)
                         (read-char reader))
      (identical? \" ch) (. buffer (toString))
@@ -418,7 +418,7 @@ nil if the end of stream has been reached")
   [reader eof-is-error sentinel is-recursive]
   (let [ch (read-char reader)]
     (cond
-     (nil? ch) (if eof-is-error (reader-error reader "EOF") sentinel)
+     (nil? ch) (if eof-is-error (reader-error reader "EOF while reading") sentinel)
      (whitespace? ch) (recur reader eof-is-error sentinel is-recursive)
      (comment-prefix? ch) (recur (read-comment reader ch) eof-is-error sentinel is-recursive)
      :else (let [f (macros ch)
@@ -483,7 +483,7 @@ nil if the end of stream has been reached")
               (->> V
                    (map #(update-in %2 [0] %)
                         [(constantly nil) #(if (= % "-") "-1" "1")])
-                   (map (fn [v] (map #(js/parseInt %) v))))
+                   (map (fn [v] (map #(js/parseInt % 10) v))))
               offset (* offset-sign (+ (* offset-hours 60) offset-minutes))]
           [(if-not years 1970 y)
            (if-not months 1        (check 1 mo 12 "timestamp month field must be in range 1..12"))

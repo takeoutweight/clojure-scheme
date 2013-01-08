@@ -189,10 +189,10 @@
                '[IFn ICounted IEmptyableCollection ICollection IIndexed ASeq ISeq INext
                  ILookup IAssociative IMap IMapEntry ISet IStack IVector IDeref
                  IDerefWithTimeout IMeta IWithMeta IReduce IKVReduce IEquiv IHash
-                 ISeqable ISequential IList IRecord IReversible ISorted IPrintable
-                 IPending IWatchable IEditableCollection ITransientCollection
+                 ISeqable ISequential IList IRecord IReversible ISorted IPrintable IWriter
+                 IPrintWithWriter IPending IWatchable IEditableCollection ITransientCollection
                  ITransientAssociative ITransientMap ITransientVector ITransientSet
-                 IMultiFn])
+                 IMultiFn IChunkedSeq IChunkedNext IComparable])
           (iterate (fn [[p b]]
                      (if (core/== 2147483648 b)
                        [(core/inc p) 1]
@@ -604,9 +604,15 @@
         warn-if-not-protocol #(when-not (= 'Object %)
                                 (if cljs.analyzer/*cljs-warn-on-undeclared*
                                   (if-let [var (cljs.analyzer/resolve-existing-var (dissoc &env :locals) %)]
-                                    (when-not (:protocol-symbol var)
-                                      (cljs.analyzer/warning &env
-                                        (core/str "WARNING: Symbol " % " is not a protocol")))
+                                    (do
+                                     (when-not (:protocol-symbol var)
+                                       (cljs.analyzer/warning &env
+                                         (core/str "WARNING: Symbol " % " is not a protocol")))
+                                     (when (and cljs.analyzer/*cljs-warn-protocol-deprecated*
+                                                (-> var :deprecated)
+                                                (not (-> % meta :deprecation-nowarn)))
+                                       (cljs.analyzer/warning &env
+                                         (core/str "WARNING: Protocol " % " is deprecated"))))
                                     (cljs.analyzer/warning &env
                                       (core/str "WARNING: Can't resolve protocol symbol " %)))))
         skip-flag (set (-> tsym meta :skip-protocol-flag))]
@@ -641,13 +647,13 @@
                                        (mapcat (fn [[f & meths :as form]]
                                                  (if (= psym 'cljs.core/IFn)
                                                    (let [adapt-params (fn [[[targ & args :as sig] & body]]
-                                                                        (let [this-sym (with-meta (gensym "this-sym") {:tag t})]
+                                                                        (let [this-sym (with-meta 'self__ {:tag t})]
                                                                           `(~(vec (cons this-sym args))
                                                                             (this-as ~this-sym
                                                                                      (let [~targ ~this-sym]
                                                                                        ~@body)))))
                                                          meths (map adapt-params meths)
-                                                         this-sym (with-meta (gensym "this-sym") {:tag t})
+                                                         this-sym (with-meta 'self__ {:tag t})
                                                          argsym (gensym "args")]
                                                      [`(set! ~(prototype-prefix 'call) ~(with-meta `(fn ~@meths) (meta form)))
                                                       `(set! ~(prototype-prefix 'apply)
@@ -696,8 +702,8 @@
                  (range fast-path-protocol-partitions-count))]))))
 
 (defn dt->et
-  ([specs fields] (dt->et specs fields false))
-  ([specs fields inline]
+  ([t specs fields] (dt->et t specs fields false))
+  ([t specs fields inline]
      (loop [ret [] s specs]
        (if (seq s)
          (recur (-> ret
@@ -705,7 +711,8 @@
                     (into
                       (reduce (core/fn [v [f sigs]]
                                 (conj v (vary-meta (cons f (map #(cons (second %) (nnext %)) sigs))
-                                                   assoc :cljs.analyzer/fields fields
+                                                   assoc :cljs.analyzer/type t
+                                                         :cljs.analyzer/fields fields
                                                          :protocol-impl true
                                                          :protocol-inline inline)))
                               []
@@ -731,12 +738,14 @@
          (deftype* ~t ~fields ~pmasks)
          (set! (.-cljs$lang$type ~t) true)
          (set! (.-cljs$lang$ctorPrSeq ~t) (core/fn [this#] (list ~(core/str r))))
+         (set! (.-cljs$lang$ctorPrWriter ~t) (core/fn [this# writer# opt#] (-write writer# ~(core/str r))))
          (extend-type ~t ~@(dt->et impls fields true))
          ~t)
       `(do
          (deftype* ~t ~fields ~pmasks)
          (set! (.-cljs$lang$type ~t) true)
          (set! (.-cljs$lang$ctorPrSeq ~t) (core/fn [this#] (list ~(core/str r))))
+         (set! (.-cljs$lang$ctorPrWriter ~t) (core/fn [this# writer# opts#] (-write writer# ~(core/str r))))
          ~t))))
 
 (defn- emit-defrecord
@@ -801,13 +810,14 @@
                   'ISeqable
                   `(~'-seq [~gthis] (seq (concat [~@(map #(list `vector (keyword %) (accessorize gthis %)) base-fields)] 
                                                  ~(accessorize gthis '__extmap))))
-                  'IPrintable
-                  `(~'-pr-seq [gthis opts#]
-                              (let [pr-pair# (core/fn [keyval#] (pr-sequential pr-seq "" " " "" opts# keyval#))]
-                                (pr-sequential
-                                 pr-pair# (str "#" ~(name rname) "{") ", " "}" opts#
-                                 (concat [~@(map #(list `vector (keyword %) (accessorize gthis %)) base-fields)] 
-                                         ~(accessorize gthis '__extmap)))))
+                  
+                  'IPrintWithWriter
+                  `(~'-pr-writer [gthis writer# opts#]
+                                 (let [pr-pair# (fn [keyval#] (pr-sequential-writer writer# pr-writer "" " " "" opts# keyval#))]
+                                   (pr-sequential-writer
+                                    writer# pr-pair# (core/str "#" ~(name rname) "{") ", " "}" opts#
+                                    (concat [~@(map #(list `vector (keyword %) (accessorize gthis %)) base-fields)]
+                                            ~(accessorize gthis '__extmap)))))
                   ])
           [fpps pmasks] (prepare-protocol-masks env tagname impls)
           protocols (collect-protocols impls env)
@@ -829,7 +839,7 @@
          (~'scm* {::poly-constructor ~poly-constructor} (~'define ~poly-constructor-name ::poly-constructor))
          (def ~tagname (type (new ~tagname ~@(map (constantly nil) base-fields)))) ;hack in lieu of compiler hook to capture ##type-2-ns/tagname in scheme
          (~'scm* {::tagname ~tagname} (~'table-set! ~'cljs.core/protocol-impls ::tagname ~'(make-table)))
-         (extend-type ~tagname ~@(dt->et impls fields true))))))
+         (extend-type ~tagname ~@(dt->et tagname impls fields true))))))
 
 (defn- build-positional-factory
   [rsym rname fields]
@@ -852,6 +862,8 @@
   (let [r (:name (cljs.analyzer/resolve-var (dissoc &env :locals) rsym))]
     `(do
        ~(emit-defrecord &env rsym r fields impls)
+       (set! (.-cljs$lang$ctorPrSeq ~r) (fn [this#] (list ~(core/str r))))
+       (set! (.-cljs$lang$ctorPrWriter ~r) (fn [this# writer#] (-write writer# ~(core/str r))))
        ~(build-positional-factory rsym r fields)
        ~(build-map-factory rsym r fields)
        ~r)))
@@ -873,6 +885,26 @@
         fqn (core/fn [n] (symbol (str ns-name "." n)))
         prefix (protocol-prefix p)
         methods (if (string? (first doc+methods)) (next doc+methods) doc+methods)
+        expand-sig (fn [fname slot sig]
+                     `(~sig
+                       (if (and ~(first sig) (. ~(first sig) ~(symbol (core/str "-" slot)))) ;; Property access needed here.
+                         (. ~(first sig) ~slot ~@sig)
+                         (let [x# (if (nil? ~(first sig)) nil ~(first sig))]
+                           ((or
+                             (aget ~(fqn fname) (goog.typeOf x#))
+                             (aget ~(fqn fname) "_")
+                             (throw (missing-protocol
+                                     ~(core/str psym "." fname) ~(first sig))))
+                            ~@sig)))))
+        #_method #_(fn [[fname & sigs]]
+                     (let [sigs (take-while vector? sigs)
+                           slot (symbol (core/str prefix (name fname)))
+                           fname (vary-meta fname assoc :protocol p)]
+                       `(defn ~fname ~@(map (fn [sig]
+                                              (expand-sig fname
+                                                          (symbol (core/str slot "$arity$" (count sig)))
+                                                          sig))
+                                            sigs))))
         method
         , (core/fn
            [[fname & sigs]]
@@ -1073,9 +1105,15 @@
                                                          cljs.analyzer/*cljs-file*)))))
                            (assoc m test expr)))
         pairs (reduce (fn [m [test expr]]
-                        (if (seq? test)
-                          (reduce #(assoc-test %1 %2 expr) m test)
-                          (assoc-test m test expr)))
+                        (cond
+                         (seq? test) (reduce (fn [m test]
+                                               (let [test (if (symbol? test)
+                                                            (list 'quote test)
+                                                            test)]
+                                                 (assoc-test m test expr)))
+                                             m test)
+                         (symbol? test) (assoc-test m (list 'quote test) expr)
+                         :else (assoc-test m test expr)))
                       {} (partition 2 clauses))
         esym (gensym)]
    `(let [~esym ~e]
@@ -1189,9 +1227,9 @@
                  [true `(do ~@body)]
                  (let [k (first exprs)
                        v (second exprs)
-                       
+
                        seqsym (when-not (keyword? k) (gensym))
-                       recform (if (keyword? k) recform `(recur (first ~seqsym) ~seqsym))
+                       recform (if (keyword? k) recform `(recur (next ~seqsym)))
                        steppair (step recform (nnext exprs))
                        needrec (steppair 0)
                        subform (steppair 1)]
@@ -1205,12 +1243,11 @@
                                              ~subform
                                              ~@(when needrec [recform]))
                                            ~recform)]
-                     :else [true `(let [~seqsym (seq ~v)]
+                     :else [true `(loop [~seqsym (seq ~v)]
                                     (when ~seqsym
-                                      (loop [~k (first ~seqsym) ~seqsym ~seqsym]
-                                       ~subform
-                                       (when-let [~seqsym (next ~seqsym)]
-                                        ~@(when needrec [recform])))))]))))]
+                                      (let [~k (first ~seqsym)]
+                                        ~subform
+                                        ~@(when needrec [recform]))))]))))]
     (nth (step nil (seq seq-exprs)) 1)))
 
 (defmacro alength [a]
@@ -1224,8 +1261,8 @@
 
 (defmacro amap
   "Maps an expression across an array a, using an index named idx, and
-  return value named ret, initialized to a clone of a, then setting 
-  each element of ret to the evaluation of expr, returning the new 
+  return value named ret, initialized to a clone of a, then setting
+  each element of ret to the evaluation of expr, returning the new
   array ret."
   [a idx ret expr]
   `(let [a# ~a
@@ -1239,7 +1276,7 @@
 
 (defmacro areduce
   "Reduces an expression across an array a, using an index named idx,
-  and return value named ret, initialized to init, setting ret to the 
+  and return value named ret, initialized to init, setting ret to the
   evaluation of expr at each step, returning ret."
   [a idx ret init expr]
   `(let [a# ~a]
@@ -1372,3 +1409,14 @@
            (~'f)
            ~(gen-apply-to-helper))))
      (set! ~'*unchecked-if* false)))
+
+(defmacro with-out-str
+  "Evaluates exprs in a context in which *print-fn* is bound to .append
+  on a fresh StringBuffer.  Returns the string created by any nested
+  printing calls."
+  [& body]
+  `(let [sb# (goog.string/StringBuffer.)]
+     (binding [cljs.core/*print-fn* (fn [x#] (.append sb# x#))]
+       ~@body)
+     (cljs.core/str sb#)))
+
