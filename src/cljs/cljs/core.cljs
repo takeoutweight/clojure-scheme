@@ -1771,9 +1771,9 @@ reduces them without incurring seq initialization"
   "Returns a Keyword with the given namespace and name.  Do not use :
   in the keyword strings, it will be added automatically."
   ([name] (cond (keyword? name) name
-                (symbol? name) (str* "\uFDD0" "'" (subs name 2))
-                :else (str "\uFDD0" "'" name)))
-  ([ns name] (keyword (str ns "/" name))))
+                (symbol? name) (str* "\uFDD0" ":" (subs name 2))
+                :else (str* "\uFDD0" ":" name)))
+  ([ns name] (keyword (str* ns "/" name))))
 
 
 
@@ -7746,3 +7746,45 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
   IHash
   (-hash [this]
     (goog.string/hashCode (pr-str this))))
+
+;;; ExceptionInfo
+
+(deftype ExceptionInfo [message data cause])
+
+;;; ExceptionInfo is a special case, do not emulate this
+(set! cljs.core.ExceptionInfo/prototype (js/Error.))
+(set! (.-constructor cljs.core.ExceptionInfo/prototype) ExceptionInfo)
+
+(defn ex-info
+  "Alpha - subject to change.
+  Create an instance of ExceptionInfo, an Error type that carries a
+  map of additional data."
+  ([msg map]
+     (ExceptionInfo. msg map nil))
+  ([msg map cause]
+     (ExceptionInfo. msg map cause)))
+
+(defn ex-data
+  "Alpha - subject to change.
+  Returns exception data (a map) if ex is an ExceptionInfo.
+  Otherwise returns nil."
+  [ex]
+  (when (instance? ExceptionInfo ex)
+    (.-data ex)))
+
+(defn ex-message
+  "Alpha - subject to change.
+  Returns the message attached to the given Error / ExceptionInfo object.
+  For non-Errors returns nil."
+  [ex]
+  (when (instance? js/Error ex)
+    (.-message ex)))
+
+(defn ex-cause
+  "Alpha - subject to change.
+  Returns exception cause (an Error / ExceptionInfo) if ex is an
+  ExceptionInfo.
+  Otherwise returns nil."
+  [ex]
+  (when (instance? ExceptionInfo ex)
+    (.-cause ex)))

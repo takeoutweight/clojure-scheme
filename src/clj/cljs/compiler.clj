@@ -35,7 +35,8 @@
     "return" "short" "static" "super" "switch"
     "synchronized" "this" "throw" "throws"
     "transient" "try" "typeof" "var" "void"
-    "volatile" "while" "with" "yield" "methods"})
+    "volatile" "while" "with" "yield" "methods"
+    "null"})
 
 (def ^:dynamic *position* nil)
 (def ^:dynamic *emitted-provides* nil)
@@ -234,16 +235,6 @@
     (space-sep (map #(with-out-str (emit-constant %)) x))
     "))"))
 
-(defn emit-block
-  [context statements ret]
-  (if statements
-    (emits (apply strict-str
-                    (concat ["(begin "]
-                            (interpose "\n  " (map #(with-out-str (emit %))
-                                                 (concat statements [ret])))
-                            [")"])))
-    (emit ret)))
-
 (defmacro emit-wrap [env & body]
   `(let [env# ~env]
      (when (= :return (:context env#)) (emits "return "))
@@ -363,16 +354,6 @@
     (emits "(define " name")\n")
     #_(when export
         (println (str "goog.exportSymbol('" export "', " name ");")))))
-(defn schemify-method-arglist
-  "analyzed method [a b & r] -> (a b . r) -- as symbols not as a string.
-   or [& r] -> r in the case of no fixed args."
-  [{:keys [variadic max-fixed-arity params]}]
-  (if variadic
-    (if (> max-fixed-arity 0)
-      (apply list (concat (take max-fixed-arity params)
-                          ['. (last  params)]))
-      (last params))
-    (apply list params)))
 
 (defn emit-fn-method
   [{:keys [gthis name variadic params statements ret env recurs max-fixed-arity] :as f}]
@@ -385,6 +366,95 @@
     (if name
       (emits "(letrec (("name" "lambda-str")) "name")")
       (emits lambda-str))))
+
+(comment (defn emit-fn-method
+  [{:keys [type name variadic params expr env recurs max-fixed-arity]}]
+  (emit-wrap env
+             (emitln "(function " (munge name) "(" (comma-sep (map munge params)) "){")
+             (when type
+               (emitln "var self__ = this;"))
+             (when recurs (emitln "while(true){"))
+             (emits expr)
+             (when recurs
+               (emitln "break;")
+               (emitln "}"))
+             (emits "})"))))
+
+(defn schemify-method-arglist
+  "analyzed method [a b & r] -> (a b . r) -- as symbols not as a string.
+   or [& r] -> r in the case of no fixed args."
+  [{:keys [variadic max-fixed-arity params]}]
+  (if variadic
+    (if (> max-fixed-arity 0)
+      (apply list (concat (take max-fixed-arity params)
+                          ['. (last  params)]))
+      (last params))
+    (apply list params)))
+
+(defn emit-apply-to
+  [{:keys [name params env]}]
+  (let [arglist (gensym "arglist__")
+        delegate-name (str (munge name) "__delegate")
+        params (map munge params)]
+    (emitln "(function (" arglist "){")
+    (doseq [[i param] (map-indexed vector (butlast params))]
+      (emits "var " param " = cljs.core.first(")
+      (dotimes [_ i] (emits "cljs.core.next("))
+      (emits arglist ")")
+      (dotimes [_ i] (emits ")"))
+      (emitln ";"))
+    (if (< 1 (count params))
+      (do
+        (emits "var " (last params) " = cljs.core.rest(")
+        (dotimes [_ (- (count params) 2)] (emits "cljs.core.next("))
+        (emits arglist)
+        (dotimes [_ (- (count params) 2)] (emits ")"))
+        (emitln ");")
+        (emitln "return " delegate-name "(" (string/join ", " params) ");"))
+      (do
+        (emits "var " (last params) " = ")
+        (emits "cljs.core.seq(" arglist ");")
+        (emitln ";")
+        (emitln "return " delegate-name "(" (string/join ", " params) ");")))
+    (emits "})")))
+
+(defn emit-variadic-fn-method
+  [{:keys [type name variadic params expr env recurs max-fixed-arity] :as f}]
+  (emit-wrap env
+             (let [name (or name (gensym))
+                   mname (munge name)
+                   params (map munge params)
+                   delegate-name (str mname "__delegate")]
+               (emitln "(function() { ")
+               (emitln "var " delegate-name " = function (" (comma-sep params) "){")
+               (when recurs (emitln "while(true){"))
+               (emits expr)
+               (when recurs
+                 (emitln "break;")
+                 (emitln "}"))
+               (emitln "};")
+
+               (emitln "var " mname " = function (" (comma-sep
+                                                      (if variadic
+                                                        (concat (butlast params) ['var_args])
+                                                        params)) "){")
+               (when type
+                 (emitln "var self__ = this;"))
+               (when variadic
+                 (emitln "var " (last params) " = null;")
+                 (emitln "if (goog.isDef(var_args)) {")
+                 (emitln "  " (last params) " = cljs.core.array_seq(Array.prototype.slice.call(arguments, " (dec (count params)) "),0);")
+                 (emitln "} "))
+               (emitln "return " delegate-name ".call(" (string/join ", " (cons "this" params)) ");")
+               (emitln "};")
+
+               (emitln mname ".cljs$lang$maxFixedArity = " max-fixed-arity ";")
+               (emits mname ".cljs$lang$applyTo = ")
+               (emit-apply-to (assoc f :name name))
+               (emitln ";")
+               (emitln mname ".cljs$lang$arity$variadic = " delegate-name ";")
+               (emitln "return " mname ";")
+               (emitln "})()"))))
 
 (defmethod emit :fn
   [{:keys [name env methods max-fixed-arity variadic recur-frames]}]
@@ -433,15 +503,17 @@
 (defmethod emit :do
   [{:keys [statements ret env]}]
   (let [context (:context env)]
-    (emit-block context statements ret)))
+    (emits "(begin ")
+    (when statements
+      (emits statements))
+    (emit ret)
+    (emits ")")))
 
 (defmethod emit :try*
   [{:keys [env try catch name finally]}]
-  (let [context (:context env)
-        subcontext (if (= :expr context) :return context)]
+  (let [context (:context env)]
     (if (or name finally)
       (do
-        (when finally (throw (Exception. (str "finally not yet implemented")))) ;TODO
         (emits "(with-exception-catcher ")
         (when name
           (emits "(lambda (" name ") ")
@@ -449,6 +521,9 @@
             (let [{:keys [statements ret]} catch]
               (emit-block subcontext statements ret)))
           (emits ")"))
+        (when finally
+  (assert (not= :constant (:op finally)) "finally block cannot contain constant")
+  (throw (Exception. (str "finally not yet implemented")))) ;TODO
         (emits "(lambda () ")
         (let [{:keys [statements ret]} try]
           (emit-block subcontext statements ret))
@@ -456,8 +531,11 @@
       (let [{:keys [statements ret]} try]
         (emit-block subcontext statements ret)))))
 
-(defmethod emit :let
-  [{:keys [bindings statements ret env loop recur-name]}]
+(defmethod emit :let [ast]
+  (emit-let ast false))
+
+(defn emit-let
+  [{:keys [bindings expr env]} is-loop]
   (let [bs (map (fn [{:keys [name init]}]
                   (str "(" name " " (emits init) ")"))
                 bindings)
@@ -470,9 +548,15 @@
       (emits "(let* (" bs ")")
       (when loop (emits "(letrec ((" recur-name
                         "(lambda (" (space-sep (map :name bindings)) ")" ))
-      (emit-block (if (= :expr context) :return context) statements ret)
+      (emits expr)
       (when loop (emits ")))" "(" recur-name " " (space-sep (map :name bindings)) "))"))
       (emits ")"))))
+
+(defmethod emit :let [ast]
+  (emit-let ast false))
+
+(defmethod emit :loop [ast]
+  (emit-let ast true))
 
 (defmethod emit :recur
   [{:keys [frame exprs env]}]
@@ -482,14 +566,12 @@
     (emits "(" recur-name " " (space-sep (map emits exprs))")")))
 
 (defmethod emit :letfn
-  [{:keys [bindings statements ret env]}] :TODO)
-#_(defmethod emit :letfn
-  [{:keys [bindings statements ret env]}]
+  [{:keys [bindings expr env]}]
   (let [context (:context env)]
     (when (= :expr context) (emits "(function (){"))
     (doseq [{:keys [init] :as binding} bindings]
       (emitln "var " (munge binding) " = " init ";"))
-    (emit-block (if (= :expr context) :return context) statements ret)
+    (emits expr)
     (when (= :expr context) (emits "})()"))))
 
 (defn protocol-prefix [psym]

@@ -1131,7 +1131,7 @@
 
   Catches and handles JavaScript exceptions."
   [& forms]
-  (let [catch? #(and (list? %) (= (first %) 'catch))
+  (let [catch? #(and (seq? %) (= (first %) 'catch))
         [body catches] (split-with (complement catch?) forms)
         [catches fin] (split-with catch? catches)
         e (gensym "e")]
