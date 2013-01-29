@@ -3864,13 +3864,13 @@ reduces them without incurring seq initialization"
   (let [ks  (.-keys m)
         len (alength ks)
         so  (.-strobj m)
-        out (with-meta cljs.core.PersistentHashMap/EMPTY (meta m))]
+        mm  (meta m)]
     (loop [i   0
-           out (transient out)]
+           out (transient cljs.core.PersistentHashMap/EMPTY)]
       (if (< i len)
         (let [k (aget ks i)]
           (recur (inc i) (assoc! out k (aget so k))))
-        (persistent! (assoc! out k v))))))
+        (with-meta (persistent! (assoc! out k v)) mm)))))
 
 ;;; ObjMap
 
@@ -4303,10 +4303,9 @@ reduces them without incurring seq initialization"
                                  (.push k)
                                  (.push v))
                                nil)
-          (persistent!
-           (assoc!
-            (transient (into cljs.core.PersistentHashMap/EMPTY coll))
-            k v)))
+          (with-meta
+            (assoc (into cljs.core.PersistentHashMap/EMPTY coll) k v)
+            meta))
 
         (identical? v (aget arr (inc idx)))
         coll
@@ -5421,12 +5420,12 @@ reduces them without incurring seq initialization"
     (throw (js/Error. "red-black tree invariant violation"))))
 
 (defn- tree-map-kv-reduce [node f init]
-  (let [init (f init (.-key node) (.-val node))]
+  (let [init (if-not (nil? (.-left node))
+               (tree-map-kv-reduce (.-left node) f init)
+               init)]
     (if (reduced? init)
       @init
-      (let [init (if-not (nil? (.-left node))
-                   (tree-map-kv-reduce (.-left node) f init)
-                   init)]
+      (let [init (f init (.-key node) (.-val node))]
         (if (reduced? init)
           @init
           (let [init (if-not (nil? (.-right node))
