@@ -233,6 +233,10 @@
                (keyword (-> env :ns :name name) (name sym))
                sym)})
 
+(def prim-types #{'cljs.core/Number 'cljs.core/Pair 'cljs.core/Boolean 'cljs.core/Nil 'cljs.core/Null
+                  'cljs.core/Char 'cljs.core/Array 'cljs.core/Symbol 'cljs.core/Keyword
+                  'cljs.core/Procedure 'cljs.core/String})
+
 (defmulti parse (fn [op & rest] op))
 
 (defmethod parse 'if
@@ -928,10 +932,6 @@
                        :args argexprs
                        :children (into [targetexpr] argexprs)
                        :tag (-> form meta :tag)})))))
-
-(def prim-types #{'cljs.core/Number 'cljs.core/Pair 'cljs.core/Boolean 'cljs.core/Nil 'cljs.core/Null
-                  'cljs.core/Char 'cljs.core/Array 'cljs.core/Symbol 'cljs.core/Keyword
-                  'cljs.core/Procedure 'cljs.core/String})
 
 (defmethod parse 'scm* [op env [_ symbol-map & form] _]
   {:env env :op :scm :children [] :form form :symbol-map symbol-map})
