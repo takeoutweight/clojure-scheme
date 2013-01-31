@@ -229,13 +229,13 @@
                     ~'(equal? :a :b))))
 
 (defmacro true? [x]
-  (bool-expr `(identical? ~x true))
+  (bool-expr `(identical? ~x true)))
 
 (defmacro false? [x]
   (bool-expr `(identical? ~x false)))
 
 (defmacro undefined? [x]
-  (nil? x)
+  (nil? x))
   
 (defmacro identical? [a b]
   `(scm* {:a ~a :b ~b}
@@ -341,19 +341,19 @@
   ([& more] `(scm* ~more ~(cons '/ more))))
 
 (defmacro <
-  ([& more] (bool-expr `(scm* ~more ~(cons '< more))))
+  ([& more] (bool-expr `(scm* ~more ~(cons '< more)))))
 
 (defmacro <=
-  ([& more] (bool-expr `(scm* ~more ~(cons '<= more))))
+  ([& more] (bool-expr `(scm* ~more ~(cons '<= more)))))
 
 (defmacro >
-  ([& more] (bool-expr `(scm* ~more ~(cons '> more))))
+  ([& more] (bool-expr `(scm* ~more ~(cons '> more)))))
 
 (defmacro >=
-  ([& more] (bool-expr `(scm* ~more ~(cons '>= more))))
+  ([& more] (bool-expr `(scm* ~more ~(cons '>= more)))))
 
 (defmacro ==
-  ([& more] (bool-expr `(scm* ~more ~(cons '= more))))
+  ([& more] (bool-expr `(scm* ~more ~(cons '= more)))))
 
 (defmacro dec [x]
   `(- ~x 1))
