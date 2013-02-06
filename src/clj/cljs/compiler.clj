@@ -6,17 +6,15 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software.
 
-(set! *warn-on-reflection* true)
-
 (ns cljs.compiler
   (:refer-clojure :exclude [munge macroexpand-1])
   (:require [clojure.java.io :as io]
             [clojure.string :as string]
             [clojure.walk :as walk]
-;            [cljs.tagged-literals :as tags] 
+            [cljs.tagged-literals :as tags] 
             [cljs.analyzer :as ana])
   (:import java.lang.StringBuilder))
-
+(set! *warn-on-reflection* true)
                                         ;Game plan : use emits, not print.
                                         ;unwrap nested emits.
                                         ; mapped emits - emits already nests into sequences.
@@ -134,6 +132,13 @@
                                       [line (+ column (count s))])))
                 (print s)))))
   nil)
+
+(defn emit-begin
+  [statements ret]
+  (emits "(begin \n")
+  (emits (interpose "\n" statements))
+  (emits ret)
+  (emits ")\n"))
 
 (defn- print-scm [fun-str & children]
   (print (str "(" fun-str " " (space-sep (map emits children)) ")")))
@@ -355,16 +360,30 @@
     #_(when export
         (println (str "goog.exportSymbol('" export "', " name ");")))))
 
+(defn schemify-method-arglist
+  "analyzed method [a b & r] -> (a b . r) -- as symbols not as a string.
+or [& r] -> r in the case of no fixed args."
+  [{:keys [variadic max-fixed-arity params]}]
+  (if variadic
+    (if (> max-fixed-arity 0)
+      (apply list (concat (take max-fixed-arity params)
+                          ['. (last params)]))
+      (last params))
+    (apply list params)))
+
 (defn emit-fn-method
   [{:keys [gthis name variadic params statements ret env recurs max-fixed-arity] :as f}]
-  (let [lambda-str (strict-str "(lambda "
-                               (schemify-method-arglist f) " "
-                               (when variadic (str "(let (("(last params) " (cljs.core/-seq " (last params) "))) "))
-                               (with-out-str (emit-block :return statements ret))
-                               (when variadic ")")
-                               ")")]
+  (letfn [(lambda-str []
+            (emits "(lambda"
+                   (schemify-method-arglist f) " "
+                   (when variadic (str "(let (("(last params) " (cljs.core/-seq " (last params) "))) "))
+                   (emit-begin statements ret)
+                   (when variadic ")")
+                   ")"))]
     (if name
-      (emits "(letrec (("name" "lambda-str")) "name")")
+      (emits "(letrec (("name" "             
+             lambda-str
+             ")) "name")")
       (emits lambda-str))))
 
 (comment (defn emit-fn-method
@@ -379,17 +398,6 @@
                (emitln "break;")
                (emitln "}"))
              (emits "})"))))
-
-(defn schemify-method-arglist
-  "analyzed method [a b & r] -> (a b . r) -- as symbols not as a string.
-   or [& r] -> r in the case of no fixed args."
-  [{:keys [variadic max-fixed-arity params]}]
-  (if variadic
-    (if (> max-fixed-arity 0)
-      (apply list (concat (take max-fixed-arity params)
-                          ['. (last  params)]))
-      (last params))
-    (apply list params)))
 
 (defn emit-apply-to
   [{:keys [name params env]}]
@@ -457,7 +465,7 @@
                (emitln "})()"))))
 
 (defmethod emit :fn
-  [{:keys [name env methods max-fixed-arity variadic recur-frames]}]
+  [{:keys [name env methods max-fixed-arity variadic recur-frames loop-lets]}]
   (when-not (= :statement (:context env))
     (let [loop-locals (->> (concat (mapcat :params (filter #(and % @(:flag %)) recur-frames))
                                    (mapcat :params loop-lets))
@@ -502,12 +510,7 @@
 
 (defmethod emit :do
   [{:keys [statements ret env]}]
-  (let [context (:context env)]
-    (emits "(begin ")
-    (when statements
-      (emits statements))
-    (emit ret)
-    (emits ")")))
+  (emit-begin statements ret))
 
 (defmethod emit :try*
   [{:keys [env try catch name finally]}]
@@ -519,23 +522,20 @@
           (emits "(lambda (" name ") ")
           (when catch
             (let [{:keys [statements ret]} catch]
-              (emit-block subcontext statements ret)))
+              (emit-begin statements ret)))
           (emits ")"))
         (when finally
-  (assert (not= :constant (:op finally)) "finally block cannot contain constant")
-  (throw (Exception. (str "finally not yet implemented")))) ;TODO
+          (assert (not= :constant (:op finally)) "finally block cannot contain constant")
+          (throw (Exception. (str "finally not yet implemented")))) ;TODO
         (emits "(lambda () ")
         (let [{:keys [statements ret]} try]
-          (emit-block subcontext statements ret))
+          (emit-begin statements ret))
         (emits "))"))
       (let [{:keys [statements ret]} try]
-        (emit-block subcontext statements ret)))))
-
-(defmethod emit :let [ast]
-  (emit-let ast false))
+        (emit-begin statements ret)))))
 
 (defn emit-let
-  [{:keys [bindings expr env]} is-loop]
+  [{:keys [bindings expr env recur-name]} is-loop]
   (let [bs (map (fn [{:keys [name init]}]
                   (str "(" name " " (emits init) ")"))
                 bindings)
@@ -546,10 +546,10 @@
                                                       (gensym (str (:name %) "-")))
                                              bindings)))]
       (emits "(let* (" bs ")")
-      (when loop (emits "(letrec ((" recur-name
+      (when is-loop (emits "(letrec ((" recur-name
                         "(lambda (" (space-sep (map :name bindings)) ")" ))
       (emits expr)
-      (when loop (emits ")))" "(" recur-name " " (space-sep (map :name bindings)) "))"))
+      (when is-loop (emits ")))" "(" recur-name " " (space-sep (map :name bindings)) "))"))
       (emits ")"))))
 
 (defmethod emit :let [ast]

@@ -12,7 +12,7 @@
   (:refer-clojure :exclude [macroexpand-1])
   (:require [clojure.java.io :as io]
             [clojure.string :as string]
-;            [cljs.tagged-literals :as tags]
+            [cljs.tagged-literals :as tags]
             )
   (:import java.lang.StringBuilder))
 
