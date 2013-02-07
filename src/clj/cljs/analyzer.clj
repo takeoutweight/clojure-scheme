@@ -558,44 +558,48 @@
   [encl-env [_ bindings & exprs :as form] is-loop]
   (assert (and (vector? bindings) (even? (count bindings))) "bindings must be vector of even number of elements")
   (let [context (:context encl-env)
+        recur-name (when is-loop (gensym "recurlet"))
         [bes env]
         (disallowing-recur
-         (loop [bes []
-                env (assoc encl-env :context :expr)
-                bindings (seq (partition 2 bindings))]
-           (if-let [[name init] (first bindings)]
-             (do
-               (assert (not (or (namespace name) (.contains (str name) "."))) (str "Invalid local name: " name))
-               (let [init-expr (binding [*loop-lets* (cons {:params bes} (or *loop-lets* ()))]
-                                 (analyze env init))
-                     be {:name name
-                         :init init-expr
-                         :tag (or (-> name meta :tag)
-                                  (-> init-expr :tag)
-                                  (-> init-expr :info :tag))
-                         :local true
-                         :shadow (-> env :locals name)}
-                     be (if (= (:op init-expr) :fn)
-                          (merge be
-                            {:fn-var true
-                             :variadic (:variadic init-expr)
-                             :max-fixed-arity (:max-fixed-arity init-expr)
-                             :method-params (map :params (:methods init-expr))})
-                          be)]
-                 (recur (conj bes be)
-                        (assoc-in env [:locals name] be)
-                        (next bindings))))
-             [bes env])))
+          (loop [bes []
+                 env (assoc encl-env :context :expr)
+                 bindings (seq (partition 2 bindings))]
+            (if-let [[name init] (first bindings)]
+              (do
+                (assert (not (or (namespace name) (.contains (str name) "."))) (str "Invalid local name: " name))
+                (let [init-expr (binding [*loop-lets* (cons {:params bes} (or *loop-lets* ()))]
+                                  (analyze env init))
+                      be {:name name
+                          :init init-expr
+                          :tag (or (-> name meta :tag)
+                                   (-> init-expr :tag)
+                                   (-> init-expr :info :tag))
+                          :local true
+                          :shadow (-> env :locals name)}
+                      be (if (= (:op init-expr) :fn)
+                           (merge be
+                                  {:fn-var true
+                                   :variadic (:variadic init-expr)
+                                   :max-fixed-arity (:max-fixed-arity init-expr)
+                                   :method-params (map :params (:methods init-expr))})
+                           be)]
+                  (recur (conj bes be)
+                         (assoc-in env [:locals name] be)
+                         (next bindings))))
+              [bes env])))
+        env (if recur-name (assoc env :recur-name recur-name) env)
         recur-frame (when is-loop {:params bes :flag (atom nil)})
         expr
         (binding [*recur-frames* (if recur-frame (cons recur-frame *recur-frames*) *recur-frames*)
                   *loop-lets* (cond
-                               is-loop (or *loop-lets* ())
-                               *loop-lets* (cons {:params bes} *loop-lets*))]
+                                is-loop (or *loop-lets* ())
+                                *loop-lets* (cons {:params bes} *loop-lets*))]
           (analyze (assoc env :context (if (= :expr context) :return context)) `(do ~@exprs)))]
-    {:env encl-env :op (if is-loop :loop :let)
-     :bindings bes :expr expr :form form
-     :children (conj (vec (map :init bes)) expr)}))
+    (into
+     {:env encl-env :op (if is-loop :loop :let)
+      :bindings bes :expr expr :form form
+      :children (conj (vec (map :init bes)) expr)}
+     (when recur-name [[:recur-name recur-name]]))))
 
 (defmethod parse 'let*
   [op encl-env form _]

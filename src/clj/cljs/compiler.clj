@@ -136,8 +136,7 @@
 (defn emit-begin
   [statements ret]
   (emits "(begin \n")
-  (emits (interpose "\n" statements))
-  (emits ret)
+  (emits (interpose "\n" (concat statements [ret])))
   (emits ")\n"))
 
 (defn- print-scm [fun-str & children]
@@ -545,9 +544,12 @@ or [& r] -> r in the case of no fixed args."
                                         (map #(vector (System/identityHashCode %)
                                                       (gensym (str (:name %) "-")))
                                              bindings)))]
-      (emits "(let* (" bs ")")
+      (emits "(let* (")
+      (doseq [{:keys [name init] :as binding} bindings]
+        (emitln "(" name " " init ")"))
+      (emits ")")
       (when is-loop (emits "(letrec ((" recur-name
-                        "(lambda (" (space-sep (map :name bindings)) ")" ))
+                           " (lambda (" (space-sep (map :name bindings)) ") " ))
       (emits expr)
       (when is-loop (emits ")))" "(" recur-name " " (space-sep (map :name bindings)) "))"))
       (emits ")"))))
