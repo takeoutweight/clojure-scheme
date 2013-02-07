@@ -745,8 +745,8 @@ or [& r] -> r in the case of no fixed args."
                      (fn [t] (let [r (get symbol-map t ::not-found)]
                                (if (= ::not-found r)
                                  t
-                                 (symbol (emits (analyze (assoc env :context :return) r)))))) form)]
-    (print (space-sep subbed-form))))
+                                 (symbol (with-out-str (emits (ana/analyze (assoc env :context :return) r))))))) form)]
+    (emits (space-sep (map pr-str subbed-form)))))
 
 (defn forms-seq
   "Seq of forms in a Clojure or ClojureScript file."
