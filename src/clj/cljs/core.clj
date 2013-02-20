@@ -276,10 +276,15 @@
                                          body)]
                          (maybe-destructured params body)))
              dsigs (map psig sigs)
-;        variadic? (core/some #(some #{'&} (first %)) dsigs) don't care if entire fn is.
+             any-variadic? (core/some #(some #{'&} (first %)) dsigs)
              combined-sigs
              , (vec (if (core/<= (count dsigs) 1)
-                      dsigs
+                      (if any-variadic?
+                        (let [args (first (first dsigs))
+                              body (second (first dsigs))]
+                          [args `((fn [~@(drop-last 2 args) ~(last args)] ~body)
+                                  ~@(drop-last 2 args) ~(last args))])
+                        dsigs)
                       (core/let [[smallest-sig & other-sigs] (sort-by first compare-arglist dsigs)
                                  middle-sigs (butlast other-sigs)
                                  biggest-sig (last other-sigs)
@@ -294,22 +299,31 @@
                                                                           (first sig))))
                                                           (drop (count (first smallest-sig))
                                                                 (first sig)))
-                                             rest-arg (when variadic? (last (first sig)))]
-                                          `(let [~@(mapcat (fn [s m] (when (not= s m) [m s])) ;alias small arg names
-                                                           (first smallest-sig) (first sig))
-                                                 ~@(mapcat (fn [i a] [a `(~'scm* [~restparam] (~'list-ref ~restparam ~i))])
-                                                           (range) fixed-args)
-                                                 ~@(when rest-arg [rest-arg
-                                                                   `(~'scm* [~restparam] ~(nth (iterate #(list 'cdr %) restparam) (count fixed-args)))])]
-                                             ~@(rest sig))))]
+                                             rest-arg (when variadic? (last (first sig)))
+                                             args-inits (concat
+                                                         (filter identity
+                                                                 (map (fn [s m] (when true #_(not= s m) [m s])) ;alias small arg names
+                                                                      (first smallest-sig) (first sig)))
+                                                         (map (fn [i a] [a `(~'scm* [~restparam] (~'list-ref ~restparam ~i))])
+                                                              (range) fixed-args)
+                                                         (when rest-arg [[rest-arg
+                                                                          `(~'scm* [~restparam] ~(nth (iterate #(list 'cdr %) restparam) (count fixed-args)))]]))]
+                                          (println "args-inits: " args-inits)
+                                          `((fn [~@(map first args-inits)]
+                                              ~@(rest sig))
+                                            ~@(map second args-inits))))]
                         `(~(vec (concat (first smallest-sig) ['& restparam])) 
                           (~'case (count ~restparam)
-                            0 (do ~@(rest smallest-sig))
+                            0 ((fn [~@(first smallest-sig)] ~@(rest smallest-sig)) ~@(first smallest-sig))
                             ~@(apply concat
                                      (map-indexed
                                       (fn* [i sig] [(clojure.core/inc i) (bind-rst sig)])
                                       middle-sigs))
-                            ~(when biggest-sig (bind-rst biggest-sig)))))))]
+                            ~@(when biggest-sig
+                                (if any-variadic?
+                                  [(bind-rst biggest-sig)]
+                                  [(clojure.core/inc (count middle-sigs)) (bind-rst biggest-sig)
+                                   `(throw (cljs.core.Error. (str "Wrong number of args: (" (+ ~(count (first smallest-sig)) (count ~restparam)) ")")))])))))))]
     (with-meta
       (if name
         (list* 'fn* name combined-sigs)
