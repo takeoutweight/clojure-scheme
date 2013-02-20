@@ -470,7 +470,7 @@ or [& r] -> r in the case of no fixed args."
                            seq)
           recur-name (:recur-name env)]
       (if (= 1 (count methods))
-        (emit-fn-method (assoc (first methods) :name (or name recur-name)))
+        (emit-fn-method (assoc (first methods) :name (or name (and (:recurs (first methods)) recur-name))))
         (throw (Exception. "Expected multiarity to be erased in macros."))))))
 
 (defmethod emit :extend
@@ -549,7 +549,7 @@ or [& r] -> r in the case of no fixed args."
       (when is-loop (emits "(letrec ((" recur-name
                            " (lambda (" (space-sep (map :name bindings)) ") " ))
       (emits expr)
-      (when is-loop (emits ")))" "(" recur-name " " (space-sep (map :name bindings)) "))"))
+      (when is-loop (emits ")))" "(" recur-name " " (space-sep (map :init bindings)) "))"))
       (emits ")"))))
 
 (defmethod emit :let [ast]
@@ -563,7 +563,7 @@ or [& r] -> r in the case of no fixed args."
   (let [temps (vec (take (count exprs) (repeatedly gensym)))
         params (:params frame)
         recur-name (:recur-name env)]
-    (emits "(" recur-name " " (space-sep (map emits exprs))")")))
+    (emits "("recur-name" "(space-sep (map emits exprs))")")))
 
 (defmethod emit :letfn
   [{:keys [bindings expr env]}]

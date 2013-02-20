@@ -448,6 +448,7 @@
         meths (if (vector? (first meths)) (list meths) meths)
         locals (:locals env)
         locals (if name (assoc locals name {:name name :shadow (locals name)}) locals)
+        env (assoc env :recur-name (or name "cljs.compiler/recurfn"))
         type (-> form meta ::type)
         fields (-> form meta ::fields)
         protocol-impl (-> form meta :protocol-impl)
@@ -558,7 +559,7 @@
   [encl-env [_ bindings & exprs :as form] is-loop]
   (assert (and (vector? bindings) (even? (count bindings))) "bindings must be vector of even number of elements")
   (let [context (:context encl-env)
-        recur-name (when is-loop (gensym "recurlet"))
+        recur-name (when is-loop "cljs.compiler/recurlet")
         [bes env]
         (disallowing-recur
           (loop [bes []
