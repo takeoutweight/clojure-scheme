@@ -199,7 +199,7 @@
     (emits body)))
 
 (defmethod emit-constant clojure.lang.PersistentList$EmptyList [x]
-  (print (when (not *quoted*) "'") "()"))
+  (emits (when (not *quoted*) "'") "()"))
 
 (defmethod emit-constant clojure.lang.PersistentList [x]
   (emit-meta-constant x
@@ -245,6 +245,9 @@
 
 (defmethod emit :no-op [m])
 
+(defmethod emit nil [m]
+  (throw (Exception. (str "Analzyed form with null :op " (pr-str m)))))
+
 (defmethod emit :var
   [{:keys [info env] :as arg}]
   (let [n (:name info)
@@ -252,7 +255,7 @@
             (name n)
             info)]
     (when-not (= :statement (:context env))
-      (emit-wrap env (emits (munge n))))))
+      (emits (munge n)))))
 
 (defmethod emit :meta
   [{:keys [expr meta env]}]
@@ -317,7 +320,7 @@
         (emits "(let ((" t " "  test ")) (if (and "t" (not (eq? #!void "t"))) "
              then " "
              else"))"))
-      (emits (space-sep "(if" test then else")")))))
+      (emits "(if "test" "then" "else")"))))
 
 (defmethod emit :case
   [{:keys [test clauses else]}]
@@ -351,30 +354,29 @@
   (if init
     (do
       (emit-comment doc (:jsdoc init))
-      (emits "(define " name init)
-      (emits "\n"))
+      (emits "(define "name" "init")")
+      (emitln))
     (emits "(define " name")\n")
     #_(when export
         (println (str "goog.exportSymbol('" export "', " name ");")))))
 
 (defn schemify-method-arglist
-  "analyzed method [a b & r] -> (a b . r) -- as symbols not as a string.
+  "analyzed method [a b & r] -> [a b . r] -- as symbols not as a string.
 or [& r] -> r in the case of no fixed args."
   [{:keys [variadic max-fixed-arity params]}]
   (if variadic
     (if (> max-fixed-arity 0)
-      (apply list (concat (take max-fixed-arity params)
-                          ['. (last params)]))
-      (last params))
-    (apply list params)))
+      (concat (take max-fixed-arity params)
+              ['. (last params)])
+      params)
+    params))
 
 (defn emit-fn-method
-  [{:keys [gthis name variadic params statements ret env recurs max-fixed-arity] :as f}]
+  [{:keys [gthis name variadic params expr env recurs max-fixed-arity] :as f}]
   (letfn [(lambda-str []
-            (emits "(lambda"
-                   (schemify-method-arglist f) " "
-                   (when variadic (str "(let (("(last params) " (cljs.core/-seq " (last params) "))) "))
-                   (emit-begin statements ret)
+            (emits "(lambda ("(space-sep (map munge (schemify-method-arglist f))) ") "
+                   (when variadic (str "(let (("(munge (last params)) " (cljs.core/-seq " (munge (last params)) "))) "))
+                   expr
                    (when variadic ")")
                    ")"))]
     (if name
@@ -423,7 +425,7 @@ or [& r] -> r in the case of no fixed args."
         (emitln "return " delegate-name "(" (string/join ", " params) ");")))
     (emits "})")))
 
-(defn emit-variadic-fn-method
+(comment (defn emit-variadic-fn-method
   [{:keys [type name variadic params expr env recurs max-fixed-arity] :as f}]
   (emit-wrap env
              (let [name (or name (gensym))
@@ -459,7 +461,7 @@ or [& r] -> r in the case of no fixed args."
                (emitln ";")
                (emitln mname ".cljs$lang$arity$variadic = " delegate-name ";")
                (emitln "return " mname ";")
-               (emitln "})()"))))
+               (emitln "})()")))))
 
 (defmethod emit :fn
   [{:keys [name env methods max-fixed-arity variadic recur-frames loop-lets]}]

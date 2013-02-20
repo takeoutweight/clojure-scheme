@@ -308,7 +308,6 @@
                                                               (range) fixed-args)
                                                          (when rest-arg [[rest-arg
                                                                           `(~'scm* [~restparam] ~(nth (iterate #(list 'cdr %) restparam) (count fixed-args)))]]))]
-                                          (println "args-inits: " args-inits)
                                           `((fn [~@(map first args-inits)]
                                               ~@(rest sig))
                                             ~@(map second args-inits))))]
