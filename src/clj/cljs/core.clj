@@ -253,62 +253,63 @@
    :forms '[(fn name? [params* ] exprs*) (fn name? ([params* ] exprs*)+)]}
   [& sigs]
   (core/let [name (if (symbol? (first sigs)) (first sigs) nil)
-        sigs (if name (next sigs) sigs)
-        sigs (if (vector? (first sigs)) (list sigs) sigs)
-        psig (fn* [sig]
-                  (core/let [[params & body] sig
-                        conds (when (and (next body) (map? (first body))) 
-                                (first body))
-                        body (if conds (next body) body)
-                        conds (or conds (meta params))
-                        pre (:pre conds)
-                        post (:post conds)                       
-                        body (if post
-                               `((let [~'% ~(if (core/< 1 (count body)) 
-                                              `(do ~@body) 
-                                              (first body))]
-                                   ~@(map (fn* [c] `(assert ~c)) post)
-                                   ~'%))
-                               body)
-                        body (if pre
-                               (concat (map (fn* [c] `(assert ~c)) pre) 
-                                       body)
-                               body)]
-                    (maybe-destructured params body)))
-        dsigs (map psig sigs)
+             sigs (if name (next sigs) sigs)
+             sigs (if (vector? (first sigs)) (list sigs) sigs)
+             psig (fn* [sig]
+                       (core/let [[params & body] sig
+                                  conds (when (and (next body) (map? (first body))) 
+                                          (first body))
+                                  body (if conds (next body) body)
+                                  conds (or conds (meta params))
+                                  pre (:pre conds)
+                                  post (:post conds)                       
+                                  body (if post
+                                         `((let [~'% ~(if (core/< 1 (count body)) 
+                                                        `(do ~@body) 
+                                                        (first body))]
+                                             ~@(map (fn* [c] `(assert ~c)) post)
+                                             ~'%))
+                                         body)
+                                  body (if pre
+                                         (concat (map (fn* [c] `(assert ~c)) pre) 
+                                                 body)
+                                         body)]
+                         (maybe-destructured params body)))
+             dsigs (map psig sigs)
 ;        variadic? (core/some #(some #{'&} (first %)) dsigs) don't care if entire fn is.
-        combined-sigs
-        , (vec (if (core/<= (count dsigs) 1)
-                 dsigs
-                 (core/let [[smallest-sig & other-sigs] (sort-by first compare-arglist dsigs)
-                       middle-sigs (butlast other-sigs)
-                       biggest-sig (last other-sigs)
-                       restparam (gensym "rest")
-                       bind-rst
-                       , (fn* [sig]
-                              (core/let [variadic? (some #{'&} (first sig))
-                                    fixed-args (if variadic?
-                                                 (butlast (butlast
-                                                           (drop (count (first smallest-sig))
-                                                                 (first sig))))
-                                                 (drop (count (first smallest-sig))
-                                                       (first sig)))
-                                    rest-arg (when variadic? (last (first sig)))]
-                                `(let [~@(mapcat (fn [s m] (when (not= s m) [m s])) ;alias small arg names
-                                                 (first smallest-sig) (first sig))
-                                       ~@(mapcat (fn [i a] [a `(~'scm* [~restparam] (~'list-ref ~restparam ~i))])
-                                                 (range) fixed-args)
-                                       ~@(when rest-arg [rest-arg
-                                                         `(~'scm* [~restparam] ~(nth (iterate #(list 'cdr %) restparam) (count fixed-args)))])]
-                                   ~@(rest sig))))]
-                   `(~(vec (concat (first smallest-sig) ['& restparam])) 
-                     (~'case (count ~restparam)
-                       0 (do ~@(rest smallest-sig))
-                       ~@(apply concat
-                                (map-indexed
-                                 (fn* [i sig] [(clojure.core/inc i) (bind-rst sig)])
-                                 middle-sigs))
-                       ~(when biggest-sig (bind-rst biggest-sig)))))))]
+             combined-sigs
+             , (vec (if (core/<= (count dsigs) 1)
+                      dsigs
+                      (core/let [[smallest-sig & other-sigs] (sort-by first compare-arglist dsigs)
+                                 middle-sigs (butlast other-sigs)
+                                 biggest-sig (last other-sigs)
+                                 restparam (gensym "rest")
+                                 bind-rst
+                                 , (fn* [sig]
+                                        (core/let
+                                            [variadic? (some #{'&} (first sig))
+                                             fixed-args (if variadic?
+                                                          (butlast (butlast
+                                                                    (drop (count (first smallest-sig))
+                                                                          (first sig))))
+                                                          (drop (count (first smallest-sig))
+                                                                (first sig)))
+                                             rest-arg (when variadic? (last (first sig)))]
+                                          `(let [~@(mapcat (fn [s m] (when (not= s m) [m s])) ;alias small arg names
+                                                           (first smallest-sig) (first sig))
+                                                 ~@(mapcat (fn [i a] [a `(~'scm* [~restparam] (~'list-ref ~restparam ~i))])
+                                                           (range) fixed-args)
+                                                 ~@(when rest-arg [rest-arg
+                                                                   `(~'scm* [~restparam] ~(nth (iterate #(list 'cdr %) restparam) (count fixed-args)))])]
+                                             ~@(rest sig))))]
+                        `(~(vec (concat (first smallest-sig) ['& restparam])) 
+                          (~'case (count ~restparam)
+                            0 (do ~@(rest smallest-sig))
+                            ~@(apply concat
+                                     (map-indexed
+                                      (fn* [i sig] [(clojure.core/inc i) (bind-rst sig)])
+                                      middle-sigs))
+                            ~(when biggest-sig (bind-rst biggest-sig)))))))]
     (with-meta
       (if name
         (list* 'fn* name combined-sigs)
