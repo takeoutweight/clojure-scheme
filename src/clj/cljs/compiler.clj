@@ -41,8 +41,6 @@
 (def ^:dynamic *lexical-renames* {})
 (def cljs-reserved-file-names #{"deps.cljs"})
 
-(defn munge ([s] s) ([s r] s))
-
 (defn dispatch-munge [s]
   (-> s
       (clojure.string/replace "." "_")
@@ -58,7 +56,7 @@
 
 (defonce ns-first-segments (atom '#{"cljs" "clojure"}))
 
-#_(defn munge
+(defn munge
   ([s] (munge s js-reserved))
   ([s reserved]
     (if (map? s)
@@ -140,7 +138,7 @@
   (emits ")\n"))
 
 (defn- print-scm [fun-str & children]
-  (print (str "(" fun-str " " (space-sep (map emits children)) ")")))
+  (emits "(" fun-str " " (space-sep (map emits children)) ")"))
 
 (defn ^String emit-str [expr]
   (with-out-str (emit expr)))
@@ -729,11 +727,10 @@ or [& r] -> r in the case of no fixed args."
 
 (defmethod emit :scm-str
   [{:keys [env code segs args]}]
-  (emit-wrap env
-             (if code
-               (emits code)
-               (emits (interleave (concat segs (repeat nil))
-                                  (concat args [nil]))))))
+  (if code
+    (emits code)
+    (emits (interleave (concat segs (repeat nil))
+                       (concat args [nil])))))
 
 ;form->form mapping (or a vector of candidate forms) that will be subject to analyze->emit in context.
 (defmethod emit :scm
