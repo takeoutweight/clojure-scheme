@@ -1192,18 +1192,18 @@ reduces them without incurring seq initialization"
   [x] (satisfies? IChunkedSeq x))
 
 ;;;;;;;;;;;;;;;;;;;; js primitives ;;;;;;;;;;;;
-(defn js-obj
+#_(defn js-obj
   ([]
      (js* "{}"))
   ([& keyvals]
      (apply gobject/create keyvals)))
 
-(defn js-keys [obj]
+#_(defn js-keys [obj]
   (let [keys (array)]
     (goog.object/forEach obj (fn [val key obj] (.push keys key)))
     keys))
 
-(defn js-delete [obj key]
+#_(defn js-delete [obj key]
   (js* "delete ~{obj}[~{key}]"))
 
 (defn- array-copy
