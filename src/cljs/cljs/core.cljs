@@ -6657,7 +6657,7 @@ reduces them without incurring seq initialization"
   (-write [_ s] (.append sb s))
   (-flush [_] nil))
 
-(defn- ^:deprecated pr-seq
+#_(defn- ^:deprecated pr-seq
   "Do not use this.  It is kept for backwards compatibility with the
    old IPrintable protocol."
   [obj opts]
@@ -7138,9 +7138,9 @@ reduces them without incurring seq initialization"
   IMeta
   (-meta [_] meta)
 
-  ^:deprecation-nowarn IPrintable
-  (-pr-seq [a opts]
-    (concat  ["#<Atom: "] (pr-seq state opts) [">"]))
+  ;; ^:deprecation-nowarn IPrintable
+  ;; (-pr-seq [a opts]
+  ;;  (concat  ["#<Atom: "] (pr-seq state opts) [">"]))
 
   IPrintWithWriter
   (-pr-writer [a writer opts]
