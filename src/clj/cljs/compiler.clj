@@ -721,7 +721,7 @@ or [& r] -> r in the case of no fixed args."
 (defmethod emit :dot
   [{:keys [target field method args env]}]
   (if field
-    (emit "(cljs.core/record-ref " target " '"  field ")")
+    (emits "(cljs.core/record-ref "target" '"field")")
     (throw (Exception. (str "no special dot-method access: " (:line env)))) ;TODO
     #_(emits target "." (munge method #{}) "("
                       (comma-sep args)
