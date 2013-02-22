@@ -288,9 +288,7 @@
   (-inode-seq [inode])
   (-ensure-editable [inode e])
   (-inode-assoc! [inode edit shift hash key val added-leaf?])
-  (-inode-without! [inode edit shift hash key removed-leaf?])
-  (-kv-reduce [inode f init]))
-
+  (-inode-without! [inode edit shift hash key removed-leaf?]))
 
 (defprotocol IPairable
   (-pair [coll]))
@@ -4521,7 +4519,7 @@ reduces them without incurring seq initialization"
 (declare ArrayNode)
 
 (deftype BitmapIndexedNode [edit ^:mutable bitmap ^:mutable arr]
-  Object
+  INode
   (-inode-assoc [inode shift hash key val added-leaf?]
     (let [bit (bitpos hash shift)
           idx (bitmap-indexed-node-index bitmap bit)]
@@ -4618,20 +4616,6 @@ reduces them without incurring seq initialization"
         (array-copy arr 0 new-arr 0 (* 2 n))
         (BitmapIndexedNode. e bitmap new-arr))))
 
-  (edit-and-remove-pair [inode e bit i]
-    (if (== bitmap bit)
-      nil
-      (let [editable (-ensure-editable inode e)
-            earr     (.-arr editable)
-            len      (alength earr)]
-        (set! (.-bitmap editable) (bit-xor bit (.-bitmap editable)))
-        (array-copy earr (* 2 (inc i))
-                    earr (* 2 i)
-                    (- len (* 2 (inc i))))
-        (aset earr (- len 2) nil)
-        (aset earr (dec len) nil)
-        editable)))
-
   (-inode-assoc! [inode edit shift hash key val added-leaf?]
     (let [bit (bitpos hash shift)
           idx (bitmap-indexed-node-index bitmap bit)]
@@ -4701,16 +4685,29 @@ reduces them without incurring seq initialization"
         inode
         (let [idx         (bitmap-indexed-node-index bitmap bit)
               key-or-nil  (aget arr (* 2 idx))
-              val-or-node (aget arr (inc (* 2 idx)))]
+              val-or-node (aget arr (inc (* 2 idx)))
+              edit-and-remove-pair (fn [inode e bit i]
+                                     (if (== bitmap bit)
+                                       nil
+                                       (let [editable (-ensure-editable inode e)
+                                             earr     (.-arr editable)
+                                             len      (alength earr)]
+                                         (set! (.-bitmap editable) (bit-xor bit (.-bitmap editable)))
+                                         (array-copy earr (* 2 (inc i))
+                                                     earr (* 2 i)
+                                                     (- len (* 2 (inc i))))
+                                         (aset earr (- len 2) nil)
+                                         (aset earr (dec len) nil)
+                                         editable)))]
           (cond (nil? key-or-nil)
                 (let [n (-inode-without! val-or-node edit (+ shift 5) hash key removed-leaf?)]
                   (cond (identical? n val-or-node) inode
                         (not (nil? n)) (edit-and-set inode edit (inc (* 2 idx)) n)
                         (== bitmap bit) nil
-                        :else (.edit-and-remove-pair inode edit bit idx)))
+                        :else (edit-and-remove-pair inode edit bit idx)))
                 (key-test key key-or-nil)
                 (do (aset removed-leaf? 0 true)
-                    (.edit-and-remove-pair inode edit bit idx))
+                    (edit-and-remove-pair inode edit bit idx))
                 :else inode)))))
   
   IKVReduce
@@ -4733,7 +4730,7 @@ reduces them without incurring seq initialization"
         (BitmapIndexedNode. edit bitmap new-arr)))))
 
 (deftype ArrayNode [edit ^:mutable cnt ^:mutable arr]
-  Object
+  INode
   (-inode-assoc [inode shift hash key val added-leaf?]
     (let [idx  (mask hash shift)
           node (aget arr idx)]
@@ -4842,7 +4839,7 @@ reduces them without incurring seq initialization"
                             ^:mutable collision-hash
                             ^:mutable cnt
                             ^:mutable arr]
-  Object
+  INode
   (-inode-assoc [inode shift hash key val added-leaf?]
     (if (== hash collision-hash)
       (let [idx (hash-collision-node-find-index arr cnt key)]
@@ -4888,16 +4885,15 @@ reduces them without incurring seq initialization"
         (array-copy arr 0 new-arr 0 (* 2 cnt))
         (HashCollisionNode. e collision-hash cnt new-arr))))
 
-  (ensure-editable-array [inode e count array]
-    (if (identical? e edit)
-      (do (set! arr array)
-          (set! cnt count)
-          inode)
-      (HashCollisionNode. edit collision-hash count array)))
-
   (-inode-assoc! [inode edit shift hash key val added-leaf?]
     (if (== hash collision-hash)
-      (let [idx (hash-collision-node-find-index arr cnt key)]
+      (let [idx (hash-collision-node-find-index arr cnt key)
+            ensure-editable-array (fn [inode e count array]
+                                    (if (identical? e edit)
+                                      (do (set! arr array)
+                                          (set! cnt count)
+                                          inode)
+                                      (HashCollisionNode. edit collision-hash count array)))]
         (if (== idx -1)
           (if (> (alength arr) (* 2 cnt))
             (let [editable (edit-and-set inode edit (* 2 cnt) key (inc (* 2 cnt)) val)]
@@ -4910,7 +4906,7 @@ reduces them without incurring seq initialization"
               (aset new-arr len key)
               (aset new-arr (inc len) val)
               (set! (.-val added-leaf?) true)
-              (.ensure-editable-array inode edit (inc cnt) new-arr)))
+              (ensure-editable-array inode edit (inc cnt) new-arr)))
           (if (identical? (aget arr (inc idx)) val)
             inode
             (edit-and-set inode edit (inc idx) val))))
