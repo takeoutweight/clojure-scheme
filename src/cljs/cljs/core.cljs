@@ -3865,7 +3865,7 @@ reduces them without incurring seq initialization"
 ; non-string key is assoc'ed, return a HashMap object instead.
 
 (declare hash-map)
-(defn- obj-map-compare-keys [a b]
+#_(defn- obj-map-compare-keys [a b]
   (let [a (hash a)
         b (hash b)]
     (cond
@@ -3873,7 +3873,7 @@ reduces them without incurring seq initialization"
      (> a b) 1
      :else 0)))
 
-(defn- obj-map->hash-map [m k v]
+#_(defn- obj-map->hash-map [m k v]
   (let [ks  (.-keys m)
         len (alength ks)
         so  (.-strobj m)
@@ -3897,7 +3897,7 @@ reduces them without incurring seq initialization"
           (recur (inc i)))))
     new-obj))
 
-(deftype ObjMap [meta keys strobj update-count ^:mutable __hash]
+#_(deftype ObjMap [meta keys strobj update-count ^:mutable __hash]
   Object
   (toString [this]
     (pr-str this))
@@ -3999,11 +3999,11 @@ reduces them without incurring seq initialization"
   (-as-transient [coll]
     (transient (into (hash-map) coll))))
 
-(set! cljs.core.ObjMap/EMPTY (ObjMap. nil (array) (js-obj) 0 0))
+#_(set! cljs.core.ObjMap/EMPTY (ObjMap. nil (array) (js-obj) 0 0))
 
-(set! cljs.core.ObjMap/HASHMAP_THRESHOLD 32)
+#_(set! cljs.core.ObjMap/HASHMAP_THRESHOLD 32)
 
-(set! cljs.core.ObjMap/fromObject (fn [ks obj] (ObjMap. nil ks obj 0 nil)))
+#_(set! cljs.core.ObjMap/fromObject (fn [ks obj] (ObjMap. nil ks obj 0 nil)))
 
 ;;; HashMap
 ;;; DEPRECATED
@@ -5936,7 +5936,7 @@ reduces them without incurring seq initialization"
   [& keyvals]
   (PersistentArrayMap. nil (quot (count keyvals) 2) (apply array keyvals) nil))
 
-(defn obj-map
+#_(defn obj-map
   "keyval => key val
   Returns a new object map with supplied mappings."
   [& keyvals]
@@ -6950,10 +6950,10 @@ reduces them without incurring seq initialization"
   RedNode
   (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "[" " " "]" opts coll))
 
-  ObjMap
-  (-pr-seq [coll opts]
-    (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential pr-seq "" " " "" opts keyval))]
-      ^:deprecation-nowarn (pr-sequential pr-pair "{" ", " "}" opts coll)))
+  ;; ObjMap
+  ;; (-pr-seq [coll opts]
+  ;;   (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential pr-seq "" " " "" opts keyval))]
+  ;;    ^:deprecation-nowarn (pr-sequential pr-pair "{" ", " "}" opts coll)))
 
   ;; HashMap
   ;; (-pr-seq [coll opts]
@@ -7086,10 +7086,10 @@ reduces them without incurring seq initialization"
   RedNode
   (-pr-writer [coll writer opts] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "[" " " "]" opts coll))
 
-  ObjMap
-  (-pr-writer [coll writer opts]
-    (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "" " " "" opts keyval))]
-      ^:deprecation-nowarn (pr-sequential-writer writer pr-pair "{" ", " "}" opts coll)))
+  ;; ObjMap
+  ;; (-pr-writer [coll writer opts]
+  ;;   (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "" " " "" opts keyval))]
+  ;;    ^:deprecation-nowarn (pr-sequential-writer writer pr-pair "{" ", " "}" opts coll)))
 
   ;; HashMap
   ;; (-pr-writer [coll writer opts]
