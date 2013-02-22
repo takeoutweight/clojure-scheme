@@ -2398,7 +2398,7 @@ reduces them without incurring seq initialization"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; apply ;;;;;;;;;;;;;;;;
 
 ;; see core.clj
-(gen-apply-to)
+#_(gen-apply-to)
 
 (set! *unchecked-if* true)
 (defn apply
