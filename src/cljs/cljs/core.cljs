@@ -5342,7 +5342,7 @@ reduces them without incurring seq initialization"
     (cond
       (instance? RedNode (.-left ins))
       (RedNode. (.-key ins) (.-val ins)
-              (.blacken (.-left ins))
+              (-blacken (.-left ins))
               (BlackNode. key val (.-right ins) right nil)
               nil)
 
@@ -5368,7 +5368,7 @@ reduces them without incurring seq initialization"
       (instance? RedNode (.-right ins))
       (RedNode. (.-key ins) (.-val ins)
                 (BlackNode. key val left (.-left ins) nil)
-                (.blacken (.-right ins))
+                (-blacken (.-right ins))
                 nil)
 
       (instance? RedNode (.-left ins))
@@ -5387,7 +5387,7 @@ reduces them without incurring seq initialization"
 (defn- balance-left-del [key val del right]
   (cond
     (instance? RedNode del)
-    (RedNode. key val (.blacken del) right nil)
+    (RedNode. key val (-blacken del) right nil)
 
     (instance? BlackNode right)
     (balance-right key val del (-redden right))
@@ -5406,7 +5406,7 @@ reduces them without incurring seq initialization"
 (defn- balance-right-del [key val left del]
   (cond
     (instance? RedNode del)
-    (RedNode. key val left (.blacken del) nil)
+    (RedNode. key val left (-blacken del) nil)
 
     (instance? BlackNode left)
     (balance-left key val (-redden left) del)
