@@ -5063,8 +5063,6 @@ reduces them without incurring seq initialization"
                (recur (inc j))))))
        (ArrayNodeSeq. meta nodes i s nil))))
 
-(declare TransientHashMap)
-
 (deftype PersistentHashMap [meta cnt root ^boolean has-nil? nil-val ^:mutable __hash]
   Object
   (toString [this]
@@ -5793,18 +5791,18 @@ reduces them without incurring seq initialization"
 
 (declare key)
 
-(deftype PersistentTreeMap [comp tree cnt meta ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
-  (entry-at [coll k]
-    (loop [t tree]
+(defn- tree-map-entry-at [coll k]
+    (loop [t (.-tree coll)]
       (if-not (nil? t)
         (let [c (comp k (.-key t))]
           (cond (zero? c) t
                 (neg? c)  (recur (.-left t))
                 :else     (recur (.-right t)))))))
+
+(deftype PersistentTreeMap [comp tree cnt meta ^:mutable __hash]
+  Object
+  (toString [this]
+    (pr-str this))
 
   IWithMeta
   (-with-meta [coll meta] (PersistentTreeMap. comp tree cnt meta __hash))
@@ -5860,7 +5858,7 @@ reduces them without incurring seq initialization"
     (-lookup coll k nil))
 
   (-lookup [coll k not-found]
-    (let [n (.entry-at coll k)]
+    (let [n (tree-map-entry-at coll k)]
       (if-not (nil? n)
         (.-val n)
         not-found)))
@@ -5877,7 +5875,7 @@ reduces them without incurring seq initialization"
         (PersistentTreeMap. comp (.blacken t) (inc cnt) meta nil))))
 
   (-contains-key? [coll k]
-    (not (nil? (.entry-at coll k))))
+    (not (nil? (tree-map-entry-at coll k))))
 
   IMap
   (-dissoc [coll k]
@@ -6189,7 +6187,7 @@ reduces them without incurring seq initialization"
   (-lookup [coll v]
     (-lookup coll v nil))
   (-lookup [coll v not-found]
-    (let [n (.entry-at tree-map v)]
+    (let [n (tree-map-entry-at tree-map v)]
       (if-not (nil? n)
         (.-key n)
         not-found)))
