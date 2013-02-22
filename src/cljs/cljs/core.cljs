@@ -6882,23 +6882,23 @@ reduces them without incurring seq initialization"
   (-pr-seq [this]
     (list "#<" (str this) ">"))
 
-  js/Date
-  (-pr-seq [d _]
-    (let [normalize (fn [n len]
-                      (loop [ns (str n)]
-                        (if (< (count ns) len)
-                          (recur (str "0" ns))
-                          ns)))]
-      (list
-       (str "#inst \""
-            (.getUTCFullYear d)                   "-"
-            (normalize (inc (.getUTCMonth d)) 2)  "-"
-            (normalize (.getUTCDate d) 2)         "T"
-            (normalize (.getUTCHours d) 2)        ":"
-            (normalize (.getUTCMinutes d) 2)      ":"
-            (normalize (.getUTCSeconds d) 2)      "."
-            (normalize (.getUTCMilliseconds d) 3) "-"
-            "00:00\""))))
+  ;; js/Date
+  ;; (-pr-seq [d _]
+  ;;   (let [normalize (fn [n len]
+  ;;                     (loop [ns (str n)]
+  ;;                       (if (< (count ns) len)
+  ;;                         (recur (str "0" ns))
+  ;;                         ns)))]
+  ;;     (list
+  ;;      (str "#inst \""
+  ;;           (.getUTCFullYear d)                   "-"
+  ;;           (normalize (inc (.getUTCMonth d)) 2)  "-"
+  ;;           (normalize (.getUTCDate d) 2)         "T"
+  ;;           (normalize (.getUTCHours d) 2)        ":"
+  ;;           (normalize (.getUTCMinutes d) 2)      ":"
+  ;;           (normalize (.getUTCSeconds d) 2)      "."
+  ;;           (normalize (.getUTCMilliseconds d) 3) "-"
+  ;;           "00:00\""))))
 
   LazySeq
   (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll))
@@ -7018,23 +7018,23 @@ reduces them without incurring seq initialization"
   (-pr-writer [this writer _]
     (write-all writer "#<" (str this) ">"))
 
-  js/Date
-  (-pr-writer [d writer _]
-    (let [normalize (fn [n len]
-                      (loop [ns (str n)]
-                        (if (< (count ns) len)
-                          (recur (str "0" ns))
-                          ns)))]
-      (write-all writer
-        "#inst \""
-        (str (.getUTCFullYear d))             "-"
-        (normalize (inc (.getUTCMonth d)) 2)  "-"
-        (normalize (.getUTCDate d) 2)         "T"
-        (normalize (.getUTCHours d) 2)        ":"
-        (normalize (.getUTCMinutes d) 2)      ":"
-        (normalize (.getUTCSeconds d) 2)      "."
-        (normalize (.getUTCMilliseconds d) 3) "-"
-        "00:00\"")))
+  ;; js/Date
+  ;; (-pr-writer [d writer _]
+  ;;   (let [normalize (fn [n len]
+  ;;                     (loop [ns (str n)]
+  ;;                       (if (< (count ns) len)
+  ;;                         (recur (str "0" ns))
+  ;;                         ns)))]
+  ;;     (write-all writer
+  ;;       "#inst \""
+  ;;       (str (.getUTCFullYear d))             "-"
+  ;;       (normalize (inc (.getUTCMonth d)) 2)  "-"
+  ;;       (normalize (.getUTCDate d) 2)         "T"
+  ;;       (normalize (.getUTCHours d) 2)        ":"
+  ;;       (normalize (.getUTCMinutes d) 2)      ":"
+  ;;       (normalize (.getUTCSeconds d) 2)      "."
+  ;;       (normalize (.getUTCMilliseconds d) 3) "-"
+  ;;       "00:00\"")))
 
   LazySeq
   (-pr-writer [coll writer opts] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "(" " " ")" opts coll))
