@@ -2108,16 +2108,6 @@ reduces them without incurring seq initialization"
 (declare ArrayChunk)
 
 (deftype ChunkBuffer [^:mutable buf ^:mutable end]
-  Object
-  (add [_ o]
-    (aset buf end o)
-    (set! end (inc end)))
-
-  (chunk [_ o]
-    (let [ret (ArrayChunk. buf 0 end)]
-      (set! buf nil)
-      ret))
-
   ICounted
   (-count [_] end))
 
@@ -2210,10 +2200,13 @@ reduces them without incurring seq initialization"
     (ChunkedCons. chunk rest nil nil)))
 
 (defn chunk-append [b x]
-  (.add b x))
+  (aset (.-buf b) (.-end b) x)
+  (set! (.-end b) (inc (.-end b))))
 
 (defn chunk [b]
-  (.chunk b))
+  (let [ret (ArrayChunk. (.-buf b) 0 (.-end b))]
+      (set! (.-buf b) nil)
+      ret))
 
 (defn chunk-first [s]
   (-chunked-first s))
