@@ -290,6 +290,17 @@
   (-inode-assoc! [inode edit shift hash key val added-leaf?])
   (-inode-without! [inode edit shift hash key removed-leaf?]))
 
+(defprotocol IRedBlackNode
+  (-add-left [node ins])
+  (-add-right [node ins])
+  (-remove-left [node del])
+  (-remove-right [node del])
+  (-blacken [node])
+  (-redden [node])
+  (-balance-left [node parent])
+  (-balance-right [node parent])
+  (-replace [node key val left right]))
+
 (defprotocol IPairable
   (-pair [coll]))
 
@@ -5379,14 +5390,14 @@ reduces them without incurring seq initialization"
     (RedNode. key val (.blacken del) right nil)
 
     (instance? BlackNode right)
-    (balance-right key val del (.redden right))
+    (balance-right key val del (-redden right))
 
     (and (instance? RedNode right) (instance? BlackNode (.-left right)))
     (RedNode. (.. right -left -key) (.. right -left -val)
               (BlackNode. key val del (.. right -left -left) nil)
               (balance-right (.-key right) (.-val right)
                              (.. right -left -right)
-                             (.redden (.-right right)))
+                             (-redden (.-right right)))
               nil)
 
     :else
@@ -5398,12 +5409,12 @@ reduces them without incurring seq initialization"
     (RedNode. key val left (.blacken del) nil)
 
     (instance? BlackNode left)
-    (balance-left key val (.redden left) del)
+    (balance-left key val (-redden left) del)
 
     (and (instance? RedNode left) (instance? BlackNode (.-right left)))
     (RedNode. (.. left -right -key) (.. left -right -val)
               (balance-left (.-key left) (.-val left)
-                            (.redden (.-left left))
+                            (-redden (.-left left))
                             (.. left -right -left))
               (BlackNode. key val (.. left -right -right) del nil)
               nil)
@@ -5432,33 +5443,31 @@ reduces them without incurring seq initialization"
   (toString [this]
     (pr-str this))
 
-  (add-left [node ins]
-    (.balance-left ins node))
+  IRedBlackNode
+  (-add-left [node ins]
+    (-balance-left ins node))
 
-  (add-right [node ins]
-    (.balance-right ins node))
+  (-add-right [node ins]
+    (-balance-right ins node))
 
-  (remove-left [node del]
+  (-remove-left [node del]
     (balance-left-del key val del right))
 
-  (remove-right [node del]
+  (-remove-right [node del]
     (balance-right-del key val left del))
 
-  (blacken [node] node)
+  (-blacken [node] node)
 
-  (redden [node] (RedNode. key val left right nil))
+  (-redden [node] (RedNode. key val left right nil))
 
-  (balance-left [node parent]
+  (-balance-left [node parent]
     (BlackNode. (.-key parent) (.-val parent) node (.-right parent) nil))
 
-  (balance-right [node parent]
+  (-balance-right [node parent]
     (BlackNode. (.-key parent) (.-val parent) (.-left parent) node nil))
 
-  (replace [node key val left right]
+  (-replace [node key val left right]
     (BlackNode. key val left right nil))
-
-  (toString [this]
-    (pr-str this))
 
   IKVReduce
   (-kv-reduce [node f init]
@@ -5541,29 +5550,30 @@ reduces them without incurring seq initialization"
   (toString [this]
     (pr-str this))
 
-  (add-left [node ins]
+  IRedBlackNode
+  (-add-left [node ins]
     (RedNode. key val ins right nil))
 
-  (add-right [node ins]
+  (-add-right [node ins]
     (RedNode. key val left ins nil))
 
-  (remove-left [node del]
+  (-remove-left [node del]
     (RedNode. key val del right nil))
 
-  (remove-right [node del]
+  (-remove-right [node del]
     (RedNode. key val left del nil))
 
-  (blacken [node]
+  (-blacken [node]
     (BlackNode. key val left right nil))
 
-  (redden [node]
+  (-redden [node]
     (throw (js/Error. "red-black tree invariant violation")))
 
-  (balance-left [node parent]
+  (-balance-left [node parent]
     (cond
       (instance? RedNode left)
       (RedNode. key val
-                (.blacken left)
+                (-blacken left)
                 (BlackNode. (.-key parent) (.-val parent) right (.-right parent) nil)
                 nil)
 
@@ -5579,7 +5589,7 @@ reduces them without incurring seq initialization"
       :else
       (BlackNode. (.-key parent) (.-val parent) node (.-right parent) nil)))
 
-  (balance-right [node parent]
+  (-balance-right [node parent]
     (cond
       (instance? RedNode right)
       (RedNode. key val
@@ -5587,7 +5597,7 @@ reduces them without incurring seq initialization"
                             (.-left parent)
                             left
                             nil)
-                (.blacken right)
+                (-blacken right)
                 nil)
 
       (instance? RedNode left)
@@ -5602,11 +5612,8 @@ reduces them without incurring seq initialization"
       :else
       (BlackNode. (.-key parent) (.-val parent) (.-left parent) node nil)))
 
-  (replace [node key val left right]
+  (-replace [node key val left right]
     (RedNode. key val left right nil))
-
-  (toString [this]
-    (pr-str this))
 
   IKVReduce
   (-kv-reduce [node f init]
@@ -5696,12 +5703,12 @@ reduces them without incurring seq initialization"
         (neg? c)
         (let [ins (tree-map-add comp (.-left tree) k v found)]
           (if-not (nil? ins)
-            (.add-left tree ins)))
+            (-add-left tree ins)))
 
         :else
         (let [ins (tree-map-add comp (.-right tree) k v found)]
           (if-not (nil? ins)
-            (.add-right tree ins)))))))
+            (-add-right tree ins)))))))
 
 (defn- tree-map-append [left right]
   (cond
@@ -5785,9 +5792,9 @@ reduces them without incurring seq initialization"
 (defn- tree-map-replace [comp tree k v]
   (let [tk (.-key tree)
         c  (comp k tk)]
-    (cond (zero? c) (.replace tree tk v (.-left tree) (.-right tree))
-          (neg? c)  (.replace tree tk (.-val tree) (tree-map-replace comp (.-left tree) k v) (.-right tree))
-          :else     (.replace tree tk (.-val tree) (.-left tree) (tree-map-replace comp (.-right tree) k v)))))
+    (cond (zero? c) (-replace tree tk v (.-left tree) (.-right tree))
+          (neg? c)  (-replace tree tk (.-val tree) (tree-map-replace comp (.-left tree) k v) (.-right tree))
+          :else     (-replace tree tk (.-val tree) (.-left tree) (tree-map-replace comp (.-right tree) k v)))))
 
 (declare key)
 
@@ -5872,7 +5879,7 @@ reduces them without incurring seq initialization"
           (if (= v (.-val found-node))
             coll
             (PersistentTreeMap. comp (tree-map-replace comp tree k v) cnt meta nil)))
-        (PersistentTreeMap. comp (.blacken t) (inc cnt) meta nil))))
+        (PersistentTreeMap. comp (-blacken t) (inc cnt) meta nil))))
 
   (-contains-key? [coll k]
     (not (nil? (tree-map-entry-at coll k))))
@@ -5885,7 +5892,7 @@ reduces them without incurring seq initialization"
         (if (nil? (nth found 0))
           coll
           (PersistentTreeMap. comp nil 0 meta nil))
-        (PersistentTreeMap. comp (.blacken t) (dec cnt) meta nil))))
+        (PersistentTreeMap. comp (-blacken t) (dec cnt) meta nil))))
 
   ISorted
   (-sorted-seq [coll ascending?]
