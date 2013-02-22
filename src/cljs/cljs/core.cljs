@@ -6654,7 +6654,7 @@ reduces them without incurring seq initialization"
 
 (deftype StringBufferWriter [sb]
   IWriter
-  (-write [_ s] (.append sb s))
+  (-write [_ s] (str sb s))
   (-flush [_] nil))
 
 #_(defn- ^:deprecated pr-seq
@@ -6697,9 +6697,9 @@ reduces them without incurring seq initialization"
               (-write writer " "))
             (cond
               ;; handle CLJS ctors
-              (and (not (nil? obj))
-                   ^boolean (.-cljs$lang$type obj))
-                (.cljs$lang$ctorPrWriter obj obj writer opts)
+              ;; (and (not (nil? obj))
+              ;;      ^boolean (.-cljs$lang$type obj))
+              ;;   (.cljs$lang$ctorPrWriter obj obj writer opts)
 
               ; Use the new, more efficient, IPrintWithWriter interface when possible.
               (satisfies? IPrintWithWriter obj) (-pr-writer obj writer opts)
@@ -6720,7 +6720,7 @@ reduces them without incurring seq initialization"
     (pr-writer obj writer opts)))
 
 (defn- pr-sb-with-opts [objs opts]
-  (let [sb (gstring/StringBuffer.)
+  (let [sb ""
         writer (StringBufferWriter. sb)]
     (pr-seq-writer objs writer opts)
     (-flush writer)
@@ -6740,8 +6740,7 @@ reduces them without incurring seq initialization"
   (if (empty? objs)
     "\n"
     (let [sb (pr-sb-with-opts objs opts)]
-      (.append sb \newline)
-      (str sb))))
+      (str sb \newline))))
 
 (defn- pr-with-opts
   "Prints a sequence of objects using string-print, observing all
@@ -6827,7 +6826,9 @@ reduces them without incurring seq initialization"
 
 (defn ^:private quote-string
   [s]
-  (str \"
+  ;;TODO
+  s
+  #_(str \"
        (.replace s (js/RegExp "[\\\\\"\b\f\n\r\t]" "g")
          (fn [match] (get char-escapes match)))
        \"))
