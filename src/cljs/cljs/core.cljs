@@ -3995,7 +3995,7 @@ reduces them without incurring seq initialization"
 ; collisions. A bucket is an array of alternating keys (not their hashes) and
 ; vals.
 (declare empty-hash-map)
-(deftype HashMap [meta count hashobj ^:mutable __hash]
+#_(deftype HashMap [meta count hashobj ^:mutable __hash]
   Object
   (toString [this]
     (pr-str this))
@@ -4088,17 +4088,17 @@ reduces them without incurring seq initialization"
   (-invoke [coll k not-found]
     (-lookup coll k not-found)))
 
-(set! cljs.core.HashMap/EMPTY (HashMap. nil 0 (js-obj) 0))
+#_(set! cljs.core.HashMap/EMPTY (HashMap. nil 0 (js-obj) 0))
 
-(set! cljs.core.HashMap/fromArrays (fn [ks vs]
+#_(set! cljs.core.HashMap/fromArrays (fn [ks vs]
   (let [len (alength ks)]
     (loop [i 0, out cljs.core.HashMap/EMPTY]
       (if (< i len)
         (recur (inc i) (assoc out (aget ks i) (aget vs i)))
         out)))))
 
-(def empty-hash-map (HashMap. nil (scm* [] (make-table))))
-(defn hash-map-from-arrays
+#_(def empty-hash-map (HashMap. nil (scm* [] (make-table))))
+#_(defn hash-map-from-arrays
   [ks vs]
   (let [len (alength ks)]
     (loop [i 0, out empty-hash-map]
@@ -6947,10 +6947,10 @@ reduces them without incurring seq initialization"
     (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential pr-seq "" " " "" opts keyval))]
       ^:deprecation-nowarn (pr-sequential pr-pair "{" ", " "}" opts coll)))
 
-  HashMap
-  (-pr-seq [coll opts]
-    (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential pr-seq "" " " "" opts keyval))]
-      ^:deprecation-nowarn (pr-sequential pr-pair "{" ", " "}" opts coll)))
+  ;; HashMap
+  ;; (-pr-seq [coll opts]
+  ;;   (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential pr-seq "" " " "" opts keyval))]
+  ;;    ^:deprecation-nowarn (pr-sequential pr-pair "{" ", " "}" opts coll)))
 
   PersistentArrayMap
   (-pr-seq [coll opts]
@@ -7083,10 +7083,10 @@ reduces them without incurring seq initialization"
     (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "" " " "" opts keyval))]
       ^:deprecation-nowarn (pr-sequential-writer writer pr-pair "{" ", " "}" opts coll)))
 
-  HashMap
-  (-pr-writer [coll writer opts]
-    (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "" " " "" opts keyval))]
-      ^:deprecation-nowarn (pr-sequential-writer writer pr-pair "{" ", " "}" opts coll)))
+  ;; HashMap
+  ;; (-pr-writer [coll writer opts]
+  ;;   (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "" " " "" opts keyval))]
+  ;;    ^:deprecation-nowarn (pr-sequential-writer writer pr-pair "{" ", " "}" opts coll)))
 
   PersistentArrayMap
   (-pr-writer [coll writer opts]
