@@ -5180,69 +5180,6 @@ reduces them without incurring seq initialization"
                            ^:mutable count
                            ^:mutable ^boolean has-nil?
                            ^:mutable nil-val]
-  Object
-  (conj! [tcoll o]
-    (if edit
-      (if (satisfies? IMapEntry o)
-        (.assoc! tcoll (key o) (val o))
-        (loop [es (seq o) tcoll tcoll]
-          (if-let [e (first es)]
-            (recur (next es)
-                   (.assoc! tcoll (key e) (val e)))
-            tcoll)))
-      (throw (js/Error. "conj! after persistent"))))
-
-  (assoc! [tcoll k v]
-    (if edit
-      (if (nil? k)
-        (do (if (identical? nil-val v)
-              nil
-              (set! nil-val v))
-            (if has-nil?
-              nil
-              (do (set! count (inc count))
-                  (set! has-nil? true)))
-            tcoll)
-        (let [added-leaf? (Box. false)
-              node        (-> (if (nil? root)
-                                cljs.core.BitmapIndexedNode/EMPTY
-                                root)
-                              (-inode-assoc! edit 0 (hash k) k v added-leaf?))]
-          (if (identical? node root)
-            nil
-            (set! root node))
-          (if ^boolean (.-val added-leaf?)
-            (set! count (inc count)))
-          tcoll))
-      (throw (js/Error. "assoc! after persistent!"))))
-
-  (without! [tcoll k]
-    (if edit
-      (if (nil? k)
-        (if has-nil?
-          (do (set! has-nil? false)
-              (set! nil-val nil)
-              (set! count (dec count))
-              tcoll)
-          tcoll)
-        (if (nil? root)
-          tcoll
-          (let [removed-leaf? (Box. false)
-                node (-inode-without! root edit 0 (hash k) k removed-leaf?)]
-            (if (identical? node root)
-              nil
-              (set! root node))
-            (if (aget removed-leaf? 0)
-              (set! count (dec count)))
-            tcoll)))
-      (throw (js/Error. "dissoc! after persistent!"))))
-
-  (persistent! [tcoll]
-    (if edit
-      (do (set! edit nil)
-          (PersistentHashMap. nil count root has-nil? nil-val nil))
-      (throw (js/Error. "persistent! called twice"))))
-
   ICounted
   (-count [coll]
     (if edit
@@ -5268,15 +5205,69 @@ reduces them without incurring seq initialization"
         (-inode-lookup root 0 (hash k) k not-found))))
 
   ITransientCollection
-  (-conj! [tcoll val] (.conj! tcoll val))
+  (-conj! [tcoll o]
+    (if edit
+      (if (satisfies? IMapEntry o)
+        (.assoc! tcoll (key o) (val o))
+        (loop [es (seq o) tcoll tcoll]
+          (if-let [e (first es)]
+            (recur (next es)
+                   (.assoc! tcoll (key e) (val e)))
+            tcoll)))
+      (throw (js/Error. "conj! after persistent"))))
 
-  (-persistent! [tcoll] (.persistent! tcoll))
+  (-persistent! [tcoll]
+    (if edit
+      (do (set! edit nil)
+          (PersistentHashMap. nil count root has-nil? nil-val nil))
+      (throw (js/Error. "persistent! called twice"))))
 
   ITransientAssociative
-  (-assoc! [tcoll key val] (.assoc! tcoll key val))
+  (-assoc! [tcoll k v]
+    (if edit
+      (if (nil? k)
+        (do (if (identical? nil-val v)
+              nil
+              (set! nil-val v))
+            (if has-nil?
+              nil
+              (do (set! count (inc count))
+                  (set! has-nil? true)))
+            tcoll)
+        (let [added-leaf? (Box. false)
+              node        (-> (if (nil? root)
+                                cljs.core.BitmapIndexedNode/EMPTY
+                                root)
+                              (-inode-assoc! edit 0 (hash k) k v added-leaf?))]
+          (if (identical? node root)
+            nil
+            (set! root node))
+          (if ^boolean (.-val added-leaf?)
+            (set! count (inc count)))
+          tcoll))
+      (throw (js/Error. "assoc! after persistent!"))))
 
   ITransientMap
-  (-dissoc! [tcoll key] (.without! tcoll key)))
+  (-dissoc! [tcoll k]
+    (if edit
+      (if (nil? k)
+        (if has-nil?
+          (do (set! has-nil? false)
+              (set! nil-val nil)
+              (set! count (dec count))
+              tcoll)
+          tcoll)
+        (if (nil? root)
+          tcoll
+          (let [removed-leaf? (Box. false)
+                node (-inode-without! root edit 0 (hash k) k removed-leaf?)]
+            (if (identical? node root)
+              nil
+              (set! root node))
+            (if (aget removed-leaf? 0)
+              (set! count (dec count)))
+            tcoll)))
+      (throw (js/Error. "dissoc! after persistent!")))))
 
 ;;; PersistentTreeMap
 
