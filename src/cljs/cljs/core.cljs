@@ -94,7 +94,7 @@
   ([aseq]
      (into-array nil aseq))
   ([type aseq]
-     (reduce (fn [a x] (.push a x) a) (array) aseq)))
+     (apply array aseq)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; core protocols ;;;;;;;;;;;;;
 (scm* {} (define cljs.core/protocol-impls (make-table)))
