@@ -3237,7 +3237,7 @@ reduces them without incurring seq initialization"
      (zero? cnt) (throw (Error. "Can't pop empty vector"))
      (== 1 cnt) (-with-meta cljs.core.PersistentVector/EMPTY meta)
      (< 1 (- cnt (tail-off coll)))
-      (PersistentVector. meta (dec cnt) shift root (.slice tail 0 -1) nil)
+      (PersistentVector. meta (dec cnt) shift root (slice-pop tail) nil)
       :else (let [new-tail (array-for coll (- cnt 2))
                   nr (pop-tail coll shift root)
                   new-root (if (nil? nr) cljs.core.PersistentVector/EMPTY_NODE nr)
@@ -3365,7 +3365,7 @@ reduces them without incurring seq initialization"
               xs (if (identical? no-clone true) xs (aclone xs))]
           (if (< l 32)
             (PersistentVector. nil l 5 cljs.core.PersistentVector/EMPTY_NODE xs nil)
-            (let [node (.slice xs 0 32)
+            (let [node (slice xs 0 32)
                   v (PersistentVector. nil 32 5 cljs.core.PersistentVector/EMPTY_NODE node nil)]
              (loop [i 32 out (-as-transient v)]
                (if (< i l)

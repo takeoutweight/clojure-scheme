@@ -1273,6 +1273,20 @@
   [a]
   `(scm* {:a ~a} ~'(vector-copy :a)))
 
+(defmacro slice
+  "does NOT re-create Javascripts negative index sematics, just end >= start slicing. Also, will complain on out-of-ranges; won't be clipped to viable length."
+  [a start end]
+  `(let [sz# (- ~end ~start)
+         r# (cljs.core/make-array sz#)]
+     (scm* {:a ~a :start ~start :end ~end :r r#} ~'(subvector-move! :a :start :end :r 0))))
+
+(defmacro slice-pop
+  "returns a copy without the last element"
+  [a]
+  `(let [sz# (dec (alength ~a))
+         r# (cljs.core/make-array sz#)]
+     (scm* {:a ~a :r r#} ~'(subvector-move! :a 0 sz# :r 0))))
+
 (defmacro amap
   "Maps an expression across an array a, using an index named idx, and
   return value named ret, initialized to a clone of a, then setting
