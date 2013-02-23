@@ -586,7 +586,7 @@
   (-pair [coll] coll)
 
   IWithMeta
-  (-with-meta [coll meta] (Cons. meta (first coll) (rest coll)))
+  (-with-meta [coll meta] (Cons. meta (first coll) (rest coll) nil))
 
   IReduce 
   (-reduce
@@ -1882,7 +1882,7 @@ reduces them without incurring seq initialization"
   (-pop [coll] (throw (Error. "Can't pop empty list")))
 
   ICollection
-  (-conj [coll o] (Cons. meta o empty-list))
+  (-conj [coll o] (Cons. meta o empty-list nil))
 
   IEmptyableCollection
   (-empty [coll] coll)

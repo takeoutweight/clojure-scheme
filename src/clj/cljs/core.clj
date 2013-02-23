@@ -1028,7 +1028,7 @@
   `(scm* {:x ~x} ~(list 'object->class :x ) ))
 
 (defmacro lazy-seq [& body]
-  `(new cljs.core/LazySeq nil false (core/fn [] ~@body)))
+  `(new cljs.core/LazySeq nil false (core/fn [] ~@body) nil))
 
 (defmacro delay [& body]
   "Takes a body of expressions and yields a Delay object that will
