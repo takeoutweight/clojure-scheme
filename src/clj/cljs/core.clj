@@ -750,16 +750,16 @@
     (if (seq impls)
       `(do
          (deftype* ~t ~fields ~pmasks)
-         (set! (.-cljs$lang$type ~t) true)
-         (set! (.-cljs$lang$ctorPrSeq ~t) (core/fn [this#] (list ~(core/str r))))
-         (set! (.-cljs$lang$ctorPrWriter ~t) (core/fn [this# writer# opt#] (-write writer# ~(core/str r))))
+;         (set! (.-cljs$lang$type ~t) true)
+;         (set! (.-cljs$lang$ctorPrSeq ~t) (core/fn [this#] (list ~(core/str r))))
+;         (set! (.-cljs$lang$ctorPrWriter ~t) (core/fn [this# writer# opt#] (-write writer# ~(core/str r))))
          (extend-type ~t ~@(dt->et impls fields true))
          ~t)
       `(do
          (deftype* ~t ~fields ~pmasks)
-         (set! (.-cljs$lang$type ~t) true)
-         (set! (.-cljs$lang$ctorPrSeq ~t) (core/fn [this#] (list ~(core/str r))))
-         (set! (.-cljs$lang$ctorPrWriter ~t) (core/fn [this# writer# opts#] (-write writer# ~(core/str r))))
+;         (set! (.-cljs$lang$type ~t) true)
+;         (set! (.-cljs$lang$ctorPrSeq ~t) (core/fn [this#] (list ~(core/str r))))
+;         (set! (.-cljs$lang$ctorPrWriter ~t) (core/fn [this# writer# opts#] (-write writer# ~(core/str r))))
          ~t))))
 
 (defn- emit-defrecord
