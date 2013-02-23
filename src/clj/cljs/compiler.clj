@@ -61,7 +61,8 @@
   ([s reserved]
     (if (map? s)
       ; Unshadowing
-      (let [{:keys [name field] :as info} s
+      (:name s)
+      #_(let [{:keys [name field] :as info} s
             depth (loop [d 0, {:keys [shadow]} info]
                     (cond
                       shadow (recur (inc d) shadow)
@@ -76,7 +77,8 @@
           munged-name
           (symbol (str munged-name "__$" depth))))
       ; String munging
-      (let [ss (string/replace (str s) #"\/(.)" ".$1") ; Division is special
+      s
+      #_(let [ss (string/replace (str s) #"\/(.)" ".$1") ; Division is special
             ss (apply str (map #(if (reserved %) (str % "$") %)
                                (string/split ss #"(?<=\.)|(?=\.)")))
             ms (clojure.lang.Compiler/munge ss)]
