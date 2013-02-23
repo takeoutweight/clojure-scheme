@@ -668,12 +668,12 @@
 
 (declare with-meta)
 
-(extend-type function
+#_(extend-type function
   Fn
 
   IMeta
   (-meta [_] nil)
-
+  
   IWithMeta
   (-with-meta [f meta]
     (with-meta
@@ -684,7 +684,7 @@
           (apply f args)))
       meta)))
 
-(extend-type default
+#_(extend-type default
   IHash
   (-hash [o] (scm-equal?-hash o)))
 
@@ -997,7 +997,7 @@ reduces them without incurring seq initialization"
       (recur sn)
       (first s))))
 
-(extend-type default
+#_(extend-type default
   IEquiv
   (-equiv [x o] (identical? x o)))
 
