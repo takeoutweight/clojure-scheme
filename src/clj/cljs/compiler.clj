@@ -483,27 +483,26 @@ or [& r] -> r in the case of no fixed args."
    (for [[protocol meth-map] impls]
      (do
        (emit-comment (str "Implementing " (:name protocol)) nil)
-       (println "(table-set! "
-                "(table-ref cljs.core/protocol-impls" (:name etype) ")"
-                (:name protocol) "#t" ")")
+       (emitln "(table-set! "
+              "(table-ref cljs.core/protocol-impls " (:name etype) ") "
+              (:name protocol) " #t)")
        (doall
         (for [[meth-name meth-impl] meth-map]
           (let [meth (first (:methods meth-impl))
-                fn-scm-args (schemify-method-arglist meth) ;FIXME may not be a seq.
+                fn-scm-args (map munge (schemify-method-arglist meth)) ;FIXME may not be a seq.
                 rest? (some #{'.} fn-scm-args)
-                fun-str (emits meth-impl)
-                impl-name (symbol (str (:name (:info meth-name))
+                impl-name (symbol (str (munge (:name (:info meth-name)))
                                        "---" (dispatch-munge (:name etype))))]
             (when (> (count (:methods meth-impl)) 1) (throw (Exception. "should have compiled variadic defn away.")))
-            (println
-             (str "(define " (cons impl-name 
-                                   fn-scm-args)) 
-             (if rest?
-               (str "(apply " fun-str " (append (list "
-                    (space-sep (butlast (:params meth))) ") "
-                    (last (:params meth)) "))")
-               (str "(" fun-str " " (space-sep (:params meth)) ")"))
-             ")")
+            (emits "(define (" (space-sep (cons impl-name 
+                                    fn-scm-args)) ") ")
+            (if rest?
+               (emits "(apply " meth-impl " (append (list "
+                    (space-sep (butlast (map munge (:params meth)))) ") "
+                    (munge (last (:params meth))) "))")
+               (emits "(" meth-impl " " (space-sep (map munge (:params meth))) ")"))
+
+            (emits ")")
             (when-not base-type?
               (println (str "(table-set! " (:name (:info meth-name)) "---vtable")
                        (:name etype)
