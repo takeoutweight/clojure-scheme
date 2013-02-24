@@ -366,12 +366,13 @@
   "analyzed method [a b & r] -> [a b . r] -- as symbols not as a string.
 or [& r] -> r in the case of no fixed args."
   [{:keys [variadic max-fixed-arity params]}]
-  (if variadic
-    (if (> max-fixed-arity 0)
-      (concat (take max-fixed-arity params)
-              ['. (last params)])
-      params)
-    params))
+  (map #(if (= (:name %) '_) (assoc % :name (gensym "_")) %)
+       (if variadic
+         (if (> max-fixed-arity 0)
+           (concat (take max-fixed-arity params)
+                   ['. (last params)])
+           params)
+         params)))
 
 (defn emit-fn-method
   [{:keys [gthis name variadic params expr env recurs max-fixed-arity] :as f}]
