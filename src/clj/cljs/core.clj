@@ -1273,18 +1273,39 @@
   [a]
   `(scm* {:a ~a} ~'(vector-copy :a)))
 
+(defmacro aclone-push
+  "Clones the array into an array one element larger; with the value pushed."
+  [a o]
+   `(let [sz# (scm* {:a ~a} ~'(vector-length :a))
+         r# (scm* {:nsz (inc sz#)} ~'(make-vector :nsz))]
+      (scm* {:a ~a :sz sz# :r r# :o ~o}
+            ~'(begin
+               (subvector-move! :a 0 :sz :r 0)
+               (vector-set! :a :sz :o)))))
+
+(defmacro aclone-push2
+  "Clones the array into an array one element larger; with the values pushed."
+  [a o1 o2]
+   `(let [sz# (scm* {:a ~a} ~'(vector-length :a))
+         r# (scm* {:nsz (+ sz# 2)} ~'(make-vector :nsz))]
+      (scm* {:a ~a :sz sz# :r r# :o1 ~o1 :o2 ~o2}
+            ~'(begin
+               (subvector-move! :a 0 :sz :r 0)
+               (vector-set! :a :sz :o1)
+               (vector-set! :a (+ :sz 1) :o2)))))
+
 (defmacro slice
   "does NOT re-create Javascripts negative index sematics, just end >= start slicing. Also, will complain on out-of-ranges; won't be clipped to viable length."
   [a start end]
   `(let [sz# (- ~end ~start)
-         r# (cljs.core/make-array sz#)]
+         r# (scm* {:sz sz#} ~'(make-vector :sz))]
      (scm* {:a ~a :start ~start :end ~end :r r#} ~'(subvector-move! :a :start :end :r 0))))
 
 (defmacro slice-pop
   "returns a copy without the last element"
   [a]
   `(let [sz# (dec (alength ~a))
-         r# (cljs.core/make-array sz#)]
+         r# (scm* {:sz sz#} ~'(make-vector :sz))]
      (scm* {:a ~a :r r#} ~'(subvector-move! :a 0 sz# :r 0))))
 
 (defmacro amap

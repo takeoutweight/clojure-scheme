@@ -3249,8 +3249,7 @@ reduces them without incurring seq initialization"
   ICollection
   (-conj [coll o]
     (if (< (- cnt (tail-off coll)) 32)
-      (let [new-tail (aclone tail)]
-        (.push new-tail o)
+      (let [new-tail (aclone-push tail o)]
         (PersistentVector. meta (inc cnt) shift root new-tail nil))
       (let [root-overflow? (> (bit-shift-right-zero-fill cnt 5) (bit-shift-left 1 shift))
             new-shift (if root-overflow? (+ shift 5) shift)
@@ -3887,7 +3886,7 @@ reduces them without incurring seq initialization"
 
 ;;; ObjMap
 
-(defn- obj-clone [obj ks]
+#_(defn- obj-clone [obj ks]
   (let [new-obj (js-obj)
         l (alength ks)]
     (loop [i 0]
@@ -3953,9 +3952,8 @@ reduces them without incurring seq initialization"
               (aset new-strobj k v)
               (ObjMap. meta keys new-strobj (inc update-count) nil)) ; overwrite
             (let [new-strobj (obj-clone strobj keys) ; append
-                  new-keys (aclone keys)]
+                  new-keys (aclone-push keys k)]
               (aset new-strobj k v)
-              (.push new-keys k)
               (ObjMap. meta new-keys new-strobj (inc update-count) nil))))
         ;; non-string key. game over.
         (obj-map->hash-map coll k v)))
@@ -4251,6 +4249,14 @@ reduces them without incurring seq initialization"
         (= (aget arr i) k) i
         :else (recur (+ i 2))))))
 
+(defn- array-map-index-of-len [m k len]
+  (let [arr (.-arr m)]
+    (loop [i 0]
+      (cond
+        (<= len i) -1
+        (= (aget arr i) k) i
+        :else (recur (+ i 2))))))
+
 (declare TransientArrayMap)
 
 (deftype PersistentArrayMap [meta cnt arr ^:mutable __hash]
@@ -4312,9 +4318,7 @@ reduces them without incurring seq initialization"
         (if (< cnt cljs.core.PersistentArrayMap/HASHMAP_THRESHOLD)
           (PersistentArrayMap. meta
                                (inc cnt)
-                               (doto (aclone arr)
-                                 (.push k)
-                                 (.push v))
+                               (aclone-push2 arr k v)
                                nil)
           (with-meta
             (assoc (into cljs.core.PersistentHashMap/EMPTY coll) k v)
@@ -4403,7 +4407,7 @@ reduces them without incurring seq initialization"
 
   (-lookup [tcoll k not-found]
     (if editable?
-      (let [idx (array-map-index-of tcoll k)]
+      (let [idx (array-map-index-of-len tcoll k len)]
         (if (== idx -1)
           not-found
           (aget arr (inc idx))))
@@ -4430,12 +4434,12 @@ reduces them without incurring seq initialization"
   ITransientAssociative
   (-assoc! [tcoll key val]
     (if editable?
-      (let [idx (array-map-index-of tcoll key)]
+      (let [idx (array-map-index-of-len tcoll key len)]
         (if (== idx -1)
           (if (<= (+ len 2) (* 2 cljs.core.PersistentArrayMap/HASHMAP_THRESHOLD))
             (do (set! len (+ len 2))
-                (.push arr key)
-                (.push arr val)
+                (aset arr (- len 2) key)
+                (aset arr (- len 1) val)
                 tcoll)
             (assoc! (array->transient-hash-map len arr) key val))
           (if (identical? val (aget arr (inc idx)))
@@ -4447,11 +4451,10 @@ reduces them without incurring seq initialization"
   ITransientMap
   (-dissoc! [tcoll key]
     (if editable?
-      (let [idx (array-map-index-of tcoll key)]
+      (let [idx (array-map-index-of-len tcoll key len)]
         (when (>= idx 0)
           (aset arr idx (aget arr (- len 2)))
           (aset arr (inc idx) (aget arr (dec len)))
-          (doto arr .pop .pop)
           (set! len (- len 2)))
         tcoll)
       (throw (js/Error. "dissoc! after persistent!")))))
@@ -5217,11 +5220,11 @@ reduces them without incurring seq initialization"
   (-conj! [tcoll o]
     (if edit
       (if (satisfies? IMapEntry o)
-        (.assoc! tcoll (key o) (val o))
+        (-assoc! tcoll (key o) (val o))
         (loop [es (seq o) tcoll tcoll]
           (if-let [e (first es)]
             (recur (next es)
-                   (.assoc! tcoll (key e) (val e)))
+                   (-assoc! tcoll (key e) (val e)))
             tcoll)))
       (throw (js/Error. "conj! after persistent"))))
 
