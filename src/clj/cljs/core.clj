@@ -718,21 +718,24 @@
 (defn dt->et
   ([t specs fields] (dt->et t specs fields false))
   ([t specs fields inline]
-     (core/loop [ret [] s specs]
-       (if (seq s)
-         (recur (-> ret
-                    (conj (first s))
-                    (into
-                      (reduce (core/fn [v [f sigs]]
-                                (conj v (vary-meta (cons f (map #(cons (second %) (nnext %)) sigs))
-                                                   assoc :cljs.analyzer/type t
-                                                         :cljs.analyzer/fields fields
-                                                         :protocol-impl true
-                                                         :protocol-inline inline)))
-                              []
-                              (group-by first (take-while seq? (next s))))))
-                (drop-while seq? (next s)))
-         ret))))
+     (letfn [(inline-arity? [sig] (not (vector? (second sig))))]
+       (core/loop [ret [] s specs]
+         (if (seq s)
+           (recur (-> ret
+                      (conj (first s))
+                      (into
+                       (reduce (core/fn [v [f sigs]]
+                                 (conj v (vary-meta (cons f (mapcat #(if (inline-arity? %)
+                                                                       (drop 1 %)
+                                                                       (list (drop 1 %))) sigs))
+                                                    assoc :cljs.analyzer/type t
+                                                    :cljs.analyzer/fields fields
+                                                    :protocol-impl true
+                                                    :protocol-inline inline)))
+                               []
+                               (group-by first (take-while seq? (next s))))))
+                  (drop-while seq? (next s)))
+           ret)))))
 
 (defn collect-protocols [impls env]
   (->> impls
@@ -753,7 +756,7 @@
 ;         (set! (.-cljs$lang$type ~t) true)
 ;         (set! (.-cljs$lang$ctorPrSeq ~t) (core/fn [this#] (list ~(core/str r))))
 ;         (set! (.-cljs$lang$ctorPrWriter ~t) (core/fn [this# writer# opt#] (-write writer# ~(core/str r))))
-         (extend-type ~t ~@(dt->et impls fields true))
+         (extend-type ~t ~@(dt->et t impls fields true))
          ~t)
       `(do
          (deftype* ~t ~fields ~pmasks)
