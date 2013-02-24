@@ -785,10 +785,6 @@ reduces them without incurring seq initialization"
   [x] (satisfies? IIndexed x))
 
 (deftype IndexedSeq [a i]
-  Object
-  (toString [this]
-    (pr-str this))
-
   ISeqable
   (-seq [this] this)
 
@@ -927,10 +923,6 @@ reduces them without incurring seq initialization"
 (declare with-meta)
 
 (deftype RSeq [ci i meta]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IMeta
   (-meta [coll] meta)
   IWithMeta
@@ -1860,10 +1852,6 @@ reduces them without incurring seq initialization"
 (deftype EmptyList [meta]
   IList
 
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [coll meta] (EmptyList. meta))
 
@@ -1943,10 +1931,6 @@ reduces them without incurring seq initialization"
 
 (deftype Cons [meta first rest ^:mutable __hash]
   IList
-
-  Object
-  (toString [this]
-    (pr-str this))
 
   IWithMeta
   (-with-meta [coll meta] (Cons. meta first rest __hash))
@@ -2077,10 +2061,6 @@ reduces them without incurring seq initialization"
           forced-val)))))
 
 (deftype LazySeq [meta realized x ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [coll meta] (LazySeq. meta realized x __hash))
 
@@ -3035,10 +3015,6 @@ reduces them without incurring seq initialization"
 
 (declare empty-vector)
 (deftype Vector [meta array ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [coll meta] (Vector. meta array __hash))
 
@@ -3219,10 +3195,6 @@ reduces them without incurring seq initialization"
          pr-sequential pr-sequential-writer pr-writer chunked-seq)
 
 (deftype PersistentVector [meta cnt shift root tail ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [coll meta] (PersistentVector. meta cnt shift root tail __hash))
 
@@ -3453,10 +3425,6 @@ reduces them without incurring seq initialization"
 (declare build-subvec)
 
 (deftype Subvec [meta v start end ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [coll meta] (build-subvec meta v start end __hash))
 
@@ -3743,10 +3711,6 @@ reduces them without incurring seq initialization"
 ;;; PersistentQueue ;;;
 
 (deftype PersistentQueueSeq [meta front rear ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [coll meta] (PersistentQueueSeq. meta front rear __hash))
 
@@ -3780,10 +3744,6 @@ reduces them without incurring seq initialization"
 
 (declare empty-persistent-queue)
 (deftype PersistentQueue [meta count front rear ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [coll meta] (PersistentQueue. meta count front rear __hash))
 
@@ -3898,10 +3858,6 @@ reduces them without incurring seq initialization"
     new-obj))
 
 #_(deftype ObjMap [meta keys strobj update-count ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [coll meta] (ObjMap. meta keys strobj update-count __hash))
 
@@ -4015,10 +3971,6 @@ reduces them without incurring seq initialization"
 ; vals.
 (declare empty-hash-map)
 #_(deftype HashMap [meta count hashobj ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [coll meta] (HashMap. meta count hashobj __hash))
 
@@ -4261,10 +4213,6 @@ reduces them without incurring seq initialization"
 (declare TransientArrayMap)
 
 (deftype PersistentArrayMap [meta cnt arr ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [coll meta] (PersistentArrayMap. meta cnt arr __hash))
 
@@ -4967,10 +4915,6 @@ reduces them without incurring seq initialization"
                (-inode-assoc! edit shift key2hash key2 val2 added-leaf?)))))))
 
 (deftype NodeSeq [meta nodes i s ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IMeta
   (-meta [coll] meta)
 
@@ -5028,10 +4972,6 @@ reduces them without incurring seq initialization"
        (NodeSeq. nil nodes i s nil))))
 
 (deftype ArrayNodeSeq [meta nodes i s ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IMeta
   (-meta [coll] meta)
 
@@ -5079,10 +5019,6 @@ reduces them without incurring seq initialization"
        (ArrayNodeSeq. meta nodes i s nil))))
 
 (deftype PersistentHashMap [meta cnt root ^boolean has-nil? nil-val ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [coll meta] (PersistentHashMap. meta cnt root has-nil? nil-val __hash))
 
@@ -5292,10 +5228,6 @@ reduces them without incurring seq initialization"
       stack)))
 
 (deftype PersistentTreeMapSeq [meta stack ^boolean ascending? cnt ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   ISeqable
   (-seq [this] this)
 
@@ -5443,10 +5375,6 @@ reduces them without incurring seq initialization"
               init)))))))
 
 (deftype BlackNode [key val left right ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IRedBlackNode
   (-add-left [node ins]
     (-balance-left ins node))
@@ -5550,10 +5478,6 @@ reduces them without incurring seq initialization"
     (-lookup node k not-found)))
 
 (deftype RedNode [key val left right ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IRedBlackNode
   (-add-left [node ins]
     (RedNode. key val ins right nil))
@@ -5811,10 +5735,6 @@ reduces them without incurring seq initialization"
                 :else     (recur (.-right t)))))))
 
 (deftype PersistentTreeMap [comp tree cnt meta ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [coll meta] (PersistentTreeMap. comp tree cnt meta __hash))
 
@@ -6035,10 +5955,6 @@ reduces them without incurring seq initialization"
 (declare TransientHashSet)
 
 (deftype PersistentHashSet [meta hash-map ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [coll meta] (PersistentHashSet. meta hash-map __hash))
 
@@ -6145,10 +6061,6 @@ reduces them without incurring seq initialization"
       k)))
 
 (deftype PersistentTreeSet [meta tree-map ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [coll meta] (PersistentTreeSet. meta tree-map __hash))
 
@@ -6394,10 +6306,6 @@ reduces them without incurring seq initialization"
                    (if ((mk-bound-fn sc end-test end-key) e) s (next s))))))
 
 (deftype Range [meta start end step ^:mutable __hash]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IWithMeta
   (-with-meta [rng meta] (Range. meta start end step __hash))
 
@@ -7734,10 +7642,6 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
 ;; UUID
 
 (deftype UUID [uuid]
-  Object
-  (toString [this]
-    (pr-str this))
-
   IEquiv
   (-equiv [_ other]
     (and (instance? UUID other) (identical? uuid (.-uuid other))))
