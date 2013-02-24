@@ -96,27 +96,39 @@
   ([type aseq]
      (apply array aseq)))
 
+(defn char?
+  "Returns true if x is a char, false otherwise."
+  [x] (scm* [x] (char? x)))
+
+(defn type [x]
+  (case (cljs.core/scm-type-idx x)
+    0 Number ;Fixnum
+    3 Pair
+    2 (case x
+        (true false) Boolean
+        nil Nil ;we hijack #!void to map to Clojure's nil
+        (scm* [x] ()) Null            ;raw scheme null = empty list.
+        (cond
+          (char? x) Char
+          :else (throw "Can't discern special type")))
+    1 (case (cljs.core/scm-subtype-idx x)
+        0 Array ; raw scheme vector
+        (2 3 30 31) Number            ;Rational ;Complex ;Flonum, ;Bignum
+        4 (scm-unsafe-vector-ref x 0)
+        8 Symbol
+        9 Keyword
+        14 Procedure
+        18 (get foreign-type-table (first (scm* [x] (foreign-tags x)))) ;Foreign ptr.
+        19 String
+        (20 21 22 23 24 25 26 27 28 29) Array ;Various numerically-typed scheme vectors
+        )))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; core protocols ;;;;;;;;;;;;;
 (scm* {} (define cljs.core/protocol-impls (make-table)))
 (scm* {} (define cljs.core/foreign-tags (make-table)))
 ;all proto defns need to be able to throw errors with str msgs- but errors themselves can implement protocols
 ;(scm* {} (define make-cljs.core/Error))
 ;(declare str)
-(defn record-ref [obj field]
-  (let [field-params (pair (scm-unsafe-vector-ref (type obj) 5))
-        search (scm* [field field-params] (memq field field-params))]
-    (if search
-      (let [slot (inc (/ (- (count field-params) (count search)) 3))]
-        (scm-unsafe-vector-ref obj slot))
-      (throw (Error. (str "Field not defined: " field " on " field-params))))))
-
-(defn record-set! [obj field val]
-  (let [field-params (pair (scm-unsafe-vector-ref (type obj) 5))
-        search (scm* [field field-params] (memq field field-params))]
-    (if search
-      (let [slot (inc (/ (- (count field-params) (count search)) 3))]
-        (scm-unsafe-vector-set! obj slot val))
-      (throw (Error. (str "Field not defined: " field " on " field-params))))))
 
 (defprotocol Fn
   "Marker protocol")
@@ -307,6 +319,22 @@
 (defn pair [coll]
   (-pair coll))
 
+(defn record-ref [obj field]
+  (let [field-params (pair (scm-unsafe-vector-ref (type obj) 5))
+        search (scm* [field field-params] (memq field field-params))]
+    (if search
+      (let [slot (inc (/ (- (count field-params) (count search)) 3))]
+        (scm-unsafe-vector-ref obj slot))
+      (throw (Error. (str "Field not defined: " field " on " field-params))))))
+
+(defn record-set! [obj field val]
+  (let [field-params (pair (scm-unsafe-vector-ref (type obj) 5))
+        search (scm* [field field-params] (memq field field-params))]
+    (if search
+      (let [slot (inc (/ (- (count field-params) (count search)) 3))]
+        (scm-unsafe-vector-set! obj slot val))
+      (throw (Error. (str "Field not defined: " field " on " field-params))))))
+
 ;;;;;;;;;;;;;;;;;;; fundamentals ;;;;;;;;;;;;;;;
 ;basic Scheme types-- do not instantiate.
 (deftype Number [])
@@ -378,35 +406,8 @@
          (= y (first more)))
        false)))
 
-(defn char?
-  "Returns true if x is a char, false otherwise."
-  [x] (scm* [x] (char? x)))
-
 (defn ^boolean instance? [t o]
   (identical? t (type o)))
-
-(defn type [x]
-  (case (cljs.core/scm-type-idx x)
-    0 Number ;Fixnum
-    3 Pair
-    2 (case x
-        (true false) Boolean
-        nil Nil ;we hijack #!void to map to Clojure's nil
-        (scm* [x] ()) Null            ;raw scheme null = empty list.
-        (cond
-          (char? x) Char
-          :else (throw "Can't discern special type")))
-    1 (case (cljs.core/scm-subtype-idx x)
-        0 Array ; raw scheme vector
-        (2 3 30 31) Number            ;Rational ;Complex ;Flonum, ;Bignum
-        4 (scm-unsafe-vector-ref x 0)
-        8 Symbol
-        9 Keyword
-        14 Procedure
-        18 (get foreign-type-table (first (scm* [x] (foreign-tags x)))) ;Foreign ptr.
-        19 String
-        (20 21 22 23 24 25 26 27 28 29) Array ;Various numerically-typed scheme vectors
-        )))
 
 ;hijack existing scheme structure types
 (def Table (type {}))
