@@ -363,21 +363,32 @@
         (println (str "goog.exportSymbol('" export "', " name ");")))))
 
 (defn schemify-method-arglist
-  "analyzed method [a b & r] -> [a b . r] -- as symbols not as a string.
-or [& r] -> r in the case of no fixed args."
+  "analyzed method [a b & r] -> \"(a b . r)\" as a string.
+   or [& r] -> \"r\" in the case of no fixed args.
+   suitable for lambda-args, not define args."
   [{:keys [variadic max-fixed-arity params]}]
-  (map #(if (= (:name %) '_) (assoc % :name (gensym "_")) %)
-       (if variadic
-         (if (> max-fixed-arity 0)
-           (concat (take max-fixed-arity params)
-                   ['. (last params)])
-           params)
-         params)))
+  (let [params (map #(if (= (:name %) '_) (assoc % :name (gensym "_")) %) params)]
+    (if variadic
+      (if (> max-fixed-arity 0)
+        (apply str (concat ["("] (space-sep (map munge (concat (take max-fixed-arity params)
+                                                               ['. (last params)])))[")"]))
+        (str (munge (first params))))
+      (apply str (concat ["("] (space-sep (map munge params)) [")"])))))
+
+(defn schemify-define-arglist
+  "suitable for define-style forms, returns args without parens,
+   and an inital dot for 0-fixed-arity variadics. Returns the string."
+  [{:keys [variadic max-fixed-arity params]}]
+   (let [params (map #(if (= (:name %) '_) (assoc % :name (gensym "_")) %) params)]
+    (if variadic
+      (apply str (space-sep (map munge (concat (take max-fixed-arity params)
+                                               ['. (last params)]))))
+      (apply str (space-sep (map munge params))))))
 
 (defn emit-fn-method
   [{:keys [gthis name variadic params expr env recurs max-fixed-arity] :as f}]
   (letfn [(lambda-str []
-            (emits "(lambda ("(space-sep (map munge (schemify-method-arglist f))) ") "
+            (emits "(lambda " (schemify-method-arglist f) " "
                    (when variadic (str "(let (("(munge (last params)) " (cljs.core/-seq " (munge (last params)) "))) "))
                    expr
                    (when variadic ")")
@@ -478,6 +489,9 @@ or [& r] -> r in the case of no fixed args."
         (emit-fn-method (assoc (first methods) :name (or name (and (:recurs (first methods)) recur-name))))
         (throw (Exception. "Expected multiarity to be erased in macros."))))))
 
+(defn- void-dontcare [s]
+  (get {'_ "#!void"} s s))
+
 (defmethod emit :extend
   [{:keys [etype impls base-type?]}]
   (doall
@@ -490,18 +504,16 @@ or [& r] -> r in the case of no fixed args."
        (doall
         (for [[meth-name meth-impl] meth-map]
           (let [meth (first (:methods meth-impl))
-                fn-scm-args (map munge (schemify-method-arglist meth)) ;FIXME may not be a seq.
-                rest? (some #{'.} fn-scm-args)
+                rest? (:varidic meth)
                 impl-name (symbol (str (munge (:name (:info meth-name)))
                                        "---" (dispatch-munge (:name etype))))]
             (when (> (count (:methods meth-impl)) 1) (throw (Exception. "should have compiled variadic defn away.")))
-            (emits "(define (" (space-sep (cons impl-name 
-                                    fn-scm-args)) ") ")
+            (emits "(define (" impl-name" "(schemify-define-arglist meth)") ")
             (if rest?
                (emits "(apply " meth-impl " (append (list "
-                    (space-sep (butlast (map munge (:params meth)))) ") "
-                    (munge (last (:params meth))) "))")
-               (emits "(" meth-impl " " (space-sep (map munge (:params meth))) ")"))
+                    (space-sep (butlast (map (comp void-dontcare munge) (:params meth)))) ") "
+                    (void-dontcare (munge (last (:params meth)))) "))")
+               (emits "(" meth-impl " " (space-sep (map (comp void-dontcare munge) (:params meth))) ")"))
 
             (emits ")")
             (when-not base-type?
