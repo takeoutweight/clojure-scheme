@@ -1133,16 +1133,16 @@ reduces them without incurring seq initialization"
          ret))))
 
 ;; Simple caching of string hashcode
-(def string-hash-cache (js-obj))
-(def string-hash-cache-count 0)
+#_(def string-hash-cache (js-obj))
+#_(def string-hash-cache-count 0)
 
-(defn add-to-string-hash-cache [k]
+#_(defn add-to-string-hash-cache [k]
   (let [h (goog.string/hashCode k)]
     (aset string-hash-cache k h)
     (set! string-hash-cache-count (inc string-hash-cache-count))
     h))
 
-(defn check-string-hash-cache [k]
+#_(defn check-string-hash-cache [k]
   (when (> string-hash-cache-count 255)
     (set! string-hash-cache (js-obj))
     (set! string-hash-cache-count 0))
@@ -1154,7 +1154,8 @@ reduces them without incurring seq initialization"
 (defn hash
   ([o] (hash o true))
   ([o ^boolean check-cache]
-     (if (and ^boolean (goog/isString o) check-cache)
+     (-hash o)
+     #_(if (and ^boolean (goog/isString o) check-cache)
        (check-string-hash-cache o)
        (-hash o))))
 
