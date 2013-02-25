@@ -1206,10 +1206,10 @@ reduces them without incurring seq initialization"
   [x] (satisfies? IChunkedSeq x))
 
 ;;;;;;;;;;;;;;;;;;;; js primitives ;;;;;;;;;;;;
-#_(defn js-obj
+(defn js-obj
   ([]
-     (js* "{}"))
-  ([& keyvals]
+     (scm* {} (make-table)))
+  #_([& keyvals]
      (apply gobject/create keyvals)))
 
 #_(defn js-keys [obj]

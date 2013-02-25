@@ -401,7 +401,7 @@
 
      (merge {:env env :variadic variadic :params (map munge params) :max-fixed-arity fixed-arity :gthis gthis :recurs @(:flag recur-frame)} block)))))
 
-(defn- analyze-fn-method [env locals form type]
+(defn- analyze-fn-method [env locals form type protocol-inline-head]
   (let [param-names (first form)
         variadic (boolean (some '#{&} param-names))
         param-names (vec (remove '#{&} param-names))
@@ -414,6 +414,7 @@
                                 [locals []] param-names)
         fixed-arity (count (if variadic (butlast params) params))
         recur-frame {:params params :flag (atom nil)}
+        env (if protocol-inline-head (assoc env :this-name (first (first form))) env)
         expr (binding [*recur-frames* (cons recur-frame *recur-frames*)]
                (analyze (assoc env :context :return :locals locals) `(do ~@body)))]
     {:env env :variadic variadic :params params :max-fixed-arity fixed-arity
@@ -466,7 +467,7 @@
         menv (merge menv
                {:protocol-impl protocol-impl
                 :protocol-inline protocol-inline})
-        methods (map #(analyze-fn-method menv locals % type) meths)
+        methods (map #(analyze-fn-method menv locals % type protocol-inline) meths)
         max-fixed-arity (apply max (map :max-fixed-arity methods))
         variadic (boolean (some :variadic methods))
         locals (if name
@@ -479,7 +480,7 @@
         methods (if name
                   ;; a second pass with knowledge of our function-ness/arity
                   ;; lets us optimize self calls
-                  (no-warn (doall (map #(analyze-fn-method menv locals % type) meths)))
+                  (no-warn (doall (map #(analyze-fn-method menv locals % type protocol-inline) meths)))
                   methods)]
     ;;todo - validate unique arities, at most one variadic, variadic takes max required args
     {:env env :op :fn :form form :name name :methods methods :variadic variadic

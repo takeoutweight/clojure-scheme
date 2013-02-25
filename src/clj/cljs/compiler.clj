@@ -59,9 +59,9 @@
 (defn munge
   ([s] (munge s js-reserved))
   ([s reserved]
-    (if (map? s)
+     (if (map? s)
+       (:name s)
       ; Unshadowing
-      (:name s)
       #_(let [{:keys [name field] :as info} s
             depth (loop [d 0, {:keys [shadow]} info]
                     (cond
@@ -73,7 +73,7 @@
                                      renamed renamed
                                      :else name)
                                reserved)]
-        (if (or field (zero? depth))
+        #_(if (or field (zero? depth))
           munged-name
           (symbol (str munged-name "__$" depth))))
       ; String munging
@@ -257,7 +257,9 @@
             (name n)
             info)]
     (when-not (= :statement (:context env))
-      (emits (munge n)))))
+      (if (:field info)
+        (emit (ana/analyze env `(. ~(:this-name env) ~(symbol (str "-" (munge n))))))
+        (emits (munge n))))))
 
 (defmethod emit :meta
   [{:keys [expr meta env]}]
@@ -681,9 +683,12 @@
 
 (defmethod emit :set!
   [{:keys [target val env]}]
-  (if (= :dot (:op target))
+  (cond
+    (and (= :var (:op target)) (:field (:info target)))
+    (emits "(cljs.core/record-set! " (:this-name env) " '" (:name (:info target)) " " val")")
+    (= :dot (:op target))
     (emits "(cljs.core/record-set! " (:target target) " '" (:field target) " " val")")
-    (emits "(set! " target " " val ")")))
+    :else (emits "(set! " target " " val ")")))
 
 (defmethod emit :ns
   [{:keys [name requires uses requires-macros env]}]

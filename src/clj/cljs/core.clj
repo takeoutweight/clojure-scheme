@@ -570,8 +570,8 @@
                       specs)))]
     [p
      (apply merge-with (fn [old new] (concat old (drop 2 new)))
-            (map (fn [[f & r]] {(-> f name keyword)
-                              (cons 'fn (cons f (hint r)))})
+            (map (fn [[f & r :as fr]] {(-> f name keyword)
+                              (with-meta (cons 'fn (cons f (hint r))) (meta fr))})
                  fs))
      #_(zipmap (map #(-> % first name keyword) fs)
                (map #(cons 'fn (hint (drop 1 %))) fs))]))
@@ -579,7 +579,7 @@
 (defn- emit-extend-type [c specs]
   (core/let [impls (parse-impls specs)]
     (apply list 'extend c
-           (mapcat (partial emit-hinted-impl c) impls))))
+                        (mapcat (partial emit-hinted-impl c) impls))))
 
 (defmacro extend-type 
   "A macro that expands into an extend call. Useful when you are
