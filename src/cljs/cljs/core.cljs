@@ -3209,12 +3209,12 @@ reduces them without incurring seq initialization"
   (-pop [coll]
     (cond
      (zero? cnt) (throw (Error. "Can't pop empty vector"))
-     (== 1 cnt) (-with-meta cljs.core.PersistentVector/EMPTY meta)
+     (== 1 cnt) (-with-meta PersistentVector-EMPTY meta)
      (< 1 (- cnt (tail-off coll)))
       (PersistentVector. meta (dec cnt) shift root (slice-pop tail) nil)
       :else (let [new-tail (array-for coll (- cnt 2))
                   nr (pop-tail coll shift root)
-                  new-root (if (nil? nr) cljs.core.PersistentVector/EMPTY_NODE nr)
+                  new-root (if (nil? nr) PersistentVector-EMPTY_NODE nr)
                   cnt-1 (dec cnt)]
               (if (and (< 5 shift) (nil? (pv-aget new-root 1)))
                 (PersistentVector. meta cnt-1 (- shift 5) (pv-aget new-root 0) new-tail nil)
@@ -3330,25 +3330,25 @@ reduces them without incurring seq initialization"
       (RSeq. coll (dec cnt) nil)
       ())))
 
-(set! cljs.core.PersistentVector/EMPTY_NODE (pv-fresh-node nil))
-(set! cljs.core.PersistentVector/EMPTY (PersistentVector. nil 0 5 cljs.core.PersistentVector/EMPTY_NODE (array) 0))
-(set! cljs.core.PersistentVector/fromArray
-      (fn [xs no-clone]
-        (let [l (alength xs)
-              xs (if (identical? no-clone true) xs (aclone xs))]
-          (if (< l 32)
-            (PersistentVector. nil l 5 cljs.core.PersistentVector/EMPTY_NODE xs nil)
-            (let [node (slice xs 0 32)
-                  v (PersistentVector. nil 32 5 cljs.core.PersistentVector/EMPTY_NODE node nil)]
-             (loop [i 32 out (-as-transient v)]
-               (if (< i l)
-                 (recur (inc i) (conj! out (aget xs i)))
-                 (persistent! out))))))))
+(def PersistentVector-EMPTY_NODE (pv-fresh-node nil))
+(def PersistentVector-EMPTY (PersistentVector. nil 0 5 PersistentVector-EMPTY_NODE (array) 0))
+(defn PersistentVector-fromArray
+  [xis no-clone]
+  (let [l (alength xs)
+        xs (if (identical? no-clone true) xs (aclone xs))]
+    (if (< l 32)
+      (PersistentVector. nil l 5 PersistentVector-EMPTY_NODE xs nil)
+      (let [node (slice xs 0 32)
+            v (PersistentVector. nil 32 5 PersistentVector-EMPTY_NODE node nil)]
+        (loop [i 32 out (-as-transient v)]
+          (if (< i l)
+            (recur (inc i) (conj! out (aget xs i)))
+            (persistent! out)))))))
 
 (defn vec [coll]
   (-persistent!
    (reduce -conj!
-           (-as-transient cljs.core.PersistentVector/EMPTY)
+           (-as-transient PersistentVector-EMPTY)
            coll)))
 
 (defn vector [& args] (vec args))
@@ -3393,7 +3393,7 @@ reduces them without incurring seq initialization"
 
   IEmptyableCollection
   (-empty [coll]
-    (with-meta cljs.core.PersistentVector/EMPTY meta))
+    (with-meta PersistentVector-EMPTY meta))
 
   IChunkedSeq
   (-chunked-first [coll]
@@ -3840,7 +3840,7 @@ reduces them without incurring seq initialization"
         so  (.-strobj m)
         mm  (meta m)]
     (loop [i   0
-           out (transient cljs.core.PersistentHashMap/EMPTY)]
+           out (transient PersistentHashMap-EMPTY)]
       (if (< i len)
         (let [k (aget ks i)]
           (recur (inc i) (assoc! out k (aget so k))))
@@ -4227,7 +4227,7 @@ reduces them without incurring seq initialization"
       (reduce -conj coll entry)))
 
   IEmptyableCollection
-  (-empty [coll] (-with-meta cljs.core.PersistentArrayMap/EMPTY meta))
+  (-empty [coll] (-with-meta PersistentArrayMap-EMPTY meta))
 
   IEquiv
   (-equiv [coll other] (equiv-map coll other))
@@ -4265,13 +4265,13 @@ reduces them without incurring seq initialization"
     (let [idx (array-map-index-of coll k)]
       (cond
         (== idx -1)
-        (if (< cnt cljs.core.PersistentArrayMap/HASHMAP_THRESHOLD)
+        (if (< cnt PersistentArrayMap-HASHMAP_THRESHOLD)
           (PersistentArrayMap. meta
                                (inc cnt)
                                (aclone-push2 arr k v)
                                nil)
           (with-meta
-            (assoc (into cljs.core.PersistentHashMap/EMPTY coll) k v)
+            (assoc (into PersistentHashMap-EMPTY coll) k v)
             meta))
 
         (identical? v (aget arr (inc idx)))
@@ -4327,18 +4327,18 @@ reduces them without incurring seq initialization"
   (-as-transient [coll]
     (TransientArrayMap. (js-obj) (alength arr) (aclone arr))))
 
-(set! cljs.core.PersistentArrayMap/EMPTY (PersistentArrayMap. nil 0 (array) nil))
+(def PersistentArrayMap-EMPTY (PersistentArrayMap. nil 0 (array) nil))
 
-(set! cljs.core.PersistentArrayMap/HASHMAP_THRESHOLD 16)
+(def PersistentArrayMap-HASHMAP_THRESHOLD 16)
 
-(set! cljs.core.PersistentArrayMap/fromArrays
-      (fn [ks vs]
-        (let [len (count ks)]
-          (loop [i   0
-                 out (transient cljs.core.PersistentArrayMap/EMPTY)]
-            (if (< i len)
-              (recur (inc i) (assoc! out (aget ks i) (aget vs i)))
-              (persistent! out))))))
+(defn PersistentArrayMap-fromArrays
+  [ks vs]
+  (let [len (count ks)]
+    (loop [i   0
+           out (transient PersistentArrayMap-EMPTY)]
+      (if (< i len)
+        (recur (inc i) (assoc! out (aget ks i) (aget vs i)))
+        (persistent! out)))))
 
 (declare array->transient-hash-map)
 
@@ -4386,7 +4386,7 @@ reduces them without incurring seq initialization"
     (if editable?
       (let [idx (array-map-index-of-len tcoll key len)]
         (if (== idx -1)
-          (if (<= (+ len 2) (* 2 cljs.core.PersistentArrayMap/HASHMAP_THRESHOLD))
+          (if (<= (+ len 2) (* 2 PersistentArrayMap-HASHMAP_THRESHOLD))
             (do (set! len (+ len 2))
                 (aset arr (- len 2) key)
                 (aset arr (- len 1) val)
@@ -4492,14 +4492,14 @@ reduces them without incurring seq initialization"
           (if (>= n 16)
             (let [nodes (make-array 32)
                   jdx   (mask hash shift)]
-              (aset nodes jdx (-inode-assoc cljs.core.BitmapIndexedNode/EMPTY (+ shift 5) hash key val added-leaf?))
+              (aset nodes jdx (-inode-assoc BitmapIndexedNode-EMPTY (+ shift 5) hash key val added-leaf?))
               (loop [i 0 j 0]
                 (if (< i 32)
                   (if (zero? (bit-and (bit-shift-right-zero-fill bitmap i) 1))
                     (recur (inc i) j)
                     (do (aset nodes i
                               (if-not (nil? (aget arr j))
-                                (-inode-assoc cljs.core.BitmapIndexedNode/EMPTY
+                                (-inode-assoc BitmapIndexedNode-EMPTY
                                               (+ shift 5) (cljs.core/hash (aget arr j)) (aget arr j) (aget arr (inc j)) added-leaf?)
                                 (aget arr (inc j))))
                         (recur (inc i) (+ j 2))))))
@@ -4601,14 +4601,14 @@ reduces them without incurring seq initialization"
             (>= n 16)
             (let [nodes (make-array 32)
                   jdx   (mask hash shift)]
-              (aset nodes jdx (-inode-assoc! cljs.core.BitmapIndexedNode/EMPTY edit (+ shift 5) hash key val added-leaf?))
+              (aset nodes jdx (-inode-assoc! BitmapIndexedNode-EMPTY edit (+ shift 5) hash key val added-leaf?))
               (loop [i 0 j 0]
                 (if (< i 32)
                   (if (zero? (bit-and (bit-shift-right-zero-fill bitmap i) 1))
                     (recur (inc i) j)
                     (do (aset nodes i
                               (if-not (nil? (aget arr j))
-                                (-inode-assoc! cljs.core.BitmapIndexedNode/EMPTY
+                                (-inode-assoc! BitmapIndexedNode-EMPTY
                                                edit (+ shift 5) (cljs.core/hash (aget arr j)) (aget arr j) (aget arr (inc j)) added-leaf?)
                                 (aget arr (inc j))))
                         (recur (inc i) (+ j 2))))))
@@ -4678,7 +4678,7 @@ reduces them without incurring seq initialization"
   (-kv-reduce [inode f init]
     (inode-kv-reduce arr f init)))
 
-(set! cljs.core.BitmapIndexedNode/EMPTY (BitmapIndexedNode. nil 0 (make-array 0)))
+(def BitmapIndexedNode-EMPTY (BitmapIndexedNode. nil 0 (make-array 0)))
 
 (defn- pack-array-node [array-node edit idx]
   (let [arr     (.-arr array-node)
@@ -4699,7 +4699,7 @@ reduces them without incurring seq initialization"
     (let [idx  (mask hash shift)
           node (aget arr idx)]
       (if (nil? node)
-        (ArrayNode. nil (inc cnt) (clone-and-set arr idx (-inode-assoc cljs.core.BitmapIndexedNode/EMPTY (+ shift 5) hash key val added-leaf?)))
+        (ArrayNode. nil (inc cnt) (clone-and-set arr idx (-inode-assoc BitmapIndexedNode-EMPTY (+ shift 5) hash key val added-leaf?)))
         (let [n (-inode-assoc node (+ shift 5) hash key val added-leaf?)]
           (if (identical? n node)
             inode
@@ -4749,7 +4749,7 @@ reduces them without incurring seq initialization"
     (let [idx  (mask hash shift)
           node (aget arr idx)]
       (if (nil? node)
-        (let [editable (edit-and-set inode edit idx (-inode-assoc! cljs.core.BitmapIndexedNode/EMPTY edit (+ shift 5) hash key val added-leaf?))]
+        (let [editable (edit-and-set inode edit idx (-inode-assoc! BitmapIndexedNode-EMPTY edit (+ shift 5) hash key val added-leaf?))]
           (set! (.-cnt editable) (inc (.-cnt editable)))
           editable)
         (let [n (-inode-assoc! node edit (+ shift 5) hash key val added-leaf?)]
@@ -4903,7 +4903,7 @@ reduces them without incurring seq initialization"
        (if (== key1hash key2hash)
          (HashCollisionNode. nil key1hash 2 (array key1 val1 key2 val2))
          (let [added-leaf? (Box. false)]
-           (-> cljs.core.BitmapIndexedNode/EMPTY
+           (-> BitmapIndexedNode-EMPTY
                (-inode-assoc shift key1hash key1 val1 added-leaf?)
                (-inode-assoc shift key2hash key2 val2 added-leaf?))))))
   ([edit shift key1 val1 key2hash key2 val2]
@@ -4911,7 +4911,7 @@ reduces them without incurring seq initialization"
        (if (== key1hash key2hash)
          (HashCollisionNode. nil key1hash 2 (array key1 val1 key2 val2))
          (let [added-leaf? (Box. false)]
-           (-> cljs.core.BitmapIndexedNode/EMPTY
+           (-> BitmapIndexedNode-EMPTY
                (-inode-assoc! edit shift key1hash key1 val1 added-leaf?)
                (-inode-assoc! edit shift key2hash key2 val2 added-leaf?)))))))
 
@@ -5033,7 +5033,7 @@ reduces them without incurring seq initialization"
       (reduce -conj coll entry)))
 
   IEmptyableCollection
-  (-empty [coll] (-with-meta cljs.core.PersistentHashMap/EMPTY meta))
+  (-empty [coll] (-with-meta PersistentHashMap-EMPTY meta))
 
   IEquiv
   (-equiv [coll other] (equiv-map coll other))
@@ -5071,7 +5071,7 @@ reduces them without incurring seq initialization"
         (PersistentHashMap. meta (if has-nil? cnt (inc cnt)) root true v nil))
       (let [added-leaf? (Box. false)
             new-root    (-> (if (nil? root)
-                              cljs.core.BitmapIndexedNode/EMPTY
+                              BitmapIndexedNode-EMPTY
                               root)
                             (-inode-assoc 0 (hash k) k v added-leaf?))]
         (if (identical? new-root root)
@@ -5115,15 +5115,15 @@ reduces them without incurring seq initialization"
   (-as-transient [coll]
     (TransientHashMap. (js-obj) root cnt has-nil? nil-val)))
 
-(set! cljs.core.PersistentHashMap/EMPTY (PersistentHashMap. nil 0 nil false nil 0))
+(def PersistentHashMap-EMPTY (PersistentHashMap. nil 0 nil false nil 0))
 
-(set! cljs.core.PersistentHashMap/fromArrays
-      (fn [ks vs]
-        (let [len (alength ks)]
-          (loop [i 0 out (transient cljs.core.PersistentHashMap/EMPTY)]
-            (if (< i len)
-              (recur (inc i) (assoc! out (aget ks i) (aget vs i)))
-              (persistent! out))))))
+(defn PersistentHashMap-fromArrays
+  [ks vs]
+  (let [len (alength ks)]
+    (loop [i 0 out (transient PersistentHashMap-EMPTY)]
+      (if (< i len)
+        (recur (inc i) (assoc! out (aget ks i) (aget vs i)))
+        (persistent! out)))))
 
 (deftype TransientHashMap [^:mutable ^boolean edit
                            ^:mutable root
@@ -5186,7 +5186,7 @@ reduces them without incurring seq initialization"
             tcoll)
         (let [added-leaf? (Box. false)
               node        (-> (if (nil? root)
-                                cljs.core.BitmapIndexedNode/EMPTY
+                                BitmapIndexedNode-EMPTY
                                 root)
                               (-inode-assoc! edit 0 (hash k) k v added-leaf?))]
           (if (identical? node root)
@@ -5751,7 +5751,7 @@ reduces them without incurring seq initialization"
               entry)))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.PersistentTreeMap/EMPTY meta))
+  (-empty [coll] (with-meta PersistentTreeMap-EMPTY meta))
 
   IEquiv
   (-equiv [coll other] (equiv-map coll other))
@@ -5844,13 +5844,13 @@ reduces them without incurring seq initialization"
 
   (-comparator [coll] comp))
 
-(set! cljs.core.PersistentTreeMap/EMPTY (PersistentTreeMap. compare nil 0 nil 0))
+(def PersistentTreeMap-EMPTY (PersistentTreeMap. compare nil 0 nil 0))
 
 (defn hash-map
   "keyval => key val
   Returns a new hash map with supplied mappings."
   [& keyvals]
-  (loop [in (seq keyvals), out (transient cljs.core.PersistentHashMap/EMPTY)]
+  (loop [in (seq keyvals), out (transient PersistentHashMap-EMPTY)]
     (if in
       (recur (nnext in) (assoc! out (first in) (second in)))
       (persistent! out))))
@@ -5878,7 +5878,7 @@ reduces them without incurring seq initialization"
   "keyval => key val
   Returns a new sorted map with supplied mappings."
   ([& keyvals]
-     (loop [in (seq keyvals) out cljs.core.PersistentTreeMap/EMPTY]
+     (loop [in (seq keyvals) out PersistentTreeMap-EMPTY]
        (if in
          (recur (nnext in) (assoc out (first in) (second in)))
          out))))
@@ -5967,7 +5967,7 @@ reduces them without incurring seq initialization"
     (PersistentHashSet. meta (assoc hash-map o nil) nil))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.PersistentHashSet/EMPTY meta))
+  (-empty [coll] (with-meta PersistentHashSet-EMPTY meta))
 
   IEquiv
   (-equiv [coll other]
@@ -6013,16 +6013,16 @@ reduces them without incurring seq initialization"
   IEditableCollection
   (-as-transient [coll] (TransientHashSet. (transient hash-map))))
 
-(set! cljs.core.PersistentHashSet/EMPTY (PersistentHashSet. nil (hash-map) 0))
+(def PersistentHashSet-EMPTY (PersistentHashSet. nil (hash-map) 0))
 
-(set! cljs.core.PersistentHashSet/fromArray
-      (fn [items]
-        (let [len (count items)]
-          (loop [i   0
-                 out (transient cljs.core.PersistentHashSet/EMPTY)]
-            (if (< i len)
-              (recur (inc i) (conj! out (aget items i)))
-              (persistent! out))))))
+(defn PersistentHashSet-fromArray
+  [items]
+  (let [len (count items)]
+    (loop [i   0
+           out (transient PersistentHashSet-EMPTY)]
+      (if (< i len)
+        (recur (inc i) (conj! out (aget items i)))
+        (persistent! out)))))
 
 (deftype TransientHashSet [^:mutable transient-map]
   ITransientCollection
@@ -6073,7 +6073,7 @@ reduces them without incurring seq initialization"
     (PersistentTreeSet. meta (assoc tree-map o nil) nil))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.PersistentTreeSet/EMPTY meta))
+  (-empty [coll] (with-meta PersistentTreeSet-EMPTY meta))
 
   IEquiv
   (-equiv [coll other]
@@ -6128,13 +6128,13 @@ reduces them without incurring seq initialization"
 
 (def empty-set (Set. nil (scm* [] (make-table))))
 
-(set! cljs.core.PersistentTreeSet/EMPTY (PersistentTreeSet. nil (sorted-map) 0))
+(def PersistentTreeSet-EMPTY (PersistentTreeSet. nil (sorted-map) 0))
 
 (defn hash-set
-  ([] cljs.core.PersistentHashSet/EMPTY)
+  ([] PersistentHashSet-EMPTY)
   ([& keys]
     (loop [in (seq keys)
-           out (transient cljs.core.PersistentHashSet/EMPTY)]
+           out (transient PersistentHashSet-EMPTY)]
       (if (seq in)
         (recur (next in) (conj! out (first in)))
         (persistent! out)))))
@@ -6147,7 +6147,7 @@ reduces them without incurring seq initialization"
 (defn sorted-set
   "Returns a new sorted set with supplied keys."
   ([& keys]
-   (reduce -conj cljs.core.PersistentTreeSet/EMPTY keys)))
+   (reduce -conj PersistentTreeSet-EMPTY keys)))
 
 (defn sorted-set-by
   "Returns a new sorted set with supplied keys, using the supplied comparator."
@@ -7664,8 +7664,8 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
 (deftype ExceptionInfo [message data cause])
 
 ;;; ExceptionInfo is a special case, do not emulate this
-(set! cljs.core.ExceptionInfo/prototype (js/Error.))
-(set! (.-constructor cljs.core.ExceptionInfo/prototype) ExceptionInfo)
+#_(set! cljs.core.ExceptionInfo/prototype (js/Error.))
+#_(set! (.-constructor cljs.core.ExceptionInfo/prototype) ExceptionInfo)
 
 (defn ex-info
   "Alpha - subject to change.
