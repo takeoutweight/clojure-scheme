@@ -243,6 +243,9 @@
   (-write [writer s])
   (-flush [writer]))
 
+(defprotocol IStringable
+  (-toString [o]))
+
 (defprotocol IPrintWithWriter
   "The old IPrintable protocol's implementation consisted of building a giant
    list of strings to concatenate.  This involved lots of concat calls,
@@ -438,9 +441,6 @@
 
   ^:deprecation-nowarn IPrintable
   (-pr-seq [o] (list "nil"))
-
-  IPrintWithWriter
-  (-pr-writer [o writer _] (-write writer "nil"))
 
   IIndexed
   (-nth
@@ -1750,10 +1750,12 @@ reduces them without incurring seq initialization"
   x.toString().  (str nil) returns the empty string. With more than
   one arg, returns the concatenation of the str values of the args."
   ([] "")
-  ([x] (scm* {:strs (pair (-pr-seq x nil))} (apply string-append :strs)) )
+  ([x] (if (satisfies? IStringable x)
+         (-toString x)
+         (pr-str x)))
   ([x & ys]
-     (scm* {:x-s (str x) :ys-s (apply str ys)}
-           (string-append :x-s :ys-s))))
+     (scm* {:strs (-pair (map str (cons x ys)))}
+           (append-strings :strs))))
 
 (defn subs
   "Returns the substring of s beginning at start inclusive, and ending
@@ -2036,13 +2038,15 @@ reduces them without incurring seq initialization"
        (-nth string k))
     ([string k not_found]
        (-nth string k not_found)))
-
   IReduce
   (-reduce
     ([string f]
        (ci-reduce string f))
     ([string f start]
-       (ci-reduce string f start))))
+       (ci-reduce string f start)))
+
+  IStringable
+  (-toString [o] o))
 
 (deftype Error [msg]
   IPrintable
@@ -6538,14 +6542,14 @@ reduces them without incurring seq initialization"
 (defn ^:deprecated pr-sequential
   "Do not use this.  It is kept for backwards compatibility with the
    old IPrintable protocol."
-  [print-one begin sep end opts coll]
-  (concat [begin]
+  [print-one begn sep end opts coll]
+  (concat [begn]
           (flatten1
             (interpose [sep] (map #(print-one % opts) coll)))
           [end]))
 
-(defn pr-sequential-writer [writer print-one begin sep end opts coll]
-  (-write writer begin)
+(defn pr-sequential-writer [writer print-one begn sep end opts coll]
+  (-write writer begn)
   (when (seq coll)
     (print-one (first coll) writer opts))
   (doseq [o (next coll)]
@@ -6568,7 +6572,10 @@ reduces them without incurring seq initialization"
 (deftype StringBufferWriter [^:mutable sb]
   IWriter
   (-write [_ s] (set! sb (scm* {:sb sb :s s} (cons :s :sb))))
-  (-flush [_] (set! sb (scm* {:sb sb} (list (append-strings (reverse :sb)))))))
+  (-flush [_] (set! sb (scm* {:sb sb} (list (append-strings (reverse :sb))))))
+
+  IStringable
+  (-toString [o] (-flush o) (scm* {:sb sb} (car :sb))))
 
 #_(defn- ^:deprecated pr-seq
   "Do not use this.  It is kept for backwards compatibility with the
@@ -6637,7 +6644,7 @@ reduces them without incurring seq initialization"
         writer (StringBufferWriter. sb)]
     (pr-seq-writer objs writer opts)
     (-flush writer)
-    sb))
+    (-toString writer)))
 
 (defn pr-str-with-opts
   "Prints a sequence of objects to a string, observing all the
@@ -6896,16 +6903,30 @@ reduces them without incurring seq initialization"
   (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll)))
 
 (extend-protocol IPrintWithWriter
-  ;; boolean
-  ;; (-pr-writer [bool writer opts] (-write writer (str bool)))
+  Number
+  (-pr-writer [n writer opts] (-write writer (scm* [n] (number->string n))))
 
-  ;; number
-  ;; (-pr-writer [n writer opts] (/ 1 0) (-write writer (str n)))
-
+  Pair
+  (-pr-writer [c w opts] (pr-sequential-writer w pr-writer  "(" " " ")" opts c))
   ;; array
   ;; (-pr-writer [a writer opts]
   ;;   ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "#<Array [" ", " "]>" opts a))
 
+  Boolean
+  (-pr-writer [bool writer opts] (-write writer (if bool "true" "false")))
+
+  Symbol
+  (-pr-writer [o writer opts] (-write writer (scm* [o] (symbol->string o))))
+
+  String
+  (-pr-writer [o writer opts] (-write writer o))
+
+  Nil
+  (-pr-writer [o writer _] (-write writer "nil"))
+
+  Null
+  (-pr-writer [o writer _] (-write writer "()"))
+  
   ;; string
   ;; (-pr-writer [obj writer opts]
   ;;   (cond
@@ -6924,9 +6945,9 @@ reduces them without incurring seq initialization"
   ;;            (-write writer (quote-string obj))
   ;;            (-write writer obj))))
 
-  ;; function
-  ;; (-pr-writer [this writer _]
-  ;;   (write-all writer "#<" (str this) ">"))
+  Procedure
+  (-pr-writer [this writer _]
+    (-write writer (scm* [this] (object-> string this))))
 
   ;; js/Date
   ;; (-pr-writer [d writer _]
