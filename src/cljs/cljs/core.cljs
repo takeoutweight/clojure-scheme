@@ -6790,9 +6790,9 @@ reduces them without incurring seq initialization"
                    (quote-string obj)
                    obj))))
 
-  function
-  (-pr-seq [this]
-    (list "#<" (str this) ">"))
+  ;; function
+  ;; (-pr-seq [this]
+  ;;   (list "#<" (str this) ">"))
 
   ;; js/Date
   ;; (-pr-seq [d _]
@@ -6831,9 +6831,6 @@ reduces them without incurring seq initialization"
   (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll))
 
   ArrayNodeSeq
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll))
-
-  List
   (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll))
 
   Cons
@@ -6898,37 +6895,37 @@ reduces them without incurring seq initialization"
   (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll)))
 
 (extend-protocol IPrintWithWriter
-  boolean
-  (-pr-writer [bool writer opts] (-write writer (str bool)))
+  ;; boolean
+  ;; (-pr-writer [bool writer opts] (-write writer (str bool)))
 
-  number
-  (-pr-writer [n writer opts] (/ 1 0) (-write writer (str n)))
+  ;; number
+  ;; (-pr-writer [n writer opts] (/ 1 0) (-write writer (str n)))
 
-  array
-  (-pr-writer [a writer opts]
-    ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "#<Array [" ", " "]>" opts a))
+  ;; array
+  ;; (-pr-writer [a writer opts]
+  ;;   ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "#<Array [" ", " "]>" opts a))
 
-  string
-  (-pr-writer [obj writer opts]
-    (cond
-     (keyword? obj)
-       (do
-         (-write writer ":")
-         (when-let [nspc (namespace obj)]
-           (write-all writer (str nspc) "/"))
-         (-write writer (name obj)))
-     (symbol? obj)
-       (do
-         (when-let [nspc (namespace obj)]
-           (write-all writer (str nspc) "/"))
-         (-write writer (name obj)))
-     :else (if (:readably opts)
-             (-write writer (quote-string obj))
-             (-write writer obj))))
+  ;; string
+  ;; (-pr-writer [obj writer opts]
+  ;;   (cond
+  ;;    (keyword? obj)
+  ;;      (do
+  ;;        (-write writer ":")
+  ;;        (when-let [nspc (namespace obj)]
+  ;;          (write-all writer (str nspc) "/"))
+  ;;        (-write writer (name obj)))
+  ;;    (symbol? obj)
+  ;;      (do
+  ;;        (when-let [nspc (namespace obj)]
+  ;;          (write-all writer (str nspc) "/"))
+  ;;        (-write writer (name obj)))
+  ;;    :else (if (:readably opts)
+  ;;            (-write writer (quote-string obj))
+  ;;            (-write writer obj))))
 
-  function
-  (-pr-writer [this writer _]
-    (write-all writer "#<" (str this) ">"))
+  ;; function
+  ;; (-pr-writer [this writer _]
+  ;;   (write-all writer "#<" (str this) ">"))
 
   ;; js/Date
   ;; (-pr-writer [d writer _]
@@ -6967,9 +6964,6 @@ reduces them without incurring seq initialization"
   (-pr-writer [coll writer opts] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "(" " " ")" opts coll))
 
   ArrayNodeSeq
-  (-pr-writer [coll writer opts] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "(" " " ")" opts coll))
-
-  List
   (-pr-writer [coll writer opts] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "(" " " ")" opts coll))
 
   Cons
