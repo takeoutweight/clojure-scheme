@@ -399,7 +399,7 @@
                    expr
                    (when variadic ")")
                    ")"))]
-    (if name
+    (if (and name (not (:protocol-inline env))) ; preserve open recursion in inline proto defns.
       (emits "(letrec (("name" "             
              lambda-str
              ")) "name")")
