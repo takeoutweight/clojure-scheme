@@ -22,19 +22,9 @@
                                         ; note that print spaces args, emits doesn't.
                                         ;don't use emit-wrap (no expression/statement dichotomy.)
 (def js-reserved
-  #{"abstract" "boolean" "break" "byte" "case"
-    "catch" "char" "class" "const" "continue"
-    "debugger" "default" "delete" "do" "double"
-    "else" "enum" "export" "extends" "final"
-    "finally" "float" "for" "function" "goto" "if"
-    "implements" "import" "in" "instanceof" "int"
-    "interface" "let" "long" "native" "new"
-    "package" "private" "protected" "public"
-    "return" "short" "static" "super" "switch"
-    "synchronized" "this" "throw" "throws"
-    "transient" "try" "typeof" "var" "void"
-    "volatile" "while" "with" "yield" "methods"
-    "null"})
+  #{'begin 'letrec 'lambda 'vector 'make-vector 'vector-ref 'vector-set!
+    'make-array 'define 'table-set! 'table-ref 'make-table 'reverse
+    'append-strings 'eq? 'raise})
 
 (def ^:dynamic *position* nil)
 (def ^:dynamic *emitted-provides* nil)
@@ -60,7 +50,7 @@
   ([s] (munge s js-reserved))
   ([s reserved]
      (if (map? s)
-       (:name s)
+       (if (reserved (:name s)) (str (:name s) "$") (:name s))
       ; Unshadowing
       #_(let [{:keys [name field] :as info} s
             depth (loop [d 0, {:keys [shadow]} info]
