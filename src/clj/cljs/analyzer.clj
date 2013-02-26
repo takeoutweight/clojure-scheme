@@ -449,13 +449,13 @@
         meths (if (vector? (first meths)) (list meths) meths)
         recur-name (symbol (if name (str name "---recur$") "cljs.compiler/recurfn"))
         locals (:locals env)
-        locals (if name (assoc locals name {:name recur-name :shadow (locals recur-name)}) locals)
         name recur-name
         env (assoc env :recur-name recur-name)
         type (-> form meta ::type)
         fields (-> form meta ::fields)
         protocol-impl (-> form meta :protocol-impl)
         protocol-inline (-> form meta :protocol-inline)
+        locals (if (and name (not protocol-impl)) (assoc locals name {:name recur-name :shadow (locals recur-name)}) locals)
         locals (reduce (fn [m fld]
                          (assoc m fld
                                 {:name fld
