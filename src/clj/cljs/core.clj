@@ -405,6 +405,9 @@
                                    (- :num (* :div (fltruncate (/ :num :div))))
                                    (remainder :num :div))))
 
+(defmacro bit-count [x]
+  `(scm* {:x ~x} ~'(bit-count :x)))
+
 (defmacro bit-not [x]
   `(scm* {:x ~x} ~'(bitwise-not :x)))
 
@@ -435,25 +438,26 @@
 #_(defmacro bit-test [x n]
   (list 'js* "((~{} & (1 << ~{})) != 0)" x n))
 
-#_(defmacro bit-shift-left [x n]
-  (list 'js* "(~{} << ~{})" x n))
+;force 32 bit
+(defmacro bit-shift-left [x n]
+  `(scm* {:x ~x :n ~n} ~'(bitwise-and (arithmetic-shift :x :n) 4294967295)))
 
-#_(defmacro bit-shift-right [x n]
-  (list 'js* "(~{} >> ~{})" x n))
+(defmacro bit-shift-right [x n]
+  `(scm* {:x ~x :n ~n} ~'(arithmetic-shift :x (* -1 :n))))
 
 #_(defmacro bit-set [x n]
     (list 'js* "(~{} | (1 << ~{}))" x n))
 
-#_(defmacro bit-shift-right-zero-fill [x n]
-    (list 'js* "(~{} >>> ~{})" x n))
+(defmacro bit-shift-right-zero-fill [x n]
+   `(scm* {:x ~x :n ~n} ~'(arithmetic-shift (bitwise-and :x 4294967295) (* -1 :n))))
 
 ;; internal
 (defmacro mask [hash shift]
-  (list 'js* "((~{} >>> ~{}) & 0x01f)" hash shift))
+  `(scm* {:r (bit-shift-right-zero-fill ~hash ~shift)} ~'(bitwise-and :r 31)))
 
-;; internal
+
 (defmacro bitpos [hash shift]
-  (list 'js* "(1 << ~{})" `(mask ~hash ~shift)))
+  `(bit-shift-left 1 (mask ~hash ~shift)))
 
 ;; internal
 (defmacro caching-hash [coll hash-fn hash-key]

@@ -1688,7 +1688,7 @@ reduces them without incurring seq initialization"
 (defn bit-test
   "Test bit at index n"
   [x n]
-  (cljs.core/bit-test x n))
+  (cljs.core/bit-test x n)))
 
 (defn bit-shift-left
   "Bitwise shift left"
@@ -1696,7 +1696,7 @@ reduces them without incurring seq initialization"
 
 (defn bit-shift-right
   "Bitwise shift right"
-  [x n] (cljs.core/bit-shift-right x n)))
+  [x n] (cljs.core/bit-shift-right x n))
 
 (defn bit-shift-right-zero-fill
   "Bitwise shift right with zero fill"
@@ -1705,7 +1705,8 @@ reduces them without incurring seq initialization"
 (defn bit-count
   "Counts the number of bits set in n"
   [v]
-  (let [v (- v (bit-and (bit-shift-right v 1) 0x55555555))
+  (cljs.core/bit-count v)
+  #_(let [v (- v (bit-and (bit-shift-right v 1) 0x55555555))
         v (+ (bit-and v 0x33333333) (bit-and (bit-shift-right v 2) 0x33333333))]
     (bit-shift-right (* (bit-and (+ v (bit-shift-right v 4)) 0xF0F0F0F) 0x1010101) 24)))
 
