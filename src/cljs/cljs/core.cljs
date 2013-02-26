@@ -6753,180 +6753,37 @@ reduces them without incurring seq initialization"
          (fn [match] (get char-escapes match)))
        \"))
 
-(extend-protocol ^:deprecation-nowarn IPrintable
-  Boolean
-  (-pr-seq [bool opts] (list (str bool)))
-
-  Number
-  (-pr-seq [n opts] (list (scm* [n] (number->string n))))
-
-  Pair
-  (-pr-seq [a opts]
-    (pr-sequential pr-seq "(" " " ")" opts a))
-  
-  Array
-  (-pr-seq [a opts]
-    ^:deprecation-nowarn (pr-sequential pr-seq "#<Array [" ", " "]>" opts a))
-
-  Table
-  (-pr-seq [coll opts]
-    (let [pr-pair (fn [keyval ops] (pr-sequential pr-seq "" " " "" opts keyval))]
-      (pr-sequential pr-pair "{" ", " "}" opts coll)))
-
-  Keyword
-  (-pr-seq [k opts] (list (str ":" (scm* [n] (keyword->string k)))))
-
-  Symbol
-  (-pr-seq [s opts] (list (scm* [n] (symbol->string s))))
-
-  Char
-  (-pr-seq [s opts] (list (scm* [n] (string s))))
-
-  String ;TODO: I don't overload strings so need to break apart keywords etc.
-  (-pr-seq [obj opts] (list obj)
-    #_(cond
-     (keyword? obj)
-     (list (str ":"
-                (when-let [nspc (namespace obj)]
-                  (str nspc "/"))
-                (name obj)))
-     (symbol? obj)
-     (list (str (when-let [nspc (namespace obj)]
-                  (str nspc "/"))
-                (name obj)))
-     :else (list (if (:readably opts)
-                   (quote-string obj)
-                   obj))))
-
-  ;; function
-  ;; (-pr-seq [this]
-  ;;   (list "#<" (str this) ">"))
-
-  ;; js/Date
-  ;; (-pr-seq [d _]
-  ;;   (let [normalize (fn [n len]
-  ;;                     (loop [ns (str n)]
-  ;;                       (if (< (count ns) len)
-  ;;                         (recur (str "0" ns))
-  ;;                         ns)))]
-  ;;     (list
-  ;;      (str "#inst \""
-  ;;           (.getUTCFullYear d)                   "-"
-  ;;           (normalize (inc (.getUTCMonth d)) 2)  "-"
-  ;;           (normalize (.getUTCDate d) 2)         "T"
-  ;;           (normalize (.getUTCHours d) 2)        ":"
-  ;;           (normalize (.getUTCMinutes d) 2)      ":"
-  ;;           (normalize (.getUTCSeconds d) 2)      "."
-  ;;           (normalize (.getUTCMilliseconds d) 3) "-"
-  ;;           "00:00\""))))
-
-  LazySeq
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll))
-
-  IndexedSeq
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll))
-
-  RSeq
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll))
-
-  PersistentQueue
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "#queue [" " " "]" opts (seq coll)))
-
-  PersistentTreeMapSeq
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll))
-
-  NodeSeq
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll))
-
-  ArrayNodeSeq
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll))
-
-  Cons
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll))
-
-  EmptyList
-  (-pr-seq [coll opts] (list "()"))
-
-  Vector
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "[" " " "]" opts coll))
-
-  PersistentVector
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "[" " " "]" opts coll))
-
-  ChunkedCons
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll))
-
-  ChunkedSeq
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll))
-
-  Subvec
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "[" " " "]" opts coll))
-
-  BlackNode
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "[" " " "]" opts coll))
-
-  RedNode
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "[" " " "]" opts coll))
-
-  ;; ObjMap
-  ;; (-pr-seq [coll opts]
-  ;;   (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential pr-seq "" " " "" opts keyval))]
-  ;;    ^:deprecation-nowarn (pr-sequential pr-pair "{" ", " "}" opts coll)))
-
-  ;; HashMap
-  ;; (-pr-seq [coll opts]
-  ;;   (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential pr-seq "" " " "" opts keyval))]
-  ;;    ^:deprecation-nowarn (pr-sequential pr-pair "{" ", " "}" opts coll)))
-
-  PersistentArrayMap
-  (-pr-seq [coll opts]
-    (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential pr-seq "" " " "" opts keyval))]
-      ^:deprecation-nowarn (pr-sequential pr-pair "{" ", " "}" opts coll)))
-
-  PersistentHashMap
-  (-pr-seq [coll opts]
-    (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential pr-seq "" " " "" opts keyval))]
-      ^:deprecation-nowarn (pr-sequential pr-pair "{" ", " "}" opts coll)))
-
-  PersistentTreeMap
-  (-pr-seq [coll opts]
-    (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential pr-seq "" " " "" opts keyval))]
-      ^:deprecation-nowarn (pr-sequential pr-pair "{" ", " "}" opts coll)))
-
-  PersistentHashSet
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "#{" " " "}" opts coll))
-
-  PersistentTreeSet
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "#{" " " "}" opts coll))
-
-  Range
-  (-pr-seq [coll opts] ^:deprecation-nowarn (pr-sequential pr-seq "(" " " ")" opts coll)))
-
 (extend-protocol IPrintWithWriter
   Number
-  (-pr-writer [n writer opts] (-write writer (scm* [n] (number->string n))))
+  (-pr-writer [n wr opts] (-write wr (scm* [n] (number->string n))))
 
   Pair
-  (-pr-writer [c w opts] (pr-sequential-writer w pr-writer  "(" " " ")" opts c))
-  ;; array
-  ;; (-pr-writer [a writer opts]
-  ;;   ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "#<Array [" ", " "]>" opts a))
+  (-pr-writer [c wr opts] (pr-sequential-writer wr pr-writer  "(" " " ")" opts c))
 
   Boolean
-  (-pr-writer [bool writer opts] (-write writer (if bool "true" "false")))
-
-  Symbol
-  (-pr-writer [o writer opts] (-write writer (scm* [o] (symbol->string o))))
-
-  String
-  (-pr-writer [o writer opts] (-write writer o))
+  (-pr-writer [bool wr opts] (-write wr (if bool "true" "false")))
 
   Nil
-  (-pr-writer [o writer _] (-write writer "nil"))
+  (-pr-writer [o wr _] (-write wr "nil"))
 
   Null
-  (-pr-writer [o writer _] (-write writer "()"))
+  (-pr-writer [o wr _] (-write wr "()"))
+
+  Char
+  (-pr-writer [s wr opts] (-write wr (scm* [s] (string s))))
   
+  Array
+  (-pr-writer [a wr opts]
+    ^:deprecation-nowarn (pr-sequential-writer wr pr-writer "#<Array [" ", " "]>" opts a))
+
+  Table
+  (-pr-writer [coll wr opts]
+    (let [pr-pair (fn [keyval wr ops] (pr-sequential-writer wr pr-writer "" " " "" opts keyval))]
+      (pr-sequential-writer wr pr-pair "{" ", " "}" opts coll)))
+
+  String
+  (-pr-writer [o wr opts] (-write wr o))
+
   ;; string
   ;; (-pr-writer [obj writer opts]
   ;;   (cond
@@ -6945,9 +6802,14 @@ reduces them without incurring seq initialization"
   ;;            (-write writer (quote-string obj))
   ;;            (-write writer obj))))
 
+  Symbol
+  (-pr-writer [o wr opts] (-write wr (scm* [o] (symbol->string o))))
+
+  Keyword
+  (-pr-writer [k wr opts] (-write wr (str ":" (scm* [k] (keyword->string k)))))
+
   Procedure
-  (-pr-writer [this writer _]
-    (-write writer (scm* [this] (object-> string this))))
+  (-pr-writer [this wr _] (-write wr (scm* [this] (object->string this))))
 
   ;; js/Date
   ;; (-pr-writer [d writer _]
