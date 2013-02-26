@@ -594,11 +594,12 @@
     ([v f]
        (if (scm* [v] (null? v))
          (f)
-         (-reduce (scm* [v] (cdr v)) f (scm* [v] (car v)))))
+         (reduce f (scm* [v] (car v)) (scm* [v] (cdr v)))))
     ([v f start]
-       (if (scm* [v] (null? v))
-         start
-         (recur (scm* [v] (cdr v)) f (f start (scm* [v] (car v))) )))))
+       (loop [v v f f start start]
+         (if (scm* [v] (null? v))
+           start
+           (recur (scm* [v] (cdr v)) f (f start (scm* [v] (car v))) ))))))
 
 (extend-type Number
   IEquiv
