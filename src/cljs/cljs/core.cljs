@@ -5850,7 +5850,8 @@ reduces them without incurring seq initialization"
   "keyval => key val
   Returns a new hash map with supplied mappings."
   [& keyvals]
-  (loop [in (seq keyvals), out (transient PersistentHashMap-EMPTY)]
+  :TODO
+  #_(loop [in (seq keyvals), out (transient PersistentHashMap-EMPTY)]
     (if in
       (recur (nnext in) (assoc! out (first in) (second in)))
       (persistent! out))))
@@ -5878,7 +5879,8 @@ reduces them without incurring seq initialization"
   "keyval => key val
   Returns a new sorted map with supplied mappings."
   ([& keyvals]
-     (loop [in (seq keyvals) out PersistentTreeMap-EMPTY]
+     :TODO
+     #_(loop [in (seq keyvals) out PersistentTreeMap-EMPTY]
        (if in
          (recur (nnext in) (assoc out (first in) (second in)))
          out))))
@@ -5952,7 +5954,6 @@ reduces them without incurring seq initialization"
         ret)))
 
 ;;; PersistentHashSet
-(declare empty-set)
 (declare TransientHashSet)
 
 (deftype PersistentHashSet [meta hash-map ^:mutable __hash]
@@ -6126,18 +6127,16 @@ reduces them without incurring seq initialization"
       (-lookup coll k)
       (-lookup coll k not-found))))
 
-(def empty-set (Set. nil (scm* [] (make-table))))
-
 (def PersistentTreeSet-EMPTY (PersistentTreeSet. nil (sorted-map) 0))
 
 (defn hash-set
   ([] PersistentHashSet-EMPTY)
   ([& keys]
-    (loop [in (seq keys)
-           out (transient PersistentHashSet-EMPTY)]
-      (if (seq in)
-        (recur (next in) (conj! out (first in)))
-        (persistent! out)))))
+     (loop [in (seq keys)
+            out (transient PersistentHashSet-EMPTY)]
+       (if (seq in)
+         (recur (next in) (conj! out (first in)))
+         (persistent! out)))))
 
 (defn set
   "Returns a set of the distinct elements of coll."
