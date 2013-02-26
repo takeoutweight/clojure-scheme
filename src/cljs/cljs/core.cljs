@@ -543,7 +543,7 @@
 
   INext
   (-next [coll]
-    (if (== count 1)
+    (if (== (scm* {:coll coll} (length coll)) 1)
       nil
       rest))
 
