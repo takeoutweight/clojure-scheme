@@ -367,9 +367,11 @@
 (defn schemify-method-arglist
   "analyzed method [a b & r] -> \"(a b . r)\" as a string.
    or [& r] -> \"r\" in the case of no fixed args.
-   suitable for lambda-args, not define args."
+   suitable for lambda-args, not define args.
+   Munges any dontcares that are NOT in the first arg position. (can't
+   munge that one, it might be a 'this' arg in a proto defn)"
   [{:keys [variadic max-fixed-arity params]}]
-  (let [params (map #(if (= (:name %) '_) (assoc % :name (gensym "_")) %) params)]
+  (let [params (cons (first params) (map #(if (= (:name %) '_) (assoc % :name (gensym "_")) %) (rest params)))]
     (if variadic
       (if (> max-fixed-arity 0)
         (apply str (concat ["("] (space-sep (map munge (concat (take max-fixed-arity params)
@@ -379,9 +381,11 @@
 
 (defn schemify-define-arglist
   "suitable for define-style forms, returns args without parens,
-   and an inital dot for 0-fixed-arity variadics. Returns the string."
+   and an inital dot for 0-fixed-arity variadics. Returns the string.
+   Munges any dontcares that are NOT in the first arg position. (can't
+   munge that one, it might be a 'this' arg in a proto defn)"
   [{:keys [variadic max-fixed-arity params]}]
-   (let [params (map #(if (= (:name %) '_) (assoc % :name (gensym "_")) %) params)]
+   (let [params (cons (first params) (map #(if (= (:name %) '_) (assoc % :name (gensym "_")) %) (rest params)))]
     (if variadic
       (apply str (space-sep (map munge (concat (take max-fixed-arity params)
                                                ['. (last params)]))))
@@ -501,8 +505,8 @@
      (do
        (emit-comment (str "Implementing " (:name protocol)) nil)
        (emitln "(table-set! "
-              "(table-ref cljs.core/protocol-impls " (:name etype) ") "
-              (:name protocol) " #t)")
+               "(table-ref cljs.core/protocol-impls " (:name etype) ") "
+               (:name protocol) " #t)")
        (doall
         (for [[meth-name meth-impl] meth-map]
           (let [meth (first (:methods meth-impl))
@@ -512,10 +516,14 @@
             (when (> (count (:methods meth-impl)) 1) (throw (Exception. "should have compiled variadic defn away.")))
             (emits "(define (" impl-name" "(schemify-define-arglist meth)") ")
             (if rest?
-               (emits "(apply " meth-impl " (append (list "
-                    (space-sep (butlast (map (comp void-dontcare munge) (:params meth)))) ") "
-                    (void-dontcare (munge (last (:params meth)))) "))")
-               (emits "(" meth-impl " " (space-sep (map (comp void-dontcare munge) (:params meth))) ")"))
+              (emits "(apply " meth-impl " (append (list "
+                     (space-sep (butlast (cons (munge (first (:params meth)))
+                                               (map (comp void-dontcare munge)
+                                                    (rest (:params meth)))))) ") "
+                     (void-dontcare (munge (last (:params meth)))) "))") ; & rest won't ever be a dontcare this pointer we have to pass through.
+              (emits "(" meth-impl " " (space-sep (cons (munge (first (:params meth)))
+                                                        (map (comp void-dontcare munge)
+                                                             (rest (:params meth))))) ")"))
 
             (emits ")")
             (when-not base-type?
