@@ -273,7 +273,7 @@
   (let [sz (count keys)
         table-name (gensym "table")]
     (emits "(let (("table-name" (make-table size: "sz")))")
-    (emits (mapcat (fn [k v] ["(table-set!" table-name k v")"]) keys vals))
+    (emits (mapcat (fn [k v] ["(table-set! "table-name" "k" "v")"]) keys vals))
     (emits table-name ")")))
 
 (defmethod emit :vector
