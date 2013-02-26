@@ -1284,7 +1284,8 @@
       (scm* {:a ~a :sz sz# :r r# :o ~o}
             ~'(begin
                (subvector-move! :a 0 :sz :r 0)
-               (vector-set! :a :sz :o)))))
+               (vector-set! :r :sz :o)))
+      r#))
 
 (defmacro aclone-push2
   "Clones the array into an array one element larger; with the values pushed."
@@ -1294,22 +1295,25 @@
       (scm* {:a ~a :sz sz# :r r# :o1 ~o1 :o2 ~o2}
             ~'(begin
                (subvector-move! :a 0 :sz :r 0)
-               (vector-set! :a :sz :o1)
-               (vector-set! :a (+ :sz 1) :o2)))))
+               (vector-set! :r :sz :o1)
+               (vector-set! :r (+ :sz 1) :o2)))
+      r#))
 
 (defmacro slice
   "does NOT re-create Javascripts negative index sematics, just end >= start slicing. Also, will complain on out-of-ranges; won't be clipped to viable length."
   [a start end]
   `(let [sz# (- ~end ~start)
          r# (scm* {:sz sz#} ~'(make-vector :sz))]
-     (scm* {:a ~a :start ~start :end ~end :r r#} ~'(subvector-move! :a :start :end :r 0))))
+     (scm* {:a ~a :start ~start :end ~end :r r#} ~'(subvector-move! :a :start :end :r 0))
+     r#))
 
 (defmacro slice-pop
   "returns a copy without the last element"
   [a]
   `(let [sz# (dec (alength ~a))
          r# (scm* {:sz sz#} ~'(make-vector :sz))]
-     (scm* {:a ~a :r r#} ~'(subvector-move! :a 0 sz# :r 0))))
+     (scm* {:a ~a :r r#} ~'(subvector-move! :a 0 sz# :r 0))
+     r#))
 
 (defmacro amap
   "Maps an expression across an array a, using an index named idx, and
