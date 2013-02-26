@@ -310,11 +310,7 @@
 
 (defn safe-test? [e]
   (let [tag (infer-tag e)]
-    (or (#{'boolean 'seq} tag)
-        (when (= (:op e) :constant)
-          (let [form (:form e)]
-            (not (or (and (string? form) (= form ""))
-                     (and (number? form) (zero? form)))))))))
+    (#{'boolean} tag)))
 
 (defmethod emit :if
   [{:keys [test then else env unchecked]}]
