@@ -5854,8 +5854,7 @@ reduces them without incurring seq initialization"
   "keyval => key val
   Returns a new hash map with supplied mappings."
   [& keyvals]
-  :TODO
-  #_(loop [in (seq keyvals), out (transient PersistentHashMap-EMPTY)]
+  (loop [in (seq keyvals), out (transient PersistentHashMap-EMPTY)]
     (if in
       (recur (nnext in) (assoc! out (first in) (second in)))
       (persistent! out))))
@@ -5883,8 +5882,7 @@ reduces them without incurring seq initialization"
   "keyval => key val
   Returns a new sorted map with supplied mappings."
   ([& keyvals]
-     :TODO
-     #_(loop [in (seq keyvals) out PersistentTreeMap-EMPTY]
+     (loop [in (seq keyvals) out PersistentTreeMap-EMPTY]
        (if in
          (recur (nnext in) (assoc out (first in) (second in)))
          out))))
