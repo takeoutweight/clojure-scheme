@@ -496,7 +496,7 @@
        (doall
         (for [[meth-name meth-impl] meth-map]
           (let [meth (first (:methods meth-impl))
-                rest? (:varidic meth)
+                rest? (:variadic meth)
                 impl-name (symbol (str (munge (:name (:info meth-name)))
                                        "---" (dispatch-munge (:name etype))))]
             (when (> (count (:methods meth-impl)) 1) (throw (Exception. "should have compiled variadic defn away.")))
@@ -504,13 +504,12 @@
               (emits "(set! "impl-name" "meth-impl")")
               (do
                 (emits "(define (" impl-name" "(schemify-define-arglist meth)") ")
-                (if rest?
-                  (throw (Exception. (str "No variadic protcol methods")))
-                  #_(emits "(apply " meth-impl " (append (list "
-                           (space-sep (butlast (cons (munge (first (:params meth)))
-                                                     (map (comp void-dontcare munge)
-                                                          (rest (:params meth)))))) ") "
-                           (void-dontcare (munge (last (:params meth)))) "))") ; & rest won't ever be a dontcare this pointer we have to pass through.
+                (if rest? ; variadic is how we dispatch overloaded arity.
+                  (emits "(apply " meth-impl " (append (list "
+                         (space-sep (butlast (cons (munge (first (:params meth)))
+                                                   (map (comp void-dontcare munge)
+                                                        (rest (:params meth)))))) ") "
+                         (void-dontcare (munge (last (:params meth)))) "))") ; & rest won't ever be a dontcare this pointer we have to pass through.
                   (emits "(" meth-impl " " (space-sep (cons (munge (first (:params meth)))
                                                             (map (comp void-dontcare munge)
                                                                  (rest (:params meth))))) ")"))
