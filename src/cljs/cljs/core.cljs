@@ -109,7 +109,7 @@
         nil Nil ;we hijack #!void to map to Clojure's nil
         (scm* [x] ()) Null            ;raw scheme null = empty list.
         (cond
-          (char? x) Char
+          (scm* [x] (char? x)) Char
           :else (throw "Can't discern special type")))
     1 (case (cljs.core/scm-subtype-idx x)
         0 Array ; raw scheme vector
