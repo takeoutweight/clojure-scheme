@@ -545,7 +545,7 @@
   (-next [coll]
     (if (== (scm* {:coll coll} (length coll)) 1)
       nil
-      rest))
+      (scm* {:coll coll} (cdr coll))))
 
   ICollection
   (-conj [coll o] (scm* [coll o] (cons o coll)))
