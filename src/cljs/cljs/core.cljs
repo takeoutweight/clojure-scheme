@@ -6564,10 +6564,11 @@ reduces them without incurring seq initialization"
 (defn flush [] ;stub
   nil)
 
-(deftype StringBufferWriter [sb]
+; sb is a raw scheme list of strings. Flush condenses this list into a single-element list of all strings appended in one op with no intermediate strings.
+(deftype StringBufferWriter [^:mutable sb]
   IWriter
-  (-write [_ s] (str sb s))
-  (-flush [_] nil))
+  (-write [_ s] (set! sb (scm* {:sb sb :s s} (cons :s :sb))))
+  (-flush [_] (set! sb (scm* {:sb sb} (list (append-strings (reverse :sb)))))))
 
 #_(defn- ^:deprecated pr-seq
   "Do not use this.  It is kept for backwards compatibility with the
@@ -6632,7 +6633,7 @@ reduces them without incurring seq initialization"
     (pr-writer obj writer opts)))
 
 (defn- pr-sb-with-opts [objs opts]
-  (let [sb ""
+  (let [sb (scm* {} (list))
         writer (StringBufferWriter. sb)]
     (pr-seq-writer objs writer opts)
     (-flush writer)
