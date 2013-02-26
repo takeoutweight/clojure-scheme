@@ -3338,7 +3338,7 @@ reduces them without incurring seq initialization"
 (def PersistentVector-EMPTY_NODE (pv-fresh-node nil))
 (def PersistentVector-EMPTY (PersistentVector. nil 0 5 PersistentVector-EMPTY_NODE (array) 0))
 (defn PersistentVector-fromArray
-  [xis no-clone]
+  [xs no-clone]
   (let [l (alength xs)
         xs (if (identical? no-clone true) xs (aclone xs))]
     (if (< l 32)
