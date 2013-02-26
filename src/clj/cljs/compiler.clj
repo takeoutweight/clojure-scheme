@@ -385,7 +385,7 @@
                    expr
                    (when variadic ")")
                    ")"))]
-    (if (and name (not (:protocol-inline env))) ; preserve open recursion in inline proto defns.
+    (if (and name (not (:protocol-impl env))) ; preserve open recursion in inline proto defns.
       (emits "(letrec (("name" "             
              lambda-str
              ")) "name")")
@@ -500,18 +500,21 @@
                 impl-name (symbol (str (munge (:name (:info meth-name)))
                                        "---" (dispatch-munge (:name etype))))]
             (when (> (count (:methods meth-impl)) 1) (throw (Exception. "should have compiled variadic defn away.")))
-            (emits "(define (" impl-name" "(schemify-define-arglist meth)") ")
-            (if rest?
-              (emits "(apply " meth-impl " (append (list "
-                     (space-sep (butlast (cons (munge (first (:params meth)))
-                                               (map (comp void-dontcare munge)
-                                                    (rest (:params meth)))))) ") "
-                     (void-dontcare (munge (last (:params meth)))) "))") ; & rest won't ever be a dontcare this pointer we have to pass through.
-              (emits "(" meth-impl " " (space-sep (cons (munge (first (:params meth)))
-                                                        (map (comp void-dontcare munge)
-                                                             (rest (:params meth))))) ")"))
-
-            (emits ")")
+            (if base-type?
+              (emits "(set! "impl-name" "meth-impl")")
+              (do
+                (emits "(define (" impl-name" "(schemify-define-arglist meth)") ")
+                (if rest?
+                  (throw (Exception. (str "No variadic protcol methods")))
+                  #_(emits "(apply " meth-impl " (append (list "
+                           (space-sep (butlast (cons (munge (first (:params meth)))
+                                                     (map (comp void-dontcare munge)
+                                                          (rest (:params meth)))))) ") "
+                           (void-dontcare (munge (last (:params meth)))) "))") ; & rest won't ever be a dontcare this pointer we have to pass through.
+                  (emits "(" meth-impl " " (space-sep (cons (munge (first (:params meth)))
+                                                            (map (comp void-dontcare munge)
+                                                                 (rest (:params meth))))) ")"))
+                (emits ")")))
             (when-not base-type?
               (println (str "(table-set! " (:name (:info meth-name)) "---vtable")
                        (:name etype)

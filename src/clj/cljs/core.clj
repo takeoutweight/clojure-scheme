@@ -571,7 +571,7 @@
     [p
      (apply merge-with (fn [old new] (concat old (drop 2 new)))
             (map (fn [[f & r :as fr]] {(-> f name keyword)
-                              (with-meta (cons 'fn (cons f (hint r))) (meta fr))})
+                              (with-meta (cons 'fn (cons f (hint r))) (assoc (meta fr) :protocol-impl true))})
                  fs))
      #_(zipmap (map #(-> % first name keyword) fs)
                (map #(cons 'fn (hint (drop 1 %))) fs))]))
