@@ -310,18 +310,21 @@
                                                                           `(~'scm* [~restparam] ~(nth (iterate #(list 'cdr %) restparam) (count fixed-args)))]]))]
                                           `((fn [~@(map first args-inits)]
                                               ~@(rest sig))
-                                            ~@(map second args-inits))))]
+                                            ~@(map second args-inits))))
+                                   num-smallest-sigs (clojure.core/count (first smallest-sig))
+                                   ]
                         `(~(vec (concat (first smallest-sig) ['& restparam])) 
                           (~'case (count ~restparam)
                             0 ((fn [~@(first smallest-sig)] ~@(rest smallest-sig)) ~@(first smallest-sig))
                             ~@(apply concat
                                      (map-indexed
-                                      (fn* [i sig] [(clojure.core/inc i) (bind-rst sig)])
+                                      (fn* [i sig]
+                                           [(clojure.core/- (count (first sig)) num-smallest-sigs) (bind-rst sig)])
                                       middle-sigs))
                             ~@(when biggest-sig
                                 (if any-variadic?
                                   [(bind-rst biggest-sig)]
-                                  [(clojure.core/inc (count middle-sigs)) (bind-rst biggest-sig)
+                                  [(clojure.core/- (count (first biggest-sig)) num-smallest-sigs) (bind-rst biggest-sig)
                                    `(throw (cljs.core.Error. (str "Wrong number of args: (" (+ ~(count (first smallest-sig)) (count ~restparam)) ")")))])))))))]
     (with-meta
       (if name
