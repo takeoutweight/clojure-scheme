@@ -65,7 +65,7 @@
      (scm* [var-args] (apply vector var-args))))
 
 (defn make-array
-  ([size] (scm* [size] (make-vector size)))
+  ([size] (scm* {:size size :void nil} (make-vector :size :void)))
   ([type size]
      (make-array size)))
 
