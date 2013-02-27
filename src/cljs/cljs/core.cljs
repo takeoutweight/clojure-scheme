@@ -6889,17 +6889,17 @@ reduces them without incurring seq initialization"
 
   PersistentArrayMap
   (-pr-writer [coll writer opts]
-    (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "" " " "" opts keyval))]
+    (let [pr-pair (fn [keyval writer opts] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "" " " "" opts keyval))]
       ^:deprecation-nowarn (pr-sequential-writer writer pr-pair "{" ", " "}" opts coll)))
 
   PersistentHashMap
   (-pr-writer [coll writer opts]
-    (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "" " " "" opts keyval))]
+    (let [pr-pair (fn [keyval writer opts] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "" " " "" opts keyval))]
       ^:deprecation-nowarn (pr-sequential-writer writer pr-pair "{" ", " "}" opts coll)))
 
   PersistentTreeMap
   (-pr-writer [coll writer opts]
-    (let [pr-pair (fn [keyval] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "" " " "" opts keyval))]
+    (let [pr-pair (fn [keyval writer opts] ^:deprecation-nowarn (pr-sequential-writer writer pr-writer "" " " "" opts keyval))]
       ^:deprecation-nowarn (pr-sequential-writer writer pr-pair "{" ", " "}" opts coll)))
 
   PersistentHashSet
