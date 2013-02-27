@@ -2053,10 +2053,6 @@ reduces them without incurring seq initialization"
   IStringable
   (-toString [o] o))
 
-(deftype Error [msg]
-  IPrintable
-  (-pr-seq [obj opts] (list msg)))
-
 ; could use reify
 ;;; LazySeq ;;;
 
