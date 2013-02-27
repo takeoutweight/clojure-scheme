@@ -4431,8 +4431,8 @@ reduces them without incurring seq initialization"
 (declare create-inode-seq create-array-node-seq reset! create-node atom deref)
 
 (defn ^boolean key-test [key other]
-  (if ^boolean (goog/isString key)
-    (identical? key other)
+  (if ^boolean (scm* [key] (keyword? key))
+    (cljs.core/identical? key other)
     (= key other)))
 
 (defn- mask [hash shift]
