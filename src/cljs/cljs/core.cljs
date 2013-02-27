@@ -697,6 +697,9 @@
 
 (declare deref)
 
+
+(deftype Error [msg])
+
 (deftype Reduced [val]
   IDeref
   (-deref [o] val))
@@ -6810,6 +6813,9 @@ reduces them without incurring seq initialization"
 
   Procedure
   (-pr-writer [this wr _] (-write wr (scm* [this] (object->string this))))
+
+  Error
+  (-pr-writer [this wr _] (-write wr (str "#<Error: "(.-msg this)">")))
 
   ;; js/Date
   ;; (-pr-writer [d writer _]
