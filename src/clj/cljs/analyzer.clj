@@ -863,8 +863,15 @@
                                          (analyze (assoc env :context :return) meth-impl)])
                                       meth-map)]))
                             prot-impl-pairs)]
+    (swap! namespaces update-in [:proto-implementers] ;for fast-path dispatch compilation. proto-methname-symbol => set-of-types lookup.
+           (fn [mp] (reduce (fn [m methname-sym]
+                              (update-in m [methname-sym]
+                                         (comp set conj) (:name e-type-rslvd)))
+                            mp
+                            (for [[proname meths] analyzed-impls [methname _] meths] (:name (:info methname))))))
     {:env env :op :extend :etype e-type-rslvd :impls analyzed-impls :base-type? (prim-types (:name e-type-rslvd))}))
 
+;(for [[proname meths] (:impls a) [methname _] meths] (:name (:info methname)))
 ;; dot accessor code
 
 (def ^:private property-symbol? #(boolean (and (symbol? %) (re-matches #"^-.*" (name %)))))
@@ -941,8 +948,8 @@
                        :children (into [targetexpr] argexprs)
                        :tag (-> form meta :tag)})))))
 
-(defmethod parse 'scm* [op env [_ symbol-map & form] _]
-  {:env env :op :scm :children [] :form form :symbol-map symbol-map})
+(defmethod parse 'scm* [op env [s symbol-map & form] _]
+  {:env env :op :scm :children [] :form form :symbol-map symbol-map :tag (-> s meta :tag)})
 
 (defmethod parse 'scm-str*
   [op env [_ jsform & args :as form] _]

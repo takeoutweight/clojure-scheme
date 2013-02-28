@@ -21,7 +21,9 @@
                             + - * / < <= > >= == zero? pos? neg? inc dec max min mod quot rem 
                             bit-and bit-and-not bit-clear bit-flip bit-not bit-or bit-set
                             bit-test bit-shift-left bit-shift-right bit-xor])
-  (:require clojure.walk))
+  (:require [clojure.walk]
+            [clojure.set :as set]
+            [clojure.string :as string]))
 
 (alias 'core 'clojure.core)
 
@@ -45,6 +47,13 @@
 
 (def ^:dynamic *cljs-ns* 'cljs.user)
 
+(def protocol-hints (atom {}))
+(defmacro add-protocol-hints!
+  "given a map of fast-path hints for macro-expansion of protocol functions. Expands to nothing."
+  [hints]
+  (swap! protocol-hints (fn [ph] (merge-with set/union ph hints)))
+  nil)
+
 (def compare-arglist
   (comparator
    (fn* [arglist-a arglist-b]
@@ -58,7 +67,12 @@
 (defmacro scm-str* [& forms]
   `(~'scm-str* ~@forms))
 (defmacro scm* [& forms]
-    `(~'scm* ~@forms))
+  `(~'scm* ~@forms))
+
+(defmacro scm-boolean*
+  "easy way to get unchecked scheme tests. Metadata is stored on the scm* symbol."
+  [& forms]
+  `(~(with-meta 'scm* {:tag 'boolean}) ~@forms))
 
 (defn
   maybe-destructured
@@ -238,8 +252,44 @@
   `(nil? ~x))
   
 (defmacro identical? [a b]
-  `(scm* {:a ~a :b ~b}
+  `(scm-boolean* {:a ~a :b ~b}
          ~'(eqv? :a :b)))
+
+(defn scm-number? [x] `(scm-boolean* {:x ~x} ~'(number? :x)))
+(defn scm-pair? [x] `(scm-boolean* {:x ~x} ~'(pair? :x)))
+(defn scm-boolean? [x] `(scm-boolean* {:x ~x} ~'(boolean? :x)))
+(defn scm-nil? [x] (with-meta `(identical? nil ~x) {:tag :boolean}))
+(defn scm-null? [x] `(identical? () ~x))
+(defn scm-char? [x] `(scm-boolean* {:x ~x} ~'(char? :x)))
+(defn scm-vector? [x] `(scm-boolean* {:x ~x} ~'(vector? :x)))
+(defn scm-symbol? [x] `(scm-boolean* {:x ~x} ~'(symbol? :x)))
+(defn scm-keyword? [x] `(scm-boolean* {:x ~x} ~'(keyword? :x)))
+(defn scm-procedure? [x] `(scm-boolean* {:x ~x} ~'(procedure? :x)))
+(defn scm-string? [x] `(scm-boolean* {:x ~x} ~'(string? :x)))
+
+(defn scm-instance?*
+  "aware of builtin scheme primitive type tests. lookup with namespace-qualified
+  type symbols only."
+  [type-sym o]
+  ((clojure.core/get {'cljs.core/Number scm-number?
+                      'cljs.core/Pair scm-pair?
+                      'cljs.core/Boolean scm-boolean?
+                      'cljs.core/Nil scm-nil?
+                      'cljs.core/Null scm-null?
+                      'cljs.core/Char scm-char?
+                      'cljs.core/Array scm-vector?
+                      'cljs.core/Symbol scm-symbol?
+                      'cljs.core/Keyword scm-keyword?
+                      'cljs.core/Procedure scm-procedure?
+                      'cljs.core/String scm-string?}
+                     type-sym
+                     (fn [o] `(scm-boolean* {:o ~o} (~(symbol (str type-sym "?")) :o))))
+   o))
+
+(defmacro scm-instance?
+  "giveen the resolved symbol of the type, generates a fast type check."
+  [type-sym o]
+  (scm-instance?* type-sym o))
 
 ;-- compiles variadic methods into a case dispatch.
 (defmacro fn
@@ -904,101 +954,114 @@
 
 (defmacro defprotocol [psym & doc+methods]
   (core/let [p (:name (cljs.analyzer/resolve-var (dissoc &env :locals) psym))
-        psym (vary-meta psym assoc :protocol-symbol true)
-        ns-name (-> &env :ns :name)
-        fqn (core/fn [n] (symbol (str ns-name "." n)))
-        prefix (protocol-prefix p)
-        methods (if (string? (first doc+methods)) (next doc+methods) doc+methods)
-        expand-sig (fn [fname slot sig]
-                     `(~sig
-                       (if (and ~(first sig) (. ~(first sig) ~(symbol (core/str "-" slot)))) ;; Property access needed here.
-                         (. ~(first sig) ~slot ~@sig)
-                         (let [x# (if (nil? ~(first sig)) nil ~(first sig))]
-                           ((or
-                             (aget ~(fqn fname) (goog.typeOf x#))
-                             (aget ~(fqn fname) "_")
-                             (throw (missing-protocol
-                                     ~(core/str psym "." fname) ~(first sig))))
-                            ~@sig)))))
-        #_method #_(fn [[fname & sigs]]
-                     (core/let [sigs (take-while vector? sigs)
-                           slot (symbol (core/str prefix (name fname)))
-                           fname (vary-meta fname assoc :protocol p)]
-                       `(defn ~fname ~@(map (fn [sig]
-                                              (expand-sig fname
-                                                          (symbol (core/str slot "$arity$" (count sig)))
-                                                          sig))
-                                            sigs))))
-        method
-        , (core/fn
-           [[fname & sigs]]
-           (core/let [single-sig (gather-polysigs (take-while vector? sigs))
-                 [o & rst] single-sig
-                 _ (when (= o '&) (throw (Exception. "Can't have polyvariadic protocol methods with no fixed args.")))
-                 captd-args (map (core/fn [s] `(scm* {} ~s))
-                                 (remove #{'&} rst))
-                 fx-a (concat [`(scm* {} ~'list)
-                               `(scm* {} ~o)]
-                              (butlast captd-args))
-                 rst-a (last captd-args)
-                 variadic? (some #{'&} single-sig)
-                 fn-name-sym (gensym fname)
-                 fn-vtable-name (symbol (str fname "---vtable"))
-                 prim-types [:Number :Pair :Boolean :Nil :Null
-                             :Char :Array :Symbol :Keyword :Procedure :String]
-                 prim-fnames (map #(symbol (str fname "---cljs_core$" (name %))) prim-types)
-                 call-form (fn [p-fn]
-                             (if variadic?
-                               #_"capture locals that will be introduced later in scheme."
-                               `(scm* {:p-fn ~p-fn :fixed ~fx-a :rest ~rst-a}
-                                      (~'apply :p-fn (~'append :fixed :rest)))
-                               (concat [p-fn `(scm* {} ~o)]
-                                       (map (fn [s] `(scm* {} ~s)) (remove #{'&} rst)))))
-                 prim-call
-                 , (into {} (map #(vector %1 (call-form %2)) prim-types prim-fnames))
-                 test-sym (gensym "type")
-                 prim-dispatches
-                 , `(~'case (cljs.core/scm-type-idx (scm* {} ~o))
-                      0 ~(prim-call :Number) ;Fixnum
-                      3 ~(prim-call :Pair)   
-                      2 (~'case (scm* {} ~o)
-                          (true false) ~(prim-call :Boolean)
-                          nil ~(prim-call :Nil)
-                          (scm* [] ()) ~(prim-call :Null)
-                          (when (char? (scm* {} ~o)) ~(prim-call :Char)))
-                      1 (~'case (cljs.core/scm-subtype-idx (scm* {} ~o))
-                          0 ~(prim-call :Array)
-                          (2 3 30 31) ~(prim-call :Number) ;Rational ;Complex ;Flonum, ;Bignum
-                          4 ~(call-form `(cljs.core/scm-table-ref
-                                          ~fn-vtable-name
-                                          (cljs.core/scm-unsafe-vector-ref (scm* {} ~o) 0)))
-                          8 ~(prim-call :Symbol)
-                          9 ~(prim-call :Keyword)
-                          14 ~(prim-call :Procedure)
-                          19 ~(prim-call :String)
-                          (20 21 22 23 24 25 26 27 28 29) ~(prim-call :Array) ;Various numerically-typed arrays
-                          ))
-                 , #_`(let [~test-sym (type (scm* {} ~o))]
-                        (cond
-                          ~@(mapcat (fn [ty sp-fn]
-                                      [`(identical? ~ty ~test-sym),
-                                       (if variadic?
-                                         (concat [`apply sp-fn `(scm* {} ~o)] ;capture locals that will be introduced in scheme.
-                                                 (map (fn [s] `(scm* {} ~s)) (remove #{'&} rst)))
-                                         (concat [sp-fn `(scm* {} ~o)]
-                                                 (map (fn [s] `(scm* {} ~s)) (remove #{'&} rst))))])
-                                    prim-types specialized-fns)))]
-             `(do
-                ~@(map (fn [sf] `(defn ~sf [& args] (throw (cljs.core/Error. (str "Protocol/Type pair: " (quote ~sf) " not defined."))))) prim-fnames)
-                (def ~fn-vtable-name {})
-                ~(list 'scm*
-                       {fn-name-sym fname
-                        ::prim-dispatches prim-dispatches}
-                       (list 'define
-                             (apply list (concat [fn-name-sym]
-                                                 [o]
-                                                 (map #(core/get {'& '.} % %) rst)))
-                             ::prim-dispatches)))))]
+             psym (vary-meta psym assoc :protocol-symbol true)
+             ns-name (-> &env :ns :name)
+             fqn (core/fn [n] (symbol (str ns-name "." n)))
+             prefix (protocol-prefix p)
+             methods (if (string? (first doc+methods)) (next doc+methods) doc+methods)
+             expand-sig (fn [fname slot sig]
+                          `(~sig
+                            (if (and ~(first sig) (. ~(first sig) ~(symbol (core/str "-" slot)))) ;; Property access needed here.
+                              (. ~(first sig) ~slot ~@sig)
+                              (let [x# (if (nil? ~(first sig)) nil ~(first sig))]
+                                ((or
+                                  (aget ~(fqn fname) (goog.typeOf x#))
+                                  (aget ~(fqn fname) "_")
+                                  (throw (missing-protocol
+                                          ~(core/str psym "." fname) ~(first sig))))
+                                 ~@sig)))))
+             #_method #_(fn [[fname & sigs]]
+                          (core/let [sigs (take-while vector? sigs)
+                                     slot (symbol (core/str prefix (name fname)))
+                                     fname (vary-meta fname assoc :protocol p)]
+                            `(defn ~fname ~@(map (fn [sig]
+                                                   (expand-sig fname
+                                                               (symbol (core/str slot "$arity$" (count sig)))
+                                                               sig))
+                                                 sigs))))
+             method
+             , (core/fn
+                 [[fname & sigs]]
+                 (core/let [single-sig (gather-polysigs (take-while vector? sigs))
+                            [o & rst] single-sig
+                            _ (when (= o '&) (throw (Exception. "Can't have polyvariadic protocol methods with no fixed args.")))
+                            captd-args (map (core/fn [s] `(scm* {} ~s))
+                                            (remove #{'&} rst))
+                            fx-a (concat [`(scm* {} ~'list)
+                                          `(scm* {} ~o)]
+                                         (butlast captd-args))
+                            rst-a (last captd-args)
+                            variadic? (some #{'&} single-sig)
+                            fn-name-sym (gensym fname)
+                            fn-vtable-name (symbol (str fname "---vtable"))
+                            prim-types [:Number :Pair :Boolean :Nil :Null
+                                        :Char :Array :Symbol :Keyword :Procedure :String]
+                            prim-fnames (map #(symbol (str fname "---cljs_core$" (name %))) prim-types)
+                            prim-checks {'cljs.core/Number 'scm-number?
+                                         'cljs.core/Pair 'pair?
+                                         'cljs.core/Boolean 'boolean?
+                                         'cljs.core/Nil '(eq? nil :TODO)}
+                            call-form (fn [p-fn]
+                                        (if variadic?
+                                          #_"capture locals that will be introduced later in scheme."
+                                          `(scm* {:p-fn ~p-fn :fixed ~fx-a :rest ~rst-a}
+                                                 (~'apply :p-fn (~'append :fixed :rest)))
+                                          (concat [p-fn `(scm* {} ~o)]
+                                                  (map (fn [s] `(scm* {} ~s)) (remove #{'&} rst)))))
+                            prim-call
+                            , (into {} (map #(vector %1 (call-form %2)) prim-types prim-fnames))
+                            test-sym (gensym "type")
+                            prim-dispatches
+                            , `(~'case (cljs.core/scm-type-idx (scm* {} ~o))
+                                 ~@(when false `[0 ~(prim-call :Number)]) ;Fixnum
+                                 ~@(when false `[3 ~(prim-call :Pair)])
+                                 ~@(when "one of the following is the case:"
+                                     `[2 (~'case (scm* {} ~o)
+                                           ~@(when false `[(true false) ~(prim-call :Boolean)])
+                                           ~@(when false `[nil ~(prim-call :Nil)])
+                                           ~@(when false `[(scm* [] ()) ~(prim-call :Null)])
+                                           ~@(when true `[(when (char? (scm* {} ~o)) ~(prim-call :Char))]))])
+                                 1 (~'case (cljs.core/scm-subtype-idx (scm* {} ~o))
+                                     ~@(when false `[0 ~(prim-call :Array)])
+                                     ~@(when false `[(2 3 30 31) ~(prim-call :Number)]) ;Rational ;Complex ;Flonum, ;Bignum
+                                     4 ~(call-form `(cljs.core/scm-table-ref
+                                                     ~fn-vtable-name
+                                                     (cljs.core/scm-unsafe-vector-ref (scm* {} ~o) 0)))
+                                     ~@(when false `[8 ~(prim-call :Symbol)])
+                                     ~@(when false `[9 ~(prim-call :Keyword)])
+                                     ~@(when false `[14 ~(prim-call :Procedure)])
+                                     ~@(when false `[19 ~(prim-call :String)])
+                                     ~@(when false `[(20 21 22 23 24 25 26 27 28 29) ~(prim-call :Array)]) ;Various numerically-typed arrays
+                                     ))
+                            , #_`(let [~test-sym (type (scm* {} ~o))]
+                                   (cond
+                                     ~@(mapcat (fn [ty sp-fn]
+                                                 [`(identical? ~ty ~test-sym),
+                                                  (if variadic?
+                                                    (concat [`apply sp-fn `(scm* {} ~o)] ;capture locals that will be introduced in scheme.
+                                                            (map (fn [s] `(scm* {} ~s)) (remove #{'&} rst)))
+                                                    (concat [sp-fn `(scm* {} ~o)]
+                                                            (map (fn [s] `(scm* {} ~s)) (remove #{'&} rst))))])
+                                               prim-types specialized-fns)))
+                            resolved-name (:name (cljs.analyzer/resolve-var (dissoc &env :locals) fname))
+                            known-implementing-types (clojure.core/get @protocol-hints (:name (cljs.analyzer/resolve-var (dissoc &env :locals) fname)))
+                            fast-dispatch `(cond ~@(mapcat (fn [t] [(scm-instance?* t `(scm* {} ~o)) (call-form (symbol (str fname "---" (-> (str t) (string/replace "." "_") (string/replace "/" "$")))))])
+                                                           known-implementing-types)
+                                                 true ~(call-form `(cljs.core/scm-table-ref
+                                                                    ~fn-vtable-name
+                                                                    (cljs.core/scm-unsafe-vector-ref (scm* {} ~o) 0))))]
+;                   (println "DISPATCH: "fname"->"resolved-name":"known-implementing-types)
+                   `(do
+;                      ~@(map (fn [sf] `(defn ~sf [& args] (throw (cljs.core/Error. (str "Protocol/Type pair: " (quote ~sf) " not defined."))))) prim-fnames)
+                      (def ~fn-vtable-name {})
+                      ~(list 'scm*
+                             {fn-name-sym fname
+                              ::prim-dispatches fast-dispatch}
+                             (list 'define
+                                   (apply list (concat [fn-name-sym]
+                                                       [o]
+                                                       (map #(core/get {'& '.} % %) rst)))
+                                   ::prim-dispatches)))))]
     `(do
        (set! ~'*unchecked-if* true)
        (def ~psym (quote ~p))

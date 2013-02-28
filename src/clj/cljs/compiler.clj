@@ -346,7 +346,8 @@
       (emit-comment doc (:jsdoc init))
       (emits "(define "name" "init")")
       (emitln))
-    (emits "(define " name")\n")
+    nil
+    #_(emits "(define " name")\n")
     #_(when export
         (println (str "goog.exportSymbol('" export "', " name ");")))))
 
@@ -500,7 +501,7 @@
                 impl-name (symbol (str (munge (:name (:info meth-name)))
                                        "---" (dispatch-munge (:name etype))))]
             (when (> (count (:methods meth-impl)) 1) (throw (Exception. "should have compiled variadic defn away.")))
-            (if base-type?
+            (if false ;base-type?
               (emits "(set! "impl-name" "meth-impl")")
               (do
                 (emits "(define (" impl-name" "(schemify-define-arglist meth)") ")
