@@ -1013,27 +1013,30 @@
                             prim-call
                             , (into {} (map #(vector %1 (call-form %2)) prim-types prim-fnames))
                             test-sym (gensym "type")
-                            prim-dispatches
+                                                        resolved-name (:name (cljs.analyzer/resolve-var (dissoc &env :locals) fname))
+                            known-implementing-types (clojure.core/get @protocol-hints (:name (cljs.analyzer/resolve-var (dissoc &env :locals) fname)))
+                            check-impl (fn [sym] (not (clojure.core/get known-implementing-types sym)))
+                            prim-dispatches ; the fat "else" clause when none of the hints apply. Careful not to extract type from prims -- skip the vtable lookup as we'll then know the type.
                             , `(~'case (cljs.core/scm-type-idx (scm* {} ~o))
-                                 ~@(when false `[0 ~(prim-call :Number)]) ;Fixnum
-                                 ~@(when false `[3 ~(prim-call :Pair)])
-                                 ~@(when "one of the following is the case:"
+                                 ~@(when (check-impl 'cljs.core/Number) `[0 ~(prim-call :Number)]) ;Fixnum
+                                 ~@(when (check-impl 'cljs.core/Pair) `[3 ~(prim-call :Pair)])
+                                 ~@(when (some check-impl ['cljs.core/Boolean 'cljs.core/Nil 'cljs.core/Null 'cljs.core/Char])
                                      `[2 (~'case (scm* {} ~o)
-                                           ~@(when false `[(true false) ~(prim-call :Boolean)])
-                                           ~@(when false `[nil ~(prim-call :Nil)])
-                                           ~@(when false `[(scm* [] ()) ~(prim-call :Null)])
-                                           ~@(when true `[(when (char? (scm* {} ~o)) ~(prim-call :Char))]))])
+                                           ~@(when (check-impl 'cljs.core/Boolean) `[(true false) ~(prim-call :Boolean)])
+                                           ~@(when (check-impl 'cljs.core/Nil) `[nil ~(prim-call :Nil)])
+                                           ~@(when (check-impl 'cljs.core/Null) `[(scm* [] ()) ~(prim-call :Null)])
+                                           ~@(when (check-impl 'cljs.core/Char) `[(when (char? (scm* {} ~o)) ~(prim-call :Char))]))])
                                  1 (~'case (cljs.core/scm-subtype-idx (scm* {} ~o))
-                                     ~@(when false `[0 ~(prim-call :Array)])
-                                     ~@(when false `[(2 3 30 31) ~(prim-call :Number)]) ;Rational ;Complex ;Flonum, ;Bignum
+                                     ~@(when (check-impl 'cljs.core/Array) `[0 ~(prim-call :Array)])
+                                     ~@(when (check-impl 'cljs.core/Number) `[(2 3 30 31) ~(prim-call :Number)]) ;Rational ;Complex ;Flonum, ;Bignum
                                      4 ~(call-form `(cljs.core/scm-table-ref
                                                      ~fn-vtable-name
                                                      (cljs.core/scm-unsafe-vector-ref (scm* {} ~o) 0)))
-                                     ~@(when false `[8 ~(prim-call :Symbol)])
-                                     ~@(when false `[9 ~(prim-call :Keyword)])
-                                     ~@(when false `[14 ~(prim-call :Procedure)])
-                                     ~@(when false `[19 ~(prim-call :String)])
-                                     ~@(when false `[(20 21 22 23 24 25 26 27 28 29) ~(prim-call :Array)]) ;Various numerically-typed arrays
+                                     ~@(when (check-impl 'cljs.core/Symbol) `[8 ~(prim-call :Symbol)])
+                                     ~@(when (check-impl 'cljs.core/Keyword) `[9 ~(prim-call :Keyword)])
+                                     ~@(when (check-impl 'cljs.core/Procedure) `[14 ~(prim-call :Procedure)])
+                                     ~@(when (check-impl 'cljs.core/String) `[19 ~(prim-call :String)])
+                                     ~@(when (check-impl 'cljs.core/Array) `[(20 21 22 23 24 25 26 27 28 29) ~(prim-call :Array)]) ;Various numerically-typed arrays
                                      ))
                             , #_`(let [~test-sym (type (scm* {} ~o))]
                                    (cond
@@ -1045,13 +1048,9 @@
                                                     (concat [sp-fn `(scm* {} ~o)]
                                                             (map (fn [s] `(scm* {} ~s)) (remove #{'&} rst))))])
                                                prim-types specialized-fns)))
-                            resolved-name (:name (cljs.analyzer/resolve-var (dissoc &env :locals) fname))
-                            known-implementing-types (clojure.core/get @protocol-hints (:name (cljs.analyzer/resolve-var (dissoc &env :locals) fname)))
                             fast-dispatch `(cond ~@(mapcat (fn [t] [(scm-instance?* t `(scm* {} ~o)) (call-form (symbol (str fname "---" (-> (str t) (string/replace "." "_") (string/replace "/" "$")))))])
                                                            known-implementing-types)
-                                                 true ~(call-form `(cljs.core/scm-table-ref
-                                                                    ~fn-vtable-name
-                                                                    (cljs.core/scm-unsafe-vector-ref (scm* {} ~o) 0))))]
+                                                 true ~prim-dispatches)]
 ;                   (println "DISPATCH: "fname"->"resolved-name":"known-implementing-types)
                    `(do
 ;                      ~@(map (fn [sf] `(defn ~sf [& args] (throw (cljs.core/Error. (str "Protocol/Type pair: " (quote ~sf) " not defined."))))) prim-fnames)
