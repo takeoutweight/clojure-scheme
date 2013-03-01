@@ -181,7 +181,7 @@
 
 (defn char?
   "Returns true if x is a char, false otherwise."
-  [x] (scm* [x] (char? x)))
+  [x] (scm-boolean* [x] (char? x)))
 
 (defn type [x]
   (case (cljs.core/scm-type-idx x)
@@ -522,7 +522,7 @@
 (scm* {} (table-set! cljs.core/protocol-impls cljs.core/Class (make-table)))
 
 (defn scm-equal?-hash [o]
-  (scm* [o] (equal?-hash o)))
+  (scm-boolean* [o] (equal?-hash o)))
 ;;;;;;;;;;;;;;;;;;; protocols on primitives ;;;;;;;;
 (declare hash-map list equiv-sequential)
 
