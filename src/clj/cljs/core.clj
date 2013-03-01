@@ -266,6 +266,7 @@
 (defn scm-keyword? [x] `(scm-boolean* {:x ~x} ~'(keyword? :x)))
 (defn scm-procedure? [x] `(scm-boolean* {:x ~x} ~'(procedure? :x)))
 (defn scm-string? [x] `(scm-boolean* {:x ~x} ~'(string? :x)))
+(defn scm-table? [x] `(scm-boolean* {:x ~x} ~'(table? :x)))
 
 (defn scm-instance?*
   "aware of builtin scheme primitive type tests. lookup with namespace-qualified
@@ -281,7 +282,8 @@
                       'cljs.core/Symbol scm-symbol?
                       'cljs.core/Keyword scm-keyword?
                       'cljs.core/Procedure scm-procedure?
-                      'cljs.core/String scm-string?}
+                      'cljs.core/String scm-string?
+                      'cljs.core/Table scm-table?}
                      type-sym
                      (fn [o] `(scm-boolean* {:o ~o} (~(symbol (str type-sym "?")) :o))))
    o))
