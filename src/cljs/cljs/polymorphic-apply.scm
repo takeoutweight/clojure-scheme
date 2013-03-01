@@ -20,7 +20,9 @@
 
 (define (polymorphic-invoke oper args)
   (##declare (not interrupts-enabled))
-  (cljs.core/-invoke oper args))
+  (if (eqv? #!void oper)
+			(raise "-invoke called on nil")
+			(cljs.core/-invoke oper args)))
 
 ;This seems to be necessary for interpreted code. Compiled code uses above procedures.
 (let ((old-handler (current-exception-handler)))
