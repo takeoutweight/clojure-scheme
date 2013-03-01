@@ -405,21 +405,39 @@
 (defn pair [coll]
   (-pair coll))
 
-(defn record-ref [obj field]
+#_(defn record-ref [obj field]
   (let [field-params (pair (scm-unsafe-vector-ref (type obj) 5))
-        search (scm* [field field-params] (memq field field-params))]
+        search (scm-boolean* [field field-params] (memq field field-params))]
     (if search
       (let [slot (inc (/ (- (count field-params) (count search)) 3))]
         (scm-unsafe-vector-ref obj slot))
       (throw (Error. (str "Field not defined: " field " on " field-params))))))
 
-(defn record-set! [obj field val]
+#_(defn record-set! [obj field val]
   (let [field-params (pair (scm-unsafe-vector-ref (type obj) 5))
-        search (scm* [field field-params] (memq field field-params))]
+        search (scm-boolean* [field field-params] (memq field field-params))]
     (if search
       (let [slot (inc (/ (- (count field-params) (count search)) 3))]
         (scm-unsafe-vector-set! obj slot val))
       (throw (Error. (str "Field not defined: " field " on " field-params))))))
+
+(scm-str* "(define (cljs.core/record-ref obj field)
+           (if (and (eqv? (##type obj) 1) (eqv? (##subtype obj 4)))
+             (let* ((field-params (vector->list (##vector-ref (##vector-ref obj 0) 5)))
+                    (search (memq field field-params)))
+                   (if search 
+                     (##vector-ref obj (+ (/ (- (length field-params) (length search)) 3) 1))
+                     (raise (string-append \"No field: \" (symbol->string field)))))
+             (raise (string-append \"Not a record: \" (object->string obj)))))")
+
+(scm-str* "(define (cljs.core/record-set! obj field)
+           (if (and (eqv? (##type obj) 1) (eqv? (##subtype obj 4)))
+             (let* ((field-params (vector->list (##vector-ref (##vector-ref obj 0) 5)))
+                    (search (memq field field-params)))
+                   (if search
+                     (##vector-set! obj (+ (/ (- (length field-params) (length search)) 3) 1))
+                     (raise (string-append \"No field: \" (symbol->string field)))))
+             (raise (string-append \"Not a record: \" (object->string obj)))))")
 
 ;;;;;;;;;;;;;;;;;;; fundamentals ;;;;;;;;;;;;;;;
 ;basic Scheme types-- do not instantiate.
