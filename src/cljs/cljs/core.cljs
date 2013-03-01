@@ -520,6 +520,8 @@
 
 (def Class (type (type {})))
 (scm* {} (table-set! cljs.core/protocol-impls cljs.core/Class (make-table)))
+(scm* {} (define (cljs.core/Class? x) (equal? (cljs.core/type x) )))
+(defn Class? [x] (identical? (type x) Class))
 
 (defn scm-equal?-hash [o]
   (scm-boolean* [o] (equal?-hash o)))
