@@ -422,7 +422,7 @@
       (throw (Error. (str "Field not defined: " field " on " field-params))))))
 
 (scm-str* "(define (cljs.core/record-ref obj field)
-           (if (and (eqv? (##type obj) 1) (eqv? (##subtype obj 4)))
+           (if (and (eqv? (##type obj) 1) (eqv? (##subtype obj) 4))
              (let* ((field-params (vector->list (##vector-ref (##vector-ref obj 0) 5)))
                     (search (memq field field-params)))
                    (if search 
@@ -430,12 +430,12 @@
                      (raise (string-append \"No field: \" (symbol->string field)))))
              (raise (string-append \"Not a record: \" (object->string obj)))))")
 
-(scm-str* "(define (cljs.core/record-set! obj field)
-           (if (and (eqv? (##type obj) 1) (eqv? (##subtype obj 4)))
+(scm-str* "(define (cljs.core/record-set! obj field val)
+           (if (and (eqv? (##type obj) 1) (eqv? (##subtype obj) 4))
              (let* ((field-params (vector->list (##vector-ref (##vector-ref obj 0) 5)))
                     (search (memq field field-params)))
                    (if search
-                     (##vector-set! obj (+ (/ (- (length field-params) (length search)) 3) 1))
+                     (##vector-set! obj (+ (/ (- (length field-params) (length search)) 3) 1) val)
                      (raise (string-append \"No field: \" (symbol->string field)))))
              (raise (string-append \"Not a record: \" (object->string obj)))))")
 
