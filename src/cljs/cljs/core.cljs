@@ -4200,11 +4200,7 @@ reduces them without incurring seq initialization"
     ([coll k] (scm* [table k] (table-ref table k)))
     ([coll k not-found]
        (scm* [table k not-found]
-             (with-exception-catcher
-               (lambda (e) (if (unbound-table-key-exception? e)
-                             not-found
-                             (raise e)))
-               (lambda () (table-ref table k))))))  
+             (lambda () (table-ref table k not-found)))))  
 
   IAssociative
   (-assoc [coll k v]
@@ -4271,11 +4267,7 @@ reduces them without incurring seq initialization"
     ([table k] (-lookup table k nil))
     ([table k not-found]
        (scm* [table k not-found]
-             (with-exception-catcher
-               (lambda (e) (if (unbound-table-key-exception? e)
-                             not-found
-                             (raise e)))
-               (lambda () (table-ref table k))))))  
+             (lambda () (table-ref table k not-found)))))  
 
   IAssociative
   (-assoc [table k v]
