@@ -455,6 +455,7 @@
         fields (-> form meta ::fields)
         protocol-impl (-> form meta :protocol-impl)
         protocol-inline (-> form meta :protocol-inline)
+        single-arity (-> form meta :single-arity)
         locals (if (and name (not protocol-impl)) (assoc locals name {:name recur-name :shadow (locals recur-name)}) locals)
         locals (reduce (fn [m fld]
                          (assoc m fld
@@ -491,6 +492,7 @@
      :max-fixed-arity max-fixed-arity
      :protocol-impl protocol-impl
      :protocol-inline protocol-inline
+     :single-arity single-arity
      :children (mapv :expr methods)}))
 
 (defmethod parse 'letfn*
