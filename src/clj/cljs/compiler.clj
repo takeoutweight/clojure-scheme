@@ -22,7 +22,7 @@
                                         ; note that print spaces args, emits doesn't.
                                         ;don't use emit-wrap (no expression/statement dichotomy.)
 (def js-reserved
-  #{'begin 'letrec 'lambda 'vector 'make-vector 'vector-ref 'vector-set!
+  #{'begin 'letrec 'lambda 'vector 'make-vector 'vector-ref 'vector-set! 'length
     'make-array 'define 'table-set! 'table-ref 'make-table 'reverse
     'append-strings 'eq? 'raise})
 
