@@ -472,7 +472,7 @@
                (emitln "})()")))))
 
 (defmethod emit :fn
-  [{:keys [name env methods max-fixed-arity variadic recur-frames loop-lets]}]
+  [{:keys [name env methods max-fixed-arity single-arity variadic recur-frames loop-lets]}]
   (when-not (= :statement (:context env))
     (let [loop-locals (->> (concat (mapcat :params (filter #(and % @(:flag %)) recur-frames))
                                    (mapcat :params loop-lets))
@@ -560,14 +560,16 @@
                                         (map #(vector (System/identityHashCode %)
                                                       (gensym (str (:name %) "-")))
                                              bindings)))]
-      (emits "(let* (")
+      (if is-loop
+        (emits "(let "recur-name" (")
+        (emits "(let* ("))
       (doseq [{:keys [name init] :as binding} bindings]
         (emitln "(" name " " init ")"))
       (emits ")")
-      (when is-loop (emits "(letrec ((" recur-name
+      #_(when is-loop (emits "(letrec ((" recur-name
                            " (lambda (" (space-sep (map :name bindings)) ") " ))
       (emits expr)
-      (when is-loop (emits ")))" "(" recur-name " " (space-sep (map :init bindings)) "))"))
+      #_(when is-loop (emits ")))" "(" recur-name " " (space-sep (map :init bindings)) "))"))
       (emits ")"))))
 
 (defmethod emit :let [ast]
@@ -581,7 +583,7 @@
   (let [temps (vec (take (count exprs) (repeatedly gensym)))
         params (:params frame)
         recur-name (:recur-name env)]
-    (emits "("recur-name" "(space-sep (map emits exprs))")")))
+    (emits "("recur-name" "(map emits (space-sep exprs))")")))
 
 (defmethod emit :letfn
   [{:keys [bindings expr env]}]
