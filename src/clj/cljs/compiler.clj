@@ -130,7 +130,7 @@
   (emits ")\n"))
 
 (defn- print-scm [fun-str & children]
-  (emits "(" fun-str " " (space-sep (map emits children)) ")"))
+  (emits "(" fun-str " "(map emits (space-sep children)) ")"))
 
 (defn ^String emit-str [expr]
   (with-out-str (emit expr)))
