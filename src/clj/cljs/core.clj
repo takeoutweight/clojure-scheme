@@ -226,7 +226,7 @@
   (vary-meta e assoc :tag 'boolean))
 
 (defmacro nil? [x]
-  `(coercive-= ~x nil))
+  (bool-expr `(identical? ~x nil)))
 
 ;; internal - do not use.
 (defmacro coercive-not [x]
@@ -254,7 +254,7 @@
   
 (defmacro identical? [a b]
   `(scm-boolean* {:a ~a :b ~b}
-         ~'(eqv? :a :b)))
+         ~'(eq? :a :b)))
 
 (defn scm-number? [x] `(scm-boolean* {:x ~x} ~'(number? :x)))
 (defn scm-pair? [x] `(scm-boolean* {:x ~x} ~'(pair? :x)))
