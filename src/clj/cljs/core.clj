@@ -230,7 +230,7 @@
 
 ;; internal - do not use.
 (defmacro coercive-not [x]
-   (bool-expr `(scm* {:x ~x}
+   (bool-expr `(scm-boolean* {:x ~x}
                      ~'(not :x))))
 
 ;; internal - do not use.
@@ -294,6 +294,52 @@
   [type-sym o]
   (scm-instance?* type-sym o))
 
+(defmacro scm-length [lst]
+  `(scm* {:lst ~lst} ~'(length :lst)))
+
+(defmacro scm-nillify [lst]
+  `(scm* {:lst ~lst :nil ~nil} ~'(if (null? :lst) :nil :lst)))
+
+(defn make-car [lst cnt]
+  (if (core/<= cnt 3) (core/list (core/symbol (core/str "ca" (apply str (repeat cnt "d")) "r")) lst)
+      (core/list 'list-ref lst cnt)))
+
+(defn make-cdr [lst cnt]
+  (if (core/= cnt 0) lst
+      (if (core/<= cnt 4) (core/list (core/symbol (core/str "c" (apply str (repeat cnt "d")) "r")) lst)
+          (make-cdr (make-cdr lst 4) (core/- cnt 4)))))
+
+(defn- combine-arities
+  [methods]
+  (let [[smallest-meth & other-meths :as meths] (sort-by first compare-arglist methods)
+        middle-meths (butlast other-meths)
+        biggest-meth (last other-meths)
+        num-shared (count (first smallest-meth))
+        restparam (gensym "rest")
+        find-inits
+        , (fn [meth]
+            (let [args (first meth)
+                  variadic? (some #{'&} args)
+                  shared-args (take num-shared args)
+                  fixed-args (if variadic?
+                               (->> args (drop num-shared) (drop-last 2))
+                               (drop num-shared args))
+                  variadic-arg (when variadic? (last args))
+                  inits (concat
+                         (map vector shared-args (first smallest-meth))
+                         (map-indexed (fn [i a] [a `(~'scm* [~restparam] ~(make-car restparam i))])
+                                      fixed-args)
+                         (when variadic? [[variadic-arg
+                                             `(scm-nillify (~'scm* [~restparam] ~(make-cdr restparam (core/count fixed-args))))]]))]
+              {:args (map first inits)
+               :inits (map second inits)
+               :implforms (rest meth) 
+               :restcount (when (not variadic-arg) (core/count fixed-args))}))]
+    {:meths (map find-inits meths)
+     :restparam restparam
+     :num-shared num-shared 
+     :combined-argform (vec (concat (first smallest-meth) ['& restparam]))}))
+
 ;-- compiles variadic methods into a case dispatch.
 (defmacro fn
   "params => positional-params* , or positional-params* & next-param
@@ -330,60 +376,37 @@
                          (maybe-destructured params body)))
              dsigs (map psig sigs)
              any-variadic? (core/some #(some #{'&} (first %)) dsigs)
-             combined-sigs
-             , (vec (if (core/<= (count dsigs) 1)
-                      (if any-variadic?
-                        (let [args (first (first dsigs))
-                              body (second (first dsigs))]
-                          [args `((fn [~@(drop-last 2 args) ~(last args)] ~body)
-                                  ~@(drop-last 2 args) ~(last args))])
-                        dsigs)
-                      (core/let [[smallest-sig & other-sigs] (sort-by first compare-arglist dsigs)
-                                 middle-sigs (butlast other-sigs)
-                                 biggest-sig (last other-sigs)
-                                 restparam (gensym "rest")
-                                 bind-rst
-                                 , (fn* [sig]
-                                        (core/let
-                                            [variadic? (some #{'&} (first sig))
-                                             fixed-args (if variadic?
-                                                          (butlast (butlast
-                                                                    (drop (count (first smallest-sig))
-                                                                          (first sig))))
-                                                          (drop (count (first smallest-sig))
-                                                                (first sig)))
-                                             rest-arg (when variadic? (last (first sig)))
-                                             args-inits (concat
-                                                         (filter identity
-                                                                 (map (fn [s m] (when true #_(not= s m) [m s])) ;alias small arg names
-                                                                      (first smallest-sig) (first sig)))
-                                                         (map (fn [i a] [a `(~'scm* [~restparam] (~'list-ref ~restparam ~i))])
-                                                              (range) fixed-args)
-                                                         (when rest-arg [[rest-arg
-                                                                          `(~'scm* [~restparam] ~(nth (iterate #(list 'cdr %) restparam) (count fixed-args)))]]))]
-                                          `((fn [~@(map first args-inits)]
-                                              ~@(rest sig))
-                                            ~@(map second args-inits))))
-                                   num-smallest-sigs (clojure.core/count (first smallest-sig))
-                                   ]
-                        `(~(vec (concat (first smallest-sig) ['& restparam])) 
-                          (~'case (count ~restparam)
-                            0 ((fn [~@(first smallest-sig)] ~@(rest smallest-sig)) ~@(first smallest-sig))
-                            ~@(apply concat
-                                     (map-indexed
-                                      (fn* [i sig]
-                                           [(clojure.core/- (count (first sig)) num-smallest-sigs) (bind-rst sig)])
-                                      middle-sigs))
-                            ~@(when biggest-sig
-                                (if any-variadic?
-                                  [(bind-rst biggest-sig)]
-                                  [(clojure.core/- (count (first biggest-sig)) num-smallest-sigs) (bind-rst biggest-sig)
-                                   `(throw (cljs.core.Error. (str "Wrong number of args: (" (+ ~(count (first smallest-sig)) (count ~restparam)) ")")))])))))))]
+             single-arity? (core/<= (count dsigs) 1)
+             combined-form
+             , (if single-arity?
+                 dsigs
+                 (let [{:keys [meths combined-argform restparam num-shared]}
+                       , (combine-arities dsigs)
+                       meths (if any-variadic?
+                               meths
+                               (concat meths [{:implforms `(throw (cljs.core/Error. (str "No arity method for " (+ ~num-shared (scm-length ~restparam)) " args.")))}]))]
+                   `(~combined-argform
+                     (~'case (scm-length ~restparam)
+                       ~@(mapcat (core/fn [{:keys [args inits implforms restcount]}]
+                                   (let [initpairs
+                                         , (->> (map vector args inits)
+                                                ;(filter (core/fn [[a b]] (not= a b))) ; no re-binding needed if method arg is same as the combined arg. (but we need a potential recur target, so we need to bind everything for now.)
+                                                (apply concat)
+                                                (core/seq)) 
+                                         body (if true ;initpairs
+                                                `(~'loop [~@initpairs]
+                                                   ~@implforms)
+                                                `(do ~@implforms))]
+                                     (if restcount
+                                       [restcount body]
+                                       [body])))
+                                 meths)))))]
     (with-meta
       (if name
-        (list* 'fn* name combined-sigs)
-        (cons 'fn* combined-sigs))
-      (meta &form))))
+        (list* 'fn* name combined-form)
+        (cons 'fn* combined-form))
+      (assoc (meta &form)
+        :single-arity single-arity?))))
 
 (defmacro aget
   ([a i]
@@ -411,19 +434,19 @@
   ([& more] `(scm* ~more ~(cons '/ more))))
 
 (defmacro <
-  ([& more] (bool-expr `(scm* ~more ~(cons '< more)))))
+  ([& more] (bool-expr `(scm-boolean* ~more ~(cons '< more)))))
 
 (defmacro <=
-  ([& more] (bool-expr `(scm* ~more ~(cons '<= more)))))
+  ([& more] (bool-expr `(scm-boolean* ~more ~(cons '<= more)))))
 
 (defmacro >
-  ([& more] (bool-expr `(scm* ~more ~(cons '> more)))))
+  ([& more] (bool-expr `(scm-boolean* ~more ~(cons '> more)))))
 
 (defmacro >=
-  ([& more] (bool-expr `(scm* ~more ~(cons '>= more)))))
+  ([& more] (bool-expr `(scm-boolean* ~more ~(cons '>= more)))))
 
 (defmacro ==
-  ([& more] (bool-expr `(scm* ~more ~(cons '= more)))))
+  ([& more] (bool-expr `(scm-boolean* ~more ~(cons '= more)))))
 
 (defmacro dec [x]
   `(- ~x 1))
@@ -435,10 +458,10 @@
   `(== ~x 0))
 
 (defmacro pos? [x]
-  `(scm* {:x ~x} ~'(positive? :x)))
+  `(scm-boolean* {:x ~x} ~'(positive? :x)))
 
 (defmacro neg? [x]
-  `(scm* {:x ~x} ~'(negative? :x)))
+  `(scm-boolean* {:x ~x} ~'(negative? :x)))
 
 (defmacro max
   ([& more] `(scm* ~more ~(cons 'max more))))
@@ -1074,15 +1097,11 @@
   "Returns true if x satisfies the protocol"
   [psym x]
   (core/let [p (:name (cljs.analyzer/resolve-var (dissoc &env :locals) psym))
-        prefix (protocol-prefix p)]
+             prefix (protocol-prefix p)]
     `(let [tx# (type ~x)]
        (scm* {:tx tx# :p ~p :f false}
-             ~'(with-exception-catcher
-                 (lambda (e) (if (unbound-table-key-exception? e)
-                             :f
-                             (raise e)))
-                 (lambda () (table-ref (table-ref cljs.core/protocol-impls :tx)
-                            :p)))))))
+             ~'(table-ref (table-ref cljs.core/protocol-impls :tx)
+                          :p :f)))))
 
 (defmacro scm-table-ref [table key]
   `(scm* {:table ~table :key ~key} ~(list 'table-ref :table :key)))
@@ -1183,7 +1202,7 @@
            ~gexpr ~expr]
        ~(emit gpred gexpr clauses))))
 
-(defmacro case [e & clauses]
+#_(defmacro case [e & clauses]
   (core/let [default (if (odd? (count clauses))
                   (last clauses)
                   `(throw (js/Error. (core/str "No matching clause: " ~e))))
