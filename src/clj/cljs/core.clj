@@ -7,15 +7,15 @@
 ;   You must not remove this notice, or any other, from this software.
 
 (ns cljs.core
-  (:refer-clojure :exclude [-> ->> .. amap and areduce alength aclone assert binding bound-fn case comment cond condp
+  (:refer-clojure :exclude [-> ->> .. amap and areduce alength aclone assert binding bound-fn comment cond condp
                             declare definline definterface defmethod defmulti defn defn- defonce
                             defprotocol defrecord defstruct deftype delay destructure doseq dosync dotimes doto
                             extend-protocol extend-type fn for future gen-class gen-interface
                             if-let if-not import io! lazy-cat lazy-seq let letfn locking loop
-                            memfn ns or proxy proxy-super pvalues refer-clojure reify sync time
+                            memfn ns or proxy proxy-super pvalues refer-clojure reify sync seq time
                             when when-first when-let when-not while with-bindings with-in-str
                             with-loading-context with-local-vars with-open with-out-str with-precision with-redefs
-                            satisfies? identical? true? false? nil? get
+                            satisfies? identical? true? false? nil?
 
                             aget aset
                             + - * / < <= > >= == zero? pos? neg? inc dec max min mod quot rem 
@@ -52,7 +52,8 @@
   "given a map of fast-path hints for macro-expansion of protocol functions. Expands to nothing."
   [hints]
   (swap! protocol-hints (fn [ph] (merge-with set/union ph hints)))
-  nil)
+  (core/let [forward-types (reduce (fn [a [k v]] (into a v)) #{} hints)] ;generate forward defs for typechecks
+    `(do ~@(map (fn [ft] `(def ~(symbol (str (name ft) "?")))) forward-types))))
 
 (def compare-arglist
   (comparator
@@ -110,7 +111,7 @@
                                      n 0
                                      bs b
                                      seen-rest? false]
-                           (if (seq bs)
+                           (if (core/seq bs)
                              (core/let [firstb (first bs)]
                                (cond
                                  (= firstb '&) (recur (pb ret (second bs) (list `nthnext gvec n))
@@ -130,7 +131,7 @@
                        (core/let [gmap (gensym "map__")
                                   defaults (:or b)]
                          (core/loop [ret (-> bvec (conj gmap) (conj v)
-                                             (conj gmap) (conj `(if (seq? ~gmap) (apply hash-map ~gmap) ~gmap))
+                                             (conj gmap) (conj `(if (core/seq? ~gmap) (apply hash-map ~gmap) ~gmap))
                                              ((fn [ret]
                                                 (if (:as b)
                                                   (conj ret (:as b) gmap)
@@ -142,7 +143,7 @@
                                                     ((key entry) bes)))
                                           (dissoc b :as :or)
                                           {:keys #(keyword (core/str %)), :strs core/str, :syms #(list `quote %)})]
-                           (if (seq bes)
+                           (if (core/seq bes)
                              (core/let [bb (key (first bes))
                                         bk (val (first bes))
                                         has-default (contains? defaults bb)]
@@ -523,7 +524,7 @@
          (set! ~hash-key h#)
          h#))))
 
-(defmacro get
+#_(defmacro get
   ([coll k]
      `(-lookup ~coll ~k nil))
   ([coll k not-found]
@@ -612,14 +613,14 @@
 
 (defn- parse-impls [specs]
   (core/loop [ret {} s specs]
-    (if (seq s)
+    (if (core/seq s)
       (recur (assoc ret (first s) (take-while seq? (next s)))
              (drop-while seq? (next s)))
       ret)))
 
 ;It seems this clobbers multi-variadic protocol methods?
 (defn- emit-hinted-impl [c [p fs]]
-  (core/let [hint (fn [specs]
+  (core/let [hint (core/fn [specs]
                (core/let [specs (if (vector? (first specs)) 
                              (list specs) 
                              specs)]
@@ -628,8 +629,8 @@
                                      body))
                       specs)))]
     [p
-     (apply merge-with (fn [old new] (concat old (drop 2 new)))
-            (map (fn [[f & r :as fr]] {(-> f name keyword)
+     (apply merge-with (core/fn [old new] (concat old (drop 2 new)))
+            (map (core/fn [[f & r :as fr]] {(-> f name keyword)
                               (with-meta (cons 'fn (cons f (hint r))) (assoc (meta fr) :protocol-impl true))})
                  fs))
      #_(zipmap (map #(-> % first name keyword) fs)
@@ -670,7 +671,7 @@
                    (assert ret (core/str "Can't resolve: " %))
                    ret)
         impl-map (core/loop [ret {} s impls]
-                   (if (seq s)
+                   (if (core/seq s)
                      (recur (assoc ret (first s) (take-while seq? (next s)))
                             (drop-while seq? (next s)))
                      ret))
@@ -753,11 +754,11 @@
                    (assert ret (core/str "Can't resolve: " %))
                    ret)
         impl-map (core/loop [ret {} s impls]
-                   (if (seq s)
+                   (if (core/seq s)
                      (recur (assoc ret (first s) (take-while seq? (next s)))
                             (drop-while seq? (next s)))
                      ret))]
-    (if-let [fpp-pbs (seq (keep fast-path-protocols
+    (if-let [fpp-pbs (core/seq (keep fast-path-protocols
                                 (map resolve
                                      (keys impl-map))))]
       (core/let [fpps (into #{} (filter (partial contains? fast-path-protocols)
@@ -779,7 +780,7 @@
   ([t specs fields inline]
      (letfn [(inline-arity? [sig] (not (vector? (second sig))))]
        (core/loop [ret [] s specs]
-         (if (seq s)
+         (if (core/seq s)
            (recur (-> ret
                       (conj (first s))
                       (into
@@ -809,7 +810,7 @@
         t (vary-meta t assoc
             :protocols protocols
             :skip-protocol-flag fpps) ]
-    (if (seq impls)
+    (if (core/seq impls)
       `(do
          (deftype* ~t ~fields ~pmasks)
 ;         (set! (.-cljs$lang$type ~t) true)
@@ -831,7 +832,7 @@
         fields (vec (map #(with-meta % nil) fields))
         base-fields fields
         #_"depends on Gambit's record lookup i.e. cljs.core/MyRecord-__meta"
-        accessorize (fn [this fld] `(~(symbol (str tagname "-" fld)) ~this))
+        accessorize (core/fn [this fld] `(~(symbol (str tagname "-" fld)) ~this))
         fields (conj fields '__meta '__extmap)] ; (with-meta '__hash {:mutable true})
     (core/let [gs (gensym)
           ksym (gensym "k")
@@ -884,7 +885,7 @@
                                             (new ~tagname ~@(map #(accessorize gthis %) (remove #{'__extmap} fields)) 
                                                  (not-empty (dissoc ~(accessorize gthis '__extmap) k#)))))
                   'ISeqable
-                  `(~'-seq [~gthis] (seq (concat [~@(map #(list `vector (keyword %) (accessorize gthis %)) base-fields)] 
+                  `(~'-seq [~gthis] (core/seq (concat [~@(map #(list `vector (keyword %) (accessorize gthis %)) base-fields)] 
                                                  ~(accessorize gthis '__extmap))))
                   
                   'IPrintWithWriter
@@ -961,7 +962,7 @@
              fqn (core/fn [n] (symbol (str ns-name "." n)))
              prefix (protocol-prefix p)
              methods (if (string? (first doc+methods)) (next doc+methods) doc+methods)
-             expand-sig (fn [fname slot sig]
+             expand-sig (core/fn [fname slot sig]
                           `(~sig
                             (if (and ~(first sig) (. ~(first sig) ~(symbol (core/str "-" slot)))) ;; Property access needed here.
                               (. ~(first sig) ~slot ~@sig)
@@ -1003,19 +1004,19 @@
                                          'cljs.core/Pair 'pair?
                                          'cljs.core/Boolean 'boolean?
                                          'cljs.core/Nil '(eq? nil :TODO)}
-                            call-form (fn [p-fn]
+                            call-form (core/fn [p-fn]
                                         (if variadic?
                                           #_"capture locals that will be introduced later in scheme."
                                           `(scm* {:p-fn ~p-fn :fixed ~fx-a :rest ~rst-a}
                                                  (~'apply :p-fn (~'append :fixed :rest)))
                                           (concat [p-fn `(scm* {} ~o)]
-                                                  (map (fn [s] `(scm* {} ~s)) (remove #{'&} rst)))))
+                                                  (map (core/fn [s] `(scm* {} ~s)) (remove #{'&} rst)))))
                             prim-call
                             , (into {} (map #(vector %1 (call-form %2)) prim-types prim-fnames))
                             test-sym (gensym "type")
                                                         resolved-name (:name (cljs.analyzer/resolve-var (dissoc &env :locals) fname))
                             known-implementing-types (clojure.core/get @protocol-hints (:name (cljs.analyzer/resolve-var (dissoc &env :locals) fname)))
-                            check-impl (fn [sym] (not (clojure.core/get known-implementing-types sym)))
+                            check-impl (core/fn [sym] (not (clojure.core/get known-implementing-types sym)))
                             prim-dispatches ; the fat "else" clause when none of the hints apply. Careful not to extract type from prims -- skip the vtable lookup as we'll then know the type.
                             , `(~'case (cljs.core/scm-type-idx (scm* {} ~o))
                                  ~@(when (check-impl 'cljs.core/Number) `[0 ~(prim-call :Number)]) ;Fixnum
@@ -1040,7 +1041,7 @@
                                      ))
                             , #_`(let [~test-sym (type (scm* {} ~o))]
                                    (cond
-                                     ~@(mapcat (fn [ty sp-fn]
+                                     ~@(mapcat (core/fn [ty sp-fn]
                                                  [`(identical? ~ty ~test-sym),
                                                   (if variadic?
                                                     (concat [`apply sp-fn `(scm* {} ~o)] ;capture locals that will be introduced in scheme.
@@ -1048,7 +1049,7 @@
                                                     (concat [sp-fn `(scm* {} ~o)]
                                                             (map (fn [s] `(scm* {} ~s)) (remove #{'&} rst))))])
                                                prim-types specialized-fns)))
-                            fast-dispatch `(cond ~@(mapcat (fn [t] [(scm-instance?* t `(scm* {} ~o)) (call-form (symbol (str fname "---" (-> (str t) (string/replace "." "_") (string/replace "/" "$")))))])
+                            fast-dispatch `(cond ~@(mapcat (core/fn [t] [(scm-instance?* t `(scm* {} ~o)) (call-form (symbol (str fname "---" (-> (str t) (string/replace "." "_") (string/replace "/" "$")))))])
                                                            known-implementing-types)
                                                  true ~prim-dispatches)]
 ;                   (println "DISPATCH: "fname"->"resolved-name":"known-implementing-types)
@@ -1103,6 +1104,9 @@
 
 (defmacro lazy-seq [& body]
   `(new cljs.core/LazySeq nil false (core/fn [] ~@body) nil))
+
+(defmacro seq [coll]
+  `(-seq ~coll))
 
 (defmacro delay [& body]
   "Takes a body of expressions and yields a Delay object that will
@@ -1194,7 +1198,7 @@
                            (assoc m test expr)))
         pairs (reduce (fn [m [test expr]]
                         (cond
-                         (seq? test) (reduce (fn [m test]
+                         (core/seq? test) (reduce (fn [m test]
                                                (core/let [test (if (symbol? test)
                                                             (list 'quote test)
                                                             test)]
@@ -1219,12 +1223,12 @@
 
   Catches and handles JavaScript exceptions."
   [& forms]
-  (core/let [catch? #(and (seq? %) (= (first %) 'catch))
+  (core/let [catch? #(and (core/seq? %) (= (first %) 'catch))
         [body catches] (split-with (complement catch?) forms)
         [catches fin] (split-with catch? catches)
         e (gensym "e")]
     (assert (every? #(clojure.core/> (count %) 2) catches) "catch block must specify a prototype and a name")
-    (if (seq catches)
+    (if (core/seq catches)
       `(~'try*
         ~@body
         (catch ~e
@@ -1288,7 +1292,7 @@
                                      (keyword? k) (err "Invalid 'for' keyword " k)
                                      next-groups
                                       `(let [iterys# ~(emit-bind next-groups)
-                                             fs# (seq (iterys# ~next-expr))]
+                                             fs# (core/seq (iterys# ~next-expr))]
                                          (if fs#
                                            (concat fs# (~giter (rest ~gxs)))
                                            (recur (rest ~gxs))))
@@ -1331,12 +1335,12 @@
                                              ~subform
                                              ~@(when needrec [recform]))
                                            ~recform)]
-                     :else [true `(loop [~seqsym (seq ~v)]
+                     :else [true `(loop [~seqsym (core/seq ~v)]
                                     (when ~seqsym
                                       (let [~k (first ~seqsym)]
                                         ~subform
                                         ~@(when needrec [recform]))))]))))]
-    (nth (step nil (seq seq-exprs)) 1)))
+    (nth (step nil (core/seq seq-exprs)) 1)))
 
 (defmacro alength [a]
   `(scm* {:a ~a}
@@ -1430,7 +1434,7 @@
   "Throws an exception if the given option map contains keys not listed
   as valid, else returns nil."
   [options & valid-keys]
-  (when (seq (apply disj (apply hash-set (keys options)) valid-keys))
+  (when (core/seq (apply disj (apply hash-set (keys options)) valid-keys))
     (throw
      (apply core/str "Only these options are valid: "
 	    (first valid-keys)
@@ -1531,7 +1535,7 @@
   `(do
      (set! ~'*unchecked-if* true)
      (defn ~'apply-to [~'f ~'argc ~'args]
-       (let [~'args (seq ~'args)]
+       (let [~'args (core/seq ~'args)]
          (if (zero? ~'argc)
            (~'f)
            ~(gen-apply-to-helper))))
