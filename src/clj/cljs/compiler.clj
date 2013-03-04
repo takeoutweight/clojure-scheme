@@ -347,8 +347,7 @@
       (emit-comment doc (:jsdoc init))
       (emits "(define "name" "init")")
       (emitln))
-    nil
-    #_(emits "(define " name")\n")
+    (emits "(define " name")\n")
     #_(when export
         (println (str "goog.exportSymbol('" export "', " name ");")))))
 
