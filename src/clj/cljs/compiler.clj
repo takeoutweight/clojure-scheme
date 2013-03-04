@@ -281,7 +281,8 @@
 
 (defn get-tag [e]
   (or (-> e :tag)
-      (-> e :info :tag)))
+      (-> e :info :tag)
+      (-> e :form meta :tag)))
 
 (defn infer-tag [e]
   (if-let [tag (get-tag e)]
@@ -296,7 +297,7 @@
                   true 'boolean
                   false 'boolean
                   nil)
-      nil)))
+      (get-tag e))))
 
 (defn safe-test? [e]
   (let [tag (infer-tag e)]
@@ -378,13 +379,14 @@
                                                ['. (last params)]))))
       (apply str (space-sep (map munge params))))))
 
+;single-arity means we haven't done a "safe" arity dispatch.
 (defn emit-fn-method
-  [{:keys [gthis name variadic params expr env recurs max-fixed-arity] :as f}]
+  [{:keys [gthis name variadic single-arity params expr env recurs max-fixed-arity] :as f}]
   (letfn [(lambda-str []
             (emits "(lambda " (schemify-method-arglist f) " "
-                   (when variadic (str "(let (("(munge (last params)) " (cljs.core/-seq " (munge (last params)) "))) "))
+                   (when (and variadic single-arity) (str "(let (("(munge (last params)) " (if (null? " (munge (last params))") #!void "(munge (last params))"))) "))
                    expr
-                   (when variadic ")")
+                   (when (and variadic single-arity) ")")
                    ")"))]
     (if (and name (not (:protocol-impl env))) ; preserve open recursion in inline proto defns.
       (emits "(letrec (("name" "             
@@ -479,7 +481,9 @@
                            seq)
           recur-name (:recur-name env)]
       (if (= 1 (count methods))
-        (emit-fn-method (assoc (first methods) :name (or name (and (:recurs (first methods)) recur-name))))
+        (emit-fn-method (assoc (first methods)
+                          :name (or name (and (:recurs (first methods)) recur-name))
+                          :single-arity single-arity))
         (throw (Exception. "Expected multiarity to be erased in macros."))))))
 
 (defn- void-dontcare [s]
