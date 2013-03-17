@@ -866,11 +866,11 @@
                                       meth-map)]))
                             prot-impl-pairs)]
     (swap! namespaces update-in [:proto-implementers] ;for fast-path dispatch compilation. proto-methname-symbol => set-of-types lookup.
-           (fn [mp] (reduce (fn [m methname-sym]
-                              (update-in m [methname-sym]
+           (fn [mp] (reduce (fn [m proname]
+                              (update-in m [proname]
                                          (comp set conj) (:name e-type-rslvd)))
                             mp
-                            (for [[proname meths] analyzed-impls [methname _] meths] (:name (:info methname))))))
+                            (for [[proname meths] analyzed-impls] (:name proname))))) ;[methname _] meths
     {:env env :op :extend :etype e-type-rslvd :impls analyzed-impls :base-type? (prim-types (:name e-type-rslvd))}))
 
 ;(for [[proname meths] (:impls a) [methname _] meths] (:name (:info methname)))
