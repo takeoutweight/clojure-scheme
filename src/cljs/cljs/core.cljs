@@ -604,7 +604,13 @@
     ([_ f start] start))
 
   IHash
-  (-hash [o] (scm-equal?-hash o)))
+  (-hash [o] (scm-equal?-hash o))
+  
+  IWithMeta
+  (-with-meta [f meta]
+    (EmptyList. meta)))
+
+(def List-EMPTY ())
 
 (extend-type Pair
   IList
@@ -904,7 +910,7 @@ reduces them without incurring seq initialization"
   (-conj [coll o] (cons o coll))
 
   IEmptyableCollection
-  (-empty [coll] cljs.core.List/EMPTY)
+  (-empty [coll] List-EMPTY)
 
   IReduce
   (-reduce
@@ -1029,7 +1035,7 @@ reduces them without incurring seq initialization"
     (cons o coll))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.List/EMPTY meta))
+  (-empty [coll] (with-meta List-EMPTY meta))
 
   IHash
   (-hash [coll] (hash-coll coll)))
@@ -2269,7 +2275,7 @@ reduces them without incurring seq initialization"
     (cons o this))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.List/EMPTY meta))
+  (-empty [coll] (with-meta List-EMPTY meta))
 
   IHash
   (-hash [coll] (caching-hash coll hash-coll __hash)))
@@ -3271,7 +3277,8 @@ reduces them without incurring seq initialization"
              ret))))
 
 (declare tv-editable-root tv-editable-tail TransientVector deref
-         pr-sequential pr-sequential-writer pr-writer chunked-seq)
+         pr-sequential pr-sequential-writer pr-writer chunked-seq
+         PersistentVector-EMPTY_NODE PersistentVector-EMPTY)
 
 (deftype PersistentVector [meta cnt shift root tail ^:mutable __hash]
   IWithMeta
@@ -3408,8 +3415,6 @@ reduces them without incurring seq initialization"
       (RSeq. coll (dec cnt) nil)
       ())))
 
-(def PersistentVector-EMPTY_NODE (pv-fresh-node nil))
-(def PersistentVector-EMPTY (PersistentVector. nil 0 5 PersistentVector-EMPTY_NODE (array) 0))
 (defn PersistentVector-fromArray
   [xs no-clone]
   (let [l (alength xs)
@@ -4281,7 +4286,7 @@ reduces them without incurring seq initialization"
         (= (aget arr i) k) i
         :else (recur (+ i 2))))))
 
-(declare TransientArrayMap)
+(declare TransientArrayMap PersistentArrayMap-EMPTY PersistentHashMap-EMPTY)
 
 (deftype PersistentArrayMap [meta cnt arr ^:mutable __hash]
   IWithMeta
@@ -4396,8 +4401,6 @@ reduces them without incurring seq initialization"
   IEditableCollection
   (-as-transient [coll]
     (TransientArrayMap. (js-obj) (alength arr) (aclone arr))))
-
-(def PersistentArrayMap-EMPTY (PersistentArrayMap. nil 0 (array) nil))
 
 (def PersistentArrayMap-HASHMAP_THRESHOLD 16)
 
@@ -4996,13 +4999,13 @@ reduces them without incurring seq initialization"
   (-conj [coll o] (cons o coll))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.List/EMPTY meta))
+  (-empty [coll] (with-meta List-EMPTY meta))
 
   ICollection
   (-conj [coll o] (cons o coll))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.List/EMPTY meta))
+  (-empty [coll] (with-meta List-EMPTY meta))
 
   ISequential
   ISeq
@@ -5053,13 +5056,13 @@ reduces them without incurring seq initialization"
   (-conj [coll o] (cons o coll))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.List/EMPTY meta))
+  (-empty [coll] (with-meta List-EMPTY meta))
 
   ICollection
   (-conj [coll o] (cons o coll))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.List/EMPTY meta))
+  (-empty [coll] (with-meta List-EMPTY meta))
 
   ISequential
   ISeq
@@ -5184,8 +5187,6 @@ reduces them without incurring seq initialization"
   IEditableCollection
   (-as-transient [coll]
     (TransientHashMap. (js-obj) root cnt has-nil? nil-val)))
-
-(def PersistentHashMap-EMPTY (PersistentHashMap. nil 0 nil false nil 0))
 
 (defn PersistentHashMap-fromArrays
   [ks vs]
@@ -5327,7 +5328,7 @@ reduces them without incurring seq initialization"
   (-conj [coll o] (cons o coll))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.List/EMPTY meta))
+  (-empty [coll] (with-meta List-EMPTY meta))
 
   IHash
   (-hash [coll] (caching-hash coll hash-coll __hash))
@@ -5795,7 +5796,7 @@ reduces them without incurring seq initialization"
           (neg? c)  (-replace tree tk (.-val tree) (tree-map-replace comp (.-left tree) k v) (.-right tree))
           :else     (-replace tree tk (.-val tree) (.-left tree) (tree-map-replace comp (.-right tree) k v)))))
 
-(declare key)
+(declare key PersistentTreeMap-EMPTY)
 
 (defn- tree-map-entry-at [coll k]
     (loop [t (.-tree coll)]
@@ -5914,8 +5915,6 @@ reduces them without incurring seq initialization"
 
   (-comparator [coll] comp))
 
-(def PersistentTreeMap-EMPTY (PersistentTreeMap. compare nil 0 nil 0))
-
 (defn hash-map
   "keyval => key val
   Returns a new hash map with supplied mappings."
@@ -6022,7 +6021,7 @@ reduces them without incurring seq initialization"
         ret)))
 
 ;;; PersistentHashSet
-(declare TransientHashSet)
+(declare TransientHashSet PersistentHashSet-EMPTY)
 
 (deftype PersistentHashSet [meta hash-map ^:mutable __hash]
   IWithMeta
@@ -6082,8 +6081,6 @@ reduces them without incurring seq initialization"
   IEditableCollection
   (-as-transient [coll] (TransientHashSet. (transient hash-map))))
 
-(def PersistentHashSet-EMPTY (PersistentHashSet. nil (hash-map) 0))
-
 (defn PersistentHashSet-fromArray
   [items]
   (let [len (count items)]
@@ -6129,6 +6126,8 @@ reduces them without incurring seq initialization"
     (if (identical? (-lookup transient-map k lookup-sentinel) lookup-sentinel)
       not-found
       k)))
+
+(declare PersistentTreeSet-EMPTY)
 
 (deftype PersistentTreeSet [meta tree-map ^:mutable __hash]
   IWithMeta
@@ -6194,8 +6193,6 @@ reduces them without incurring seq initialization"
     (if (nil? not-found)
       (-lookup coll k)
       (-lookup coll k not-found))))
-
-(def PersistentTreeSet-EMPTY (PersistentTreeSet. nil (sorted-map) 0))
 
 (defn hash-set
   ([] PersistentHashSet-EMPTY)
@@ -7644,3 +7641,11 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
   [ex]
   (when (instance? ExceptionInfo ex)
     (.-cause ex)))
+
+(def PersistentVector-EMPTY_NODE (pv-fresh-node nil))
+(def PersistentVector-EMPTY (PersistentVector. nil 0 5 PersistentVector-EMPTY_NODE (array) 0))
+(def PersistentArrayMap-EMPTY (PersistentArrayMap. nil 0 (array) nil))
+(def PersistentHashMap-EMPTY (PersistentHashMap. nil 0 nil false nil 0))
+(def PersistentTreeMap-EMPTY (PersistentTreeMap. compare nil 0 nil 0))
+(def PersistentTreeSet-EMPTY (PersistentTreeSet. nil (sorted-map) 0))
+(def PersistentHashSet-EMPTY (PersistentHashSet. nil (hash-map) 0))
