@@ -709,7 +709,9 @@
   [{:keys [t fields no-constructor]}]
   (let [fields (map munge fields)]
     #_(emit-provide t)
+    (emitln "(declare (not safe))")
     (emitln "(define-type " t " " (space-sep fields) (if no-constructor " constructor: #f" "") ")")
+    (emitln "(declare (safe))")
     (emitln "(define " t " ##type-" (count fields)  "-" t ")") 
     (emitln "(table-set! cljs.core/protocol-impls " t " (make-table))" )))
 
