@@ -687,9 +687,13 @@
   [{:keys [target val env]}]
   (cond
     (and (= :var (:op target)) (:field (:info target)))
-    (emits "(cljs.core/record-set! " (:this-name env) " '" (:name (:info target)) " " val")")
+    , (if-let [tag (get-tag (ana/resolve-existing-var env (:this-name env)))]
+        (emits "("(:name (ana/resolve-existing-var env tag))"-"(:name (:info target))"-set! "(:this-name env)" "val")")
+        (emits "(cljs.core/record-set! " (:this-name env) " '" (:name (:info target)) " " val")"))
     (= :dot (:op target))
-    (emits "(cljs.core/record-set! " (:target target) " '" (:field target) " " val")")
+    , (if-let [tag (get-tag (:target target))]
+        (emits "("(:name (ana/resolve-existing-var env tag))"-"(:field target)"-set! "(:target target)" "val")")
+        (emits "(cljs.core/record-set! " (:target target) " '" (:field target) " " val")"))
     :else (emits "(set! " target " " val ")")))
 
 (defmethod emit :ns
@@ -743,7 +747,9 @@
 (defmethod emit :dot
   [{:keys [target field method args env]}]
   (if field
-    (emits "(cljs.core/record-ref "target" '"field")")
+    (if-let [tag (get-tag target)]
+      (emits "("(:name (ana/resolve-existing-var env tag)) "-"field " " target ")")
+      (emits "(cljs.core/record-ref "target" '"field")"))
     (throw (Exception. (str "no special dot-method access: " (:line env)))) ;TODO
     #_(emits target "." (munge method #{}) "("
                       (comma-sep args)
