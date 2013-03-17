@@ -695,6 +695,7 @@
 (defmethod emit :ns
   [{:keys [name requires uses requires-macros env]}]
   (swap! ns-first-segments conj (first (string/split (str name) #"\.")))
+  (emits "(declare (standard-bindings) (extended-bindings) (block))")
   (when-not (= name 'cljs.core)
     (emits "(load \"cljs.core\")"))
   (doseq [lib (into (vals requires) (distinct (vals uses)))]
