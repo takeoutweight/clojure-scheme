@@ -6,60 +6,60 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software.
 
-(ns cljs.core)
+(ns cljscm.core)
 
 ;hints for generating fast-path dispatch for known core implementors. Falls back to vtable lookup.
-;can be auto-generated from an analysis pass: (do (ana/analyze-file "cljs/core.cljs") (:proto-implementers @cljs.analyzer/namespaces))
-;(cljs.core/add-protocol-hints!)
-(cljs.core/add-protocol-hints!
- {cljs.core/IMeta [cljs.core/PersistentQueue cljs.core/PersistentArrayMap cljs.core/Atom cljs.core/Nil cljs.core/EmptyList cljs.core/Subvec cljs.core/Range cljs.core/PersistentQueueSeq cljs.core/RedNode cljs.core/ChunkedCons cljs.core/Vector cljs.core/PersistentVector cljs.core/ArrayNodeSeq cljs.core/RSeq cljs.core/PersistentTreeSet cljs.core/LazySeq cljs.core/BlackNode cljs.core/PersistentHashMap cljs.core/NodeSeq cljs.core/Cons cljs.core/PersistentTreeMapSeq cljs.core/PersistentTreeMap cljs.core/PersistentHashSet],
-  cljs.core/IFn [cljs.core/PersistentArrayMap cljs.core/MultiFn cljs.core/Subvec cljs.core/Pair cljs.core/TransientVector cljs.core/RedNode cljs.core/Vector cljs.core/Keyword cljs.core/PersistentVector cljs.core/String cljs.core/Table cljs.core/PersistentTreeSet cljs.core/TransientHashSet cljs.core/BlackNode cljs.core/PersistentHashMap cljs.core/Symbol cljs.core/PersistentTreeMap cljs.core/Array cljs.core/PersistentHashSet],
-  cljs.core/IEquiv [cljs.core/PersistentQueue cljs.core/PersistentArrayMap cljs.core/Atom cljs.core/Nil cljs.core/EmptyList cljs.core/MultiFn cljs.core/Subvec cljs.core/Range cljs.core/Number cljs.core/Char cljs.core/Pair cljs.core/PersistentQueueSeq cljs.core/IndexedSeq cljs.core/ChunkedSeq cljs.core/RedNode cljs.core/ChunkedCons cljs.core/Vector cljs.core/Keyword cljs.core/PersistentVector cljs.core/ArrayNodeSeq cljs.core/String cljs.core/Table cljs.core/RSeq cljs.core/Class cljs.core/PersistentTreeSet cljs.core/Procedure cljs.core/NeverEquiv cljs.core/LazySeq cljs.core/BlackNode cljs.core/PersistentHashMap cljs.core/NodeSeq cljs.core/Cons cljs.core/UUID cljs.core/PersistentTreeMapSeq cljs.core/Symbol cljs.core/PersistentTreeMap cljs.core/Null cljs.core/Array cljs.core/Boolean cljs.core/PersistentHashSet],
-  cljs.core/ICollection [cljs.core/PersistentQueue cljs.core/PersistentArrayMap cljs.core/Nil cljs.core/EmptyList cljs.core/Subvec cljs.core/Range cljs.core/Pair cljs.core/PersistentQueueSeq cljs.core/IndexedSeq cljs.core/ChunkedSeq cljs.core/RedNode cljs.core/ChunkedCons cljs.core/Vector cljs.core/PersistentVector cljs.core/ArrayNodeSeq cljs.core/Table cljs.core/RSeq cljs.core/PersistentTreeSet cljs.core/LazySeq cljs.core/BlackNode cljs.core/PersistentHashMap cljs.core/NodeSeq cljs.core/Cons cljs.core/PersistentTreeMapSeq cljs.core/PersistentTreeMap cljs.core/Null cljs.core/Array cljs.core/PersistentHashSet],
-  cljs.core/IVector [cljs.core/Subvec cljs.core/RedNode cljs.core/Vector cljs.core/PersistentVector cljs.core/BlackNode cljs.core/Array],
-  cljs.core/INode [cljs.core/BitmapIndexedNode cljs.core/HashCollisionNode cljs.core/ArrayNode],
-  cljs.core/IPairable [cljs.core/Nil cljs.core/EmptyList cljs.core/Subvec cljs.core/Pair cljs.core/IndexedSeq cljs.core/Vector cljs.core/LazySeq cljs.core/Cons cljs.core/Null cljs.core/Array],
-  cljs.core/Fn [cljs.core/Procedure],
-  cljs.core/IHash [cljs.core/PersistentQueue cljs.core/PersistentArrayMap cljs.core/Atom cljs.core/Nil cljs.core/EmptyList cljs.core/MultiFn cljs.core/Subvec cljs.core/Range cljs.core/Number cljs.core/Char cljs.core/Pair cljs.core/PersistentQueueSeq cljs.core/IndexedSeq cljs.core/ChunkedSeq cljs.core/RedNode cljs.core/ChunkedCons cljs.core/Vector cljs.core/Keyword cljs.core/PersistentVector cljs.core/ArrayNodeSeq cljs.core/String cljs.core/Table cljs.core/RSeq cljs.core/Class cljs.core/PersistentTreeSet cljs.core/Procedure cljs.core/LazySeq cljs.core/BlackNode cljs.core/PersistentHashMap cljs.core/NodeSeq cljs.core/Cons cljs.core/UUID cljs.core/PersistentTreeMapSeq cljs.core/Symbol cljs.core/PersistentTreeMap cljs.core/Null cljs.core/Boolean cljs.core/PersistentHashSet],
-  cljs.core/IIndexed [cljs.core/Nil cljs.core/EmptyList cljs.core/Subvec cljs.core/Range cljs.core/Pair cljs.core/IndexedSeq cljs.core/TransientVector cljs.core/RedNode cljs.core/Vector cljs.core/PersistentVector cljs.core/String cljs.core/ArrayChunk cljs.core/LazySeq cljs.core/BlackNode cljs.core/Cons cljs.core/Null cljs.core/Array],
-  cljs.core/IWriter [cljs.core/StringBufferWriter],
-  cljs.core/IChunkedSeq [cljs.core/ChunkedSeq cljs.core/ChunkedCons],
-  cljs.core/IEmptyableCollection [cljs.core/PersistentQueue cljs.core/PersistentArrayMap cljs.core/Nil cljs.core/EmptyList cljs.core/Subvec cljs.core/Range cljs.core/Pair cljs.core/PersistentQueueSeq cljs.core/IndexedSeq cljs.core/ChunkedSeq cljs.core/RedNode cljs.core/ChunkedCons cljs.core/Vector cljs.core/PersistentVector cljs.core/ArrayNodeSeq cljs.core/Table cljs.core/RSeq cljs.core/PersistentTreeSet cljs.core/LazySeq cljs.core/BlackNode cljs.core/PersistentHashMap cljs.core/NodeSeq cljs.core/Cons cljs.core/PersistentTreeMapSeq cljs.core/PersistentTreeMap cljs.core/Null cljs.core/PersistentHashSet],
-  cljs.core/ICounted [cljs.core/PersistentQueue cljs.core/PersistentArrayMap cljs.core/Nil cljs.core/ChunkBuffer cljs.core/EmptyList cljs.core/Subvec cljs.core/Range cljs.core/Pair cljs.core/IndexedSeq cljs.core/TransientArrayMap cljs.core/TransientVector cljs.core/RedNode cljs.core/Vector cljs.core/PersistentVector cljs.core/String cljs.core/Table cljs.core/RSeq cljs.core/PersistentTreeSet cljs.core/TransientHashSet cljs.core/ArrayChunk cljs.core/LazySeq cljs.core/BlackNode cljs.core/PersistentHashMap cljs.core/Cons cljs.core/TransientHashMap cljs.core/PersistentTreeMapSeq cljs.core/PersistentTreeMap cljs.core/Null cljs.core/Array cljs.core/PersistentHashSet],
-  cljs.core/IKVReduce [cljs.core/PersistentArrayMap cljs.core/BitmapIndexedNode cljs.core/HashCollisionNode cljs.core/RedNode cljs.core/PersistentVector cljs.core/ArrayNode cljs.core/BlackNode cljs.core/PersistentHashMap cljs.core/PersistentTreeMap],
-  cljs.core/ITransientVector [cljs.core/TransientVector],
-  cljs.core/ISorted [cljs.core/PersistentTreeSet cljs.core/PersistentTreeMap],
-  cljs.core/IRedBlackNode [cljs.core/RedNode cljs.core/BlackNode],
-  cljs.core/IWatchable [cljs.core/Atom],
-  cljs.core/ITransientSet [cljs.core/TransientHashSet],
-  cljs.core/IEditableCollection [cljs.core/PersistentArrayMap cljs.core/PersistentVector cljs.core/PersistentHashMap cljs.core/PersistentHashSet],
-  cljs.core/IStringable [cljs.core/String cljs.core/StringBufferWriter],
-  cljs.core/IAssociative [cljs.core/PersistentArrayMap cljs.core/Nil cljs.core/Subvec cljs.core/RedNode cljs.core/Vector cljs.core/PersistentVector cljs.core/Table cljs.core/BlackNode cljs.core/PersistentHashMap cljs.core/PersistentTreeMap cljs.core/Array],
-  cljs.core/ISeqable [cljs.core/Cons cljs.core/LazySeq cljs.core/Range cljs.core/PersistentVector cljs.core/PersistentQueue cljs.core/PersistentArrayMap cljs.core/Nil cljs.core/EmptyList cljs.core/Subvec cljs.core/Pair cljs.core/PersistentQueueSeq cljs.core/IndexedSeq cljs.core/ChunkedSeq cljs.core/RedNode cljs.core/ChunkedCons cljs.core/Vector cljs.core/ArrayNodeSeq cljs.core/String cljs.core/Table cljs.core/RSeq cljs.core/PersistentTreeSet cljs.core/BlackNode cljs.core/PersistentHashMap cljs.core/NodeSeq cljs.core/PersistentTreeMapSeq cljs.core/PersistentTreeMap cljs.core/Null cljs.core/Array cljs.core/PersistentHashSet],
-  cljs.core/ITransientMap [cljs.core/TransientArrayMap cljs.core/TransientHashMap],
-  cljs.core/IMultiFn [cljs.core/MultiFn],
-  cljs.core/IList [cljs.core/EmptyList cljs.core/Pair cljs.core/Cons],
-  cljs.core/ISet [cljs.core/Nil cljs.core/PersistentTreeSet cljs.core/PersistentHashSet],
-  cljs.core/IMapEntry [cljs.core/RedNode cljs.core/PersistentVector cljs.core/BlackNode],
-  cljs.core/IReversible [cljs.core/IndexedSeq cljs.core/PersistentVector cljs.core/PersistentTreeSet cljs.core/PersistentTreeMap],
-  cljs.core/ASeq [cljs.core/Pair cljs.core/IndexedSeq cljs.core/ChunkedSeq cljs.core/ChunkedCons cljs.core/Cons],
-  cljs.core/IPrintWithWriter [cljs.core/PersistentQueue cljs.core/PersistentArrayMap cljs.core/Atom cljs.core/Nil cljs.core/EmptyList cljs.core/Subvec cljs.core/Error cljs.core/Range cljs.core/Number cljs.core/Char cljs.core/Pair cljs.core/IndexedSeq cljs.core/ChunkedSeq cljs.core/RedNode cljs.core/ChunkedCons cljs.core/Vector cljs.core/Keyword cljs.core/PersistentVector cljs.core/ArrayNodeSeq cljs.core/String cljs.core/Table cljs.core/RSeq cljs.core/PersistentTreeSet cljs.core/Procedure cljs.core/LazySeq cljs.core/BlackNode cljs.core/PersistentHashMap cljs.core/NodeSeq cljs.core/Cons cljs.core/UUID cljs.core/PersistentTreeMapSeq cljs.core/Symbol cljs.core/PersistentTreeMap cljs.core/Null cljs.core/Array cljs.core/Boolean cljs.core/PersistentHashSet],
-  cljs.core/ISequential [cljs.core/PersistentQueue cljs.core/EmptyList cljs.core/Subvec cljs.core/Range cljs.core/Pair cljs.core/PersistentQueueSeq cljs.core/IndexedSeq cljs.core/ChunkedSeq cljs.core/RedNode cljs.core/ChunkedCons cljs.core/Vector cljs.core/PersistentVector cljs.core/ArrayNodeSeq cljs.core/RSeq cljs.core/LazySeq cljs.core/BlackNode cljs.core/NodeSeq cljs.core/Cons cljs.core/PersistentTreeMapSeq cljs.core/Null cljs.core/Array],
-  cljs.core/IDeref [cljs.core/Atom cljs.core/Reduced cljs.core/Delay],
-  cljs.core/IComparable [cljs.core/PersistentVector],
-  cljs.core/INext [cljs.core/LazySeq cljs.core/Cons cljs.core/Nil cljs.core/EmptyList cljs.core/Range cljs.core/Pair cljs.core/IndexedSeq cljs.core/ChunkedSeq],
-  cljs.core/IReduce [cljs.core/LazySeq cljs.core/Cons cljs.core/Nil cljs.core/EmptyList cljs.core/Subvec cljs.core/Range cljs.core/Pair cljs.core/IndexedSeq cljs.core/RedNode cljs.core/Vector cljs.core/PersistentVector cljs.core/String cljs.core/Table cljs.core/ArrayChunk cljs.core/BlackNode cljs.core/Null cljs.core/Array cljs.core/PersistentHashSet],
-  cljs.core/ITransientAssociative [cljs.core/TransientArrayMap cljs.core/TransientVector cljs.core/TransientHashMap],
-  cljs.core/IPending [cljs.core/Delay],
-  cljs.core/IChunk [cljs.core/ArrayChunk],
-  cljs.core/IMap [cljs.core/PersistentArrayMap cljs.core/Nil cljs.core/Table cljs.core/PersistentHashMap cljs.core/PersistentTreeMap],
-  cljs.core/ITransientCollection [cljs.core/TransientArrayMap cljs.core/TransientVector cljs.core/TransientHashSet cljs.core/TransientHashMap],
-  cljs.core/IStack [cljs.core/PersistentQueue cljs.core/Nil cljs.core/EmptyList cljs.core/Subvec cljs.core/Pair cljs.core/RedNode cljs.core/Vector cljs.core/PersistentVector cljs.core/BlackNode cljs.core/Cons],
-  cljs.core/IWithMeta [cljs.core/PersistentQueue cljs.core/PersistentArrayMap cljs.core/Nil cljs.core/EmptyList cljs.core/Subvec cljs.core/Range cljs.core/Pair cljs.core/PersistentQueueSeq cljs.core/ChunkedSeq cljs.core/RedNode cljs.core/ChunkedCons cljs.core/Vector cljs.core/PersistentVector cljs.core/ArrayNodeSeq cljs.core/Table cljs.core/RSeq cljs.core/PersistentTreeSet cljs.core/LazySeq cljs.core/BlackNode cljs.core/PersistentHashMap cljs.core/NodeSeq cljs.core/Cons cljs.core/PersistentTreeMapSeq cljs.core/PersistentTreeMap cljs.core/Array cljs.core/PersistentHashSet],
-  cljs.core/IPrintable [cljs.core/Nil cljs.core/Class cljs.core/Procedure cljs.core/UUID cljs.core/Null],
-  cljs.core/IChunkedNext [cljs.core/ChunkedSeq cljs.core/ChunkedCons],
-  cljs.core/ILookup [cljs.core/PersistentArrayMap cljs.core/Nil cljs.core/Subvec cljs.core/TransientArrayMap cljs.core/TransientVector cljs.core/RedNode cljs.core/Vector cljs.core/PersistentVector cljs.core/String cljs.core/Table cljs.core/PersistentTreeSet cljs.core/TransientHashSet cljs.core/BlackNode cljs.core/PersistentHashMap cljs.core/TransientHashMap cljs.core/PersistentTreeMap cljs.core/Array cljs.core/PersistentHashSet],
-  cljs.core/ISeq [cljs.core/LazySeq cljs.core/Cons cljs.core/Range cljs.core/PersistentQueue cljs.core/Nil cljs.core/EmptyList cljs.core/Pair cljs.core/PersistentQueueSeq cljs.core/IndexedSeq cljs.core/ChunkedSeq cljs.core/ChunkedCons cljs.core/ArrayNodeSeq cljs.core/RSeq cljs.core/NodeSeq cljs.core/PersistentTreeMapSeq cljs.core/Null]})
+;can be auto-generated from an analysis pass: (do (ana/analyze-file "cljs/core.cljs") (:proto-implementers @cljscm.analyzer/namespaces))
+;(cljscm.core/add-protocol-hints!)
+(cljscm.core/add-protocol-hints!
+ {cljscm.core/IMeta [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Atom cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/PersistentQueueSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/PersistentTreeMapSeq cljscm.core/PersistentTreeMap cljscm.core/PersistentHashSet],
+  cljscm.core/IFn [cljscm.core/PersistentArrayMap cljscm.core/MultiFn cljscm.core/Subvec cljscm.core/Pair cljscm.core/TransientVector cljscm.core/RedNode cljscm.core/Vector cljscm.core/Keyword cljscm.core/PersistentVector cljscm.core/String cljscm.core/Table cljscm.core/PersistentTreeSet cljscm.core/TransientHashSet cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/Symbol cljscm.core/PersistentTreeMap cljscm.core/Array cljscm.core/PersistentHashSet],
+  cljscm.core/IEquiv [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Atom cljscm.core/Nil cljscm.core/EmptyList cljscm.core/MultiFn cljscm.core/Subvec cljscm.core/Range cljscm.core/Number cljscm.core/Char cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/Keyword cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/String cljscm.core/Table cljscm.core/RSeq cljscm.core/Class cljscm.core/PersistentTreeSet cljscm.core/Procedure cljscm.core/NeverEquiv cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/UUID cljscm.core/PersistentTreeMapSeq cljscm.core/Symbol cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Array cljscm.core/Boolean cljscm.core/PersistentHashSet],
+  cljscm.core/ICollection [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/PersistentTreeMapSeq cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Array cljscm.core/PersistentHashSet],
+  cljscm.core/IVector [cljscm.core/Subvec cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/BlackNode cljscm.core/Array],
+  cljscm.core/INode [cljscm.core/BitmapIndexedNode cljscm.core/HashCollisionNode cljscm.core/ArrayNode],
+  cljscm.core/IPairable [cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/Vector cljscm.core/LazySeq cljscm.core/Cons cljscm.core/Null cljscm.core/Array],
+  cljscm.core/Fn [cljscm.core/Procedure],
+  cljscm.core/IHash [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Atom cljscm.core/Nil cljscm.core/EmptyList cljscm.core/MultiFn cljscm.core/Subvec cljscm.core/Range cljscm.core/Number cljscm.core/Char cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/Keyword cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/String cljscm.core/Table cljscm.core/RSeq cljscm.core/Class cljscm.core/PersistentTreeSet cljscm.core/Procedure cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/UUID cljscm.core/PersistentTreeMapSeq cljscm.core/Symbol cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Boolean cljscm.core/PersistentHashSet],
+  cljscm.core/IIndexed [cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/TransientVector cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/String cljscm.core/ArrayChunk cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/Cons cljscm.core/Null cljscm.core/Array],
+  cljscm.core/IWriter [cljscm.core/StringBufferWriter],
+  cljscm.core/IChunkedSeq [cljscm.core/ChunkedSeq cljscm.core/ChunkedCons],
+  cljscm.core/IEmptyableCollection [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/PersistentTreeMapSeq cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/PersistentHashSet],
+  cljscm.core/ICounted [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/ChunkBuffer cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/TransientArrayMap cljscm.core/TransientVector cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/String cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/TransientHashSet cljscm.core/ArrayChunk cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/Cons cljscm.core/TransientHashMap cljscm.core/PersistentTreeMapSeq cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Array cljscm.core/PersistentHashSet],
+  cljscm.core/IKVReduce [cljscm.core/PersistentArrayMap cljscm.core/BitmapIndexedNode cljscm.core/HashCollisionNode cljscm.core/RedNode cljscm.core/PersistentVector cljscm.core/ArrayNode cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/PersistentTreeMap],
+  cljscm.core/ITransientVector [cljscm.core/TransientVector],
+  cljscm.core/ISorted [cljscm.core/PersistentTreeSet cljscm.core/PersistentTreeMap],
+  cljscm.core/IRedBlackNode [cljscm.core/RedNode cljscm.core/BlackNode],
+  cljscm.core/IWatchable [cljscm.core/Atom],
+  cljscm.core/ITransientSet [cljscm.core/TransientHashSet],
+  cljscm.core/IEditableCollection [cljscm.core/PersistentArrayMap cljscm.core/PersistentVector cljscm.core/PersistentHashMap cljscm.core/PersistentHashSet],
+  cljscm.core/IStringable [cljscm.core/String cljscm.core/StringBufferWriter],
+  cljscm.core/IAssociative [cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/Subvec cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/Table cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/PersistentTreeMap cljscm.core/Array],
+  cljscm.core/ISeqable [cljscm.core/Cons cljscm.core/LazySeq cljscm.core/Range cljscm.core/PersistentVector cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/ArrayNodeSeq cljscm.core/String cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/PersistentTreeMapSeq cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Array cljscm.core/PersistentHashSet],
+  cljscm.core/ITransientMap [cljscm.core/TransientArrayMap cljscm.core/TransientHashMap],
+  cljscm.core/IMultiFn [cljscm.core/MultiFn],
+  cljscm.core/IList [cljscm.core/EmptyList cljscm.core/Pair cljscm.core/Cons],
+  cljscm.core/ISet [cljscm.core/Nil cljscm.core/PersistentTreeSet cljscm.core/PersistentHashSet],
+  cljscm.core/IMapEntry [cljscm.core/RedNode cljscm.core/PersistentVector cljscm.core/BlackNode],
+  cljscm.core/IReversible [cljscm.core/IndexedSeq cljscm.core/PersistentVector cljscm.core/PersistentTreeSet cljscm.core/PersistentTreeMap],
+  cljscm.core/ASeq [cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/ChunkedCons cljscm.core/Cons],
+  cljscm.core/IPrintWithWriter [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Atom cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Error cljscm.core/Range cljscm.core/Number cljscm.core/Char cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/Keyword cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/String cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/Procedure cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/UUID cljscm.core/PersistentTreeMapSeq cljscm.core/Symbol cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Array cljscm.core/Boolean cljscm.core/PersistentHashSet],
+  cljscm.core/ISequential [cljscm.core/PersistentQueue cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/RSeq cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/PersistentTreeMapSeq cljscm.core/Null cljscm.core/Array],
+  cljscm.core/IDeref [cljscm.core/Atom cljscm.core/Reduced cljscm.core/Delay],
+  cljscm.core/IComparable [cljscm.core/PersistentVector],
+  cljscm.core/INext [cljscm.core/LazySeq cljscm.core/Cons cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Range cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/ChunkedSeq],
+  cljscm.core/IReduce [cljscm.core/LazySeq cljscm.core/Cons cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/String cljscm.core/Table cljscm.core/ArrayChunk cljscm.core/BlackNode cljscm.core/Null cljscm.core/Array cljscm.core/PersistentHashSet],
+  cljscm.core/ITransientAssociative [cljscm.core/TransientArrayMap cljscm.core/TransientVector cljscm.core/TransientHashMap],
+  cljscm.core/IPending [cljscm.core/Delay],
+  cljscm.core/IChunk [cljscm.core/ArrayChunk],
+  cljscm.core/IMap [cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/Table cljscm.core/PersistentHashMap cljscm.core/PersistentTreeMap],
+  cljscm.core/ITransientCollection [cljscm.core/TransientArrayMap cljscm.core/TransientVector cljscm.core/TransientHashSet cljscm.core/TransientHashMap],
+  cljscm.core/IStack [cljscm.core/PersistentQueue cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Pair cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/BlackNode cljscm.core/Cons],
+  cljscm.core/IWithMeta [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/PersistentTreeMapSeq cljscm.core/PersistentTreeMap cljscm.core/Array cljscm.core/PersistentHashSet],
+  cljscm.core/IPrintable [cljscm.core/Nil cljscm.core/Class cljscm.core/Procedure cljscm.core/UUID cljscm.core/Null],
+  cljscm.core/IChunkedNext [cljscm.core/ChunkedSeq cljscm.core/ChunkedCons],
+  cljscm.core/ILookup [cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/Subvec cljscm.core/TransientArrayMap cljscm.core/TransientVector cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/String cljscm.core/Table cljscm.core/PersistentTreeSet cljscm.core/TransientHashSet cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/TransientHashMap cljscm.core/PersistentTreeMap cljscm.core/Array cljscm.core/PersistentHashSet],
+  cljscm.core/ISeq [cljscm.core/LazySeq cljscm.core/Cons cljscm.core/Range cljscm.core/PersistentQueue cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/ChunkedCons cljscm.core/ArrayNodeSeq cljscm.core/RSeq cljscm.core/NodeSeq cljscm.core/PersistentTreeMapSeq cljscm.core/Null]})
 
 (def *unchecked-if* false)
 
@@ -86,7 +86,7 @@
 (defn ^boolean identical?
   "Tests if 2 arguments are the same object"
   [x y]
-  (cljs.core/identical? x y))
+  (cljscm.core/identical? x y))
 
 (defn ^boolean nil?
   "Returns true if x is nil, false otherwise."
@@ -127,19 +127,19 @@
 (defn aget
   "Returns the value at the index."
   ([array i]
-     (cljs.core/aget array i))
+     (cljscm.core/aget array i))
   ([array i & idxs]
      (apply aget (aget array i) idxs)))
 
 (defn aset
   "Sets the value at the index."
   [array i val]
-  (cljs.core/aset array i val))
+  (cljscm.core/aset array i val))
 
 (defn alength
   "Returns the length of the array. Works on arrays of all types."
   [array]
-  (cljs.core/alength array))
+  (cljscm.core/alength array))
 
 (declare reduce)
 
@@ -154,7 +154,7 @@
   [x] (scm-boolean* [x] (char? x)))
 
 (defn type [x]
-  (case (cljs.core/scm-type-idx x)
+  (case (cljscm.core/scm-type-idx x)
     0 Number ;Fixnum
     3 Pair
     2 (case x
@@ -164,7 +164,7 @@
         (cond
           (scm* [x] (char? x)) Char
           :else (throw "Can't discern special type")))
-    1 (case (cljs.core/scm-subtype-idx x)
+    1 (case (cljscm.core/scm-subtype-idx x)
         0 Array ; raw scheme vector
         (2 3 30 31) Number            ;Rational ;Complex ;Flonum, ;Bignum
         4 (scm-unsafe-vector-ref x 0)
@@ -177,10 +177,10 @@
         )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; core protocols ;;;;;;;;;;;;;
-(scm* {} (define cljs.core/protocol-impls (make-table)))
-(scm* {} (define cljs.core/foreign-tags (make-table)))
+(scm* {} (define cljscm.core/protocol-impls (make-table)))
+(scm* {} (define cljscm.core/foreign-tags (make-table)))
 ;all proto defns need to be able to throw errors with str msgs- but errors themselves can implement protocols
-;(scm* {} (define make-cljs.core/Error))
+;(scm* {} (define make-cljscm.core/Error))
 ;(declare str)
 
 (defprotocol Fn
@@ -391,7 +391,7 @@
         (scm-unsafe-vector-set! obj slot val))
       (throw (Error. (str "Field not defined: " field " on " field-params))))))
 
-(scm-str* "(define (cljs.core/record-ref obj field)
+(scm-str* "(define (cljscm.core/record-ref obj field)
            (if (and (eqv? (##type obj) 1) (eqv? (##subtype obj) 4))
              (let* ((field-params (vector->list (##vector-ref (##vector-ref obj 0) 5)))
                     (search (memq field field-params)))
@@ -400,7 +400,7 @@
                      (raise (string-append \"No field: \" (symbol->string field)))))
              (raise (string-append \"Not a record: \" (object->string obj)))))")
 
-(scm-str* "(define (cljs.core/record-set! obj field val)
+(scm-str* "(define (cljscm.core/record-set! obj field val)
            (if (and (eqv? (##type obj) 1) (eqv? (##subtype obj) 4))
              (let* ((field-params (vector->list (##vector-ref (##vector-ref obj 0) 5)))
                     (search (memq field field-params)))
@@ -485,12 +485,12 @@
 
 ;hijack existing scheme structure types
 (def Table (type {}))
-(scm* {} (table-set! cljs.core/protocol-impls cljs.core/Table (make-table)))
-(scm* {} (define (make-cljs.core/Table) (make-table)))
+(scm* {} (table-set! cljscm.core/protocol-impls cljscm.core/Table (make-table)))
+(scm* {} (define (make-cljscm.core/Table) (make-table)))
 
 (def Class (type (type {})))
-(scm* {} (table-set! cljs.core/protocol-impls cljs.core/Class (make-table)))
-;(scm* {} (define (cljs.core/Class? x) (equal? (cljs.core/type x) )))
+(scm* {} (table-set! cljscm.core/protocol-impls cljscm.core/Class (make-table)))
+;(scm* {} (define (cljscm.core/Class? x) (equal? (cljscm.core/type x) )))
 (defn Class? [x] (identical? (type x) Class))
 
 (defn scm-equal?-hash [o]
@@ -772,7 +772,7 @@
 ;;this is primitive because & emits call to array-seq
 (defn inc
   "Returns a number one greater than num."
-  [x] (cljs.core/+ x 1))
+  [x] (cljscm.core/+ x 1))
 
 (declare deref)
 
@@ -1325,14 +1325,14 @@ reduces them without incurring seq initialization"
 
 (defn ^boolean false?
   "Returns true if x is the value false, false otherwise."
-  [x] (cljs.core/false? x))
+  [x] (cljscm.core/false? x))
 
 (defn ^boolean true?
   "Returns true if x is the value true, false otherwise."
-  [x] (cljs.core/true? x))
+  [x] (cljscm.core/true? x))
 
 (defn ^boolean undefined? [x]
-  (cljs.core/undefined? x))
+  (cljscm.core/undefined? x))
 
 (defn ^boolean seq?
   "Return true if s satisfies ISeq"
@@ -1599,22 +1599,22 @@ reduces them without incurring seq initialization"
   "Returns the sum of nums. (+) returns 0."
   ([] 0)
   ([x] x)
-  ([x y] (cljs.core/+ x y))
-  ([x y & more] (reduce + (cljs.core/+ x y) more)))
+  ([x y] (cljscm.core/+ x y))
+  ([x y & more] (reduce + (cljscm.core/+ x y) more)))
 
 (defn -
   "If no ys are supplied, returns the negation of x, else subtracts
   the ys from x and returns the result."
-  ([x] (cljs.core/- x))
-  ([x y] (cljs.core/- x y))
-  ([x y & more] (reduce - (cljs.core/- x y) more)))
+  ([x] (cljscm.core/- x))
+  ([x y] (cljscm.core/- x y))
+  ([x y & more] (reduce - (cljscm.core/- x y) more)))
 
 (defn *
   "Returns the product of nums. (*) returns 1."
   ([] 1)
   ([x] x)
-  ([x y] (cljs.core/* x y))
-  ([x y & more] (reduce * (cljs.core/* x y) more)))
+  ([x y] (cljscm.core/* x y))
+  ([x y & more] (reduce * (cljscm.core/* x y) more)))
 
 (defn /
   "If no denominators are supplied, returns 1/numerator,
@@ -1627,48 +1627,48 @@ reduces them without incurring seq initialization"
   "Returns non-nil if nums are in monotonically increasing order,
   otherwise false."
   ([x] true)
-  ([x y] (cljs.core/< x y))
+  ([x y] (cljscm.core/< x y))
   ([x y & more]
-     (if (cljs.core/< x y)
+     (if (cljscm.core/< x y)
        (if (next more)
          (recur y (first more) (next more))
-         (cljs.core/< y (first more)))
+         (cljscm.core/< y (first more)))
        false)))
 
 (defn ^boolean <=
   "Returns non-nil if nums are in monotonically non-decreasing order,
   otherwise false."
   ([x] true)
-  ([x y] (cljs.core/<= x y))
+  ([x y] (cljscm.core/<= x y))
   ([x y & more]
-   (if (cljs.core/<= x y)
+   (if (cljscm.core/<= x y)
      (if (next more)
        (recur y (first more) (next more))
-       (cljs.core/<= y (first more)))
+       (cljscm.core/<= y (first more)))
      false)))
 
 (defn ^boolean >
   "Returns non-nil if nums are in monotonically decreasing order,
   otherwise false."
   ([x] true)
-  ([x y] (cljs.core/> x y))
+  ([x y] (cljscm.core/> x y))
   ([x y & more]
-   (if (cljs.core/> x y)
+   (if (cljscm.core/> x y)
      (if (next more)
        (recur y (first more) (next more))
-       (cljs.core/> y (first more)))
+       (cljscm.core/> y (first more)))
      false)))
 
 (defn ^boolean >=
   "Returns non-nil if nums are in monotonically non-increasing order,
   otherwise false."
   ([x] true)
-  ([x y] (cljs.core/>= x y))
+  ([x y] (cljscm.core/>= x y))
   ([x y & more]
-   (if (cljs.core/>= x y)
+   (if (cljscm.core/>= x y)
      (if (next more)
        (recur y (first more) (next more))
-       (cljs.core/>= y (first more)))
+       (cljscm.core/>= y (first more)))
      false)))
 
 (defn dec
@@ -1678,16 +1678,16 @@ reduces them without incurring seq initialization"
 (defn max
   "Returns the greatest of the nums."
   ([x] x)
-  ([x y] (cljs.core/max x y))
+  ([x y] (cljscm.core/max x y))
   ([x y & more]
-   (reduce max (cljs.core/max x y) more)))
+   (reduce max (cljscm.core/max x y) more)))
 
 (defn min
   "Returns the least of the nums."
   ([x] x)
-  ([x y] (cljs.core/min x y))
+  ([x y] (cljscm.core/min x y))
   ([x y & more]
-   (reduce min (cljs.core/min x y) more)))
+   (reduce min (cljscm.core/min x y) more)))
 
 (defn- fix [q]
   (if (>= q 0)
@@ -1707,7 +1707,7 @@ reduces them without incurring seq initialization"
 (defn js-mod
   "Modulus of num and div with original javascript behavior. i.e. bug for negative numbers"
   [n d]
-  (cljs.core/js-mod n d))
+  (cljscm.core/js-mod n d))
 
 (defn mod
   "Modulus of num and div. Truncates toward negative infinity."
@@ -1717,12 +1717,12 @@ reduces them without incurring seq initialization"
 (defn quot
   "quot[ient] of dividing numerator by denominator."
   [n d]
-  (cljs.core/quot n d))
+  (cljscm.core/quot n d))
 
 (defn rem
   "remainder of dividing numerator by denominator."
   [n d]
-  (cljs.core/rem n d))
+  (cljscm.core/rem n d))
 
 (defn rand
   "Returns a random floating point number between 0 (inclusive) and n (default 1) (exclusive)."
@@ -1735,60 +1735,60 @@ reduces them without incurring seq initialization"
 
 (defn bit-xor
   "Bitwise exclusive or"
-  [x y] (cljs.core/bit-xor x y))
+  [x y] (cljscm.core/bit-xor x y))
 
 (defn bit-and
   "Bitwise and"
-  [x y] (cljs.core/bit-and x y))
+  [x y] (cljscm.core/bit-and x y))
 
 (defn bit-or
   "Bitwise or"
-  [x y] (cljs.core/bit-or x y))
+  [x y] (cljscm.core/bit-or x y))
 
 (defn bit-not
   "Bitwise complement"
-  [x] (cljs.core/bit-not x))
+  [x] (cljscm.core/bit-not x))
 
 (defn bit-and-not
   "Bitwise and"
-  [x y] (cljs.core/bit-and-not x y))
+  [x y] (cljscm.core/bit-and-not x y))
 (comment
 (defn bit-clear
   "Clear bit at index n"
   [x n]
-  (cljs.core/bit-clear x n))
+  (cljscm.core/bit-clear x n))
 
 (defn bit-flip
   "Flip bit at index n"
   [x n]
-  (cljs.core/bit-flip x n))
+  (cljscm.core/bit-flip x n))
 
 (defn bit-set
   "Set bit at index n"
   [x n]
-  (cljs.core/bit-set x n))
+  (cljscm.core/bit-set x n))
 
 (defn bit-test
   "Test bit at index n"
   [x n]
-  (cljs.core/bit-test x n)))
+  (cljscm.core/bit-test x n)))
 
 (defn bit-shift-left
   "Bitwise shift left"
-  [x n] (cljs.core/bit-shift-left x n))
+  [x n] (cljscm.core/bit-shift-left x n))
 
 (defn bit-shift-right
   "Bitwise shift right"
-  [x n] (cljs.core/bit-shift-right x n))
+  [x n] (cljscm.core/bit-shift-right x n))
 
 (defn bit-shift-right-zero-fill
   "Bitwise shift right with zero fill"
-  [x n] (cljs.core/bit-shift-right-zero-fill x n))
+  [x n] (cljscm.core/bit-shift-right-zero-fill x n))
 
 (defn bit-count
   "Counts the number of bits set in n"
   [v]
-  (cljs.core/bit-count v)
+  (cljscm.core/bit-count v)
   #_(let [v (- v (bit-and (bit-shift-right v 1) 0x55555555))
         v (+ (bit-and v 0x33333333) (bit-and (bit-shift-right v 2) 0x33333333))]
     (bit-shift-right (* (bit-and (+ v (bit-shift-right v 4)) 0xF0F0F0F) 0x1010101) 24)))
@@ -1808,14 +1808,14 @@ reduces them without incurring seq initialization"
 
 (defn ^boolean pos?
   "Returns true if num is greater than zero, else false"
-  [n] (cljs.core/pos? n))
+  [n] (cljscm.core/pos? n))
 
 (defn ^boolean zero? [n]
-  (cljs.core/zero? n))
+  (cljscm.core/zero? n))
 
 (defn ^boolean neg?
   "Returns true if num is less than zero, else false"
-  [x] (cljs.core/neg? x))
+  [x] (cljscm.core/neg? x))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; protocols for host types ;;;;;;
 
@@ -2136,13 +2136,13 @@ reduces them without incurring seq initialization"
 ;;; LazySeq ;;;
 
 (defn- lazy-seq-value [lazy-seq]
-  (let [x (scm* [lazy-seq] (cljs.core/LazySeq-x lazy-seq))]
-    (if ^boolean (scm* [lazy-seq] (cljs.core/LazySeq-realized lazy-seq))
+  (let [x (scm* [lazy-seq] (cljscm.core/LazySeq-x lazy-seq))]
+    (if ^boolean (scm* [lazy-seq] (cljscm.core/LazySeq-realized lazy-seq))
       x
       (do
         (let [forced-val (x)]
-          (scm* [lazy-seq forced-val] (cljs.core/LazySeq-x-set! lazy-seq forced-val))
-          (scm* [lazy-seq true] (cljs.core/LazySeq-realized-set! lazy-seq true))
+          (scm* [lazy-seq forced-val] (cljscm.core/LazySeq-x-set! lazy-seq forced-val))
+          (scm* [lazy-seq true] (cljscm.core/LazySeq-realized-set! lazy-seq true))
           forced-val)))))
 
 (deftype LazySeq [meta realized x ^:mutable __hash]
@@ -3528,7 +3528,7 @@ reduces them without incurring seq initialization"
     (build-subvec meta (-assoc-n v end o) start (inc end) nil))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.Vector/EMPTY meta))
+  (-empty [coll] (with-meta cljscm.core.Vector/EMPTY meta))
 
   ISequential
   IEquiv
@@ -3957,7 +3957,7 @@ reduces them without incurring seq initialization"
               entry)))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.ObjMap/EMPTY meta))
+  (-empty [coll] (with-meta cljscm.core.ObjMap/EMPTY meta))
 
   IEquiv
   (-equiv [coll other] (equiv-map coll other))
@@ -3985,8 +3985,8 @@ reduces them without incurring seq initialization"
   IAssociative
   (-assoc [coll k v]
     (if ^boolean (goog/isString k)
-        (if (or (> update-count cljs.core.ObjMap/HASHMAP_THRESHOLD)
-                (>= (alength keys) cljs.core.ObjMap/HASHMAP_THRESHOLD))
+        (if (or (> update-count cljscm.core.ObjMap/HASHMAP_THRESHOLD)
+                (>= (alength keys) cljscm.core.ObjMap/HASHMAP_THRESHOLD))
           (obj-map->hash-map coll k v)
           (if-not (nil? (scan-array 1 k keys))
             (let [new-strobj (obj-clone strobj keys)]
@@ -4038,11 +4038,11 @@ reduces them without incurring seq initialization"
   (-as-transient [coll]
     (transient (into (hash-map) coll))))
 
-#_(set! cljs.core.ObjMap/EMPTY (ObjMap. nil (array) (js-obj) 0 0))
+#_(set! cljscm.core.ObjMap/EMPTY (ObjMap. nil (array) (js-obj) 0 0))
 
-#_(set! cljs.core.ObjMap/HASHMAP_THRESHOLD 32)
+#_(set! cljscm.core.ObjMap/HASHMAP_THRESHOLD 32)
 
-#_(set! cljs.core.ObjMap/fromObject (fn [ks obj] (ObjMap. nil ks obj 0 nil)))
+#_(set! cljscm.core.ObjMap/fromObject (fn [ks obj] (ObjMap. nil ks obj 0 nil)))
 
 ;;; HashMap
 ;;; DEPRECATED
@@ -4070,7 +4070,7 @@ reduces them without incurring seq initialization"
               entry)))
 
   IEmptyableCollection
-  (-empty [coll] (with-meta cljs.core.HashMap/EMPTY meta))
+  (-empty [coll] (with-meta cljscm.core.HashMap/EMPTY meta))
 
   IEquiv
   (-equiv [coll other] (equiv-map coll other))
@@ -4143,11 +4143,11 @@ reduces them without incurring seq initialization"
   (-invoke [coll k not-found]
     (-lookup coll k not-found)))
 
-#_(set! cljs.core.HashMap/EMPTY (HashMap. nil 0 (js-obj) 0))
+#_(set! cljscm.core.HashMap/EMPTY (HashMap. nil 0 (js-obj) 0))
 
-#_(set! cljs.core.HashMap/fromArrays (fn [ks vs]
+#_(set! cljscm.core.HashMap/fromArrays (fn [ks vs]
   (let [len (alength ks)]
-    (loop [i 0, out cljs.core.HashMap/EMPTY]
+    (loop [i 0, out cljscm.core.HashMap/EMPTY]
       (if (< i len)
         (recur (inc i) (assoc out (aget ks i) (aget vs i)))
         out)))))
@@ -4499,7 +4499,7 @@ reduces them without incurring seq initialization"
 
 (defn ^boolean key-test [key other]
   (if ^boolean (scm* [key] (keyword? key))
-    (cljs.core/identical? key other)
+    (cljscm.core/identical? key other)
     (= key other)))
 
 (defn- mask [hash shift]
@@ -4573,7 +4573,7 @@ reduces them without incurring seq initialization"
                     (do (aset nodes i
                               (if-not (nil? (aget arr j))
                                 (-inode-assoc BitmapIndexedNode-EMPTY
-                                              (+ shift 5) (cljs.core/hash (aget arr j)) (aget arr j) (aget arr (inc j)) added-leaf?)
+                                              (+ shift 5) (cljscm.core/hash (aget arr j)) (aget arr j) (aget arr (inc j)) added-leaf?)
                                 (aget arr (inc j))))
                         (recur (inc i) (+ j 2))))))
               (ArrayNode. nil (inc n) nodes))
@@ -4682,7 +4682,7 @@ reduces them without incurring seq initialization"
                     (do (aset nodes i
                               (if-not (nil? (aget arr j))
                                 (-inode-assoc! BitmapIndexedNode-EMPTY
-                                               edit (+ shift 5) (cljs.core/hash (aget arr j)) (aget arr j) (aget arr (inc j)) added-leaf?)
+                                               edit (+ shift 5) (cljscm.core/hash (aget arr j)) (aget arr j) (aget arr (inc j)) added-leaf?)
                                 (aget arr (inc j))))
                         (recur (inc i) (+ j 2))))))
               (ArrayNode. edit (inc n) nodes))
@@ -5941,7 +5941,7 @@ reduces them without incurring seq initialization"
         (do (.push ks (first kvs))
             (aset obj (first kvs) (second kvs))
             (recur (nnext kvs)))
-        (cljs.core.ObjMap/fromObject ks obj)))))
+        (cljscm.core.ObjMap/fromObject ks obj)))))
 
 (defn sorted-map
   "keyval => key val
@@ -5957,7 +5957,7 @@ reduces them without incurring seq initialization"
   Returns a new sorted map with supplied mappings, using the supplied comparator."
   ([comparator & keyvals]
      (loop [in (seq keyvals)
-            out (cljs.core.PersistentTreeMap. (fn->comparator comparator) nil 0 nil 0)]
+            out (cljscm.core.PersistentTreeMap. (fn->comparator comparator) nil 0 nil 0)]
        (if in
          (recur (nnext in) (assoc out (first in) (second in)))
          out))))
@@ -6217,7 +6217,7 @@ reduces them without incurring seq initialization"
   "Returns a new sorted set with supplied keys, using the supplied comparator."
   ([comparator & keys]
    (reduce -conj
-           (cljs.core.PersistentTreeSet. nil (sorted-map-by comparator) 0)
+           (cljscm.core.PersistentTreeSet. nil (sorted-map-by comparator) 0)
            keys)))
 
 (defn replace
@@ -7009,10 +7009,10 @@ reduces them without incurring seq initialization"
       (f key this oldval newval)))
   (-add-watch [this key f]
     (let [nw (assoc watches key f)]
-      (scm* [this nw] (cljs.core/Atom-watches-set! this nw))))
+      (scm* [this nw] (cljscm.core/Atom-watches-set! this nw))))
   (-remove-watch [this key]
     (let [nw (dissoc watches key)]
-      (scm* [this nw] (cljs.core/Atom-watches-set! this nw))))
+      (scm* [this nw] (cljscm.core/Atom-watches-set! this nw))))
 
   IHash
   (-hash [this] (goog.getUid this)))
@@ -7172,7 +7172,7 @@ reduces them without incurring seq initialization"
 
 (defn ^boolean delay?
   "returns true if x is a Delay created with delay"
-  [x] (instance? cljs.core.Delay x))
+  [x] (instance? cljscm.core.Delay x))
 
 (defn force
   "If x is a Delay, returns the (possibly cached) value of its expression, else returns x"
@@ -7370,7 +7370,7 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
   supplied defaults to, and modifies, the global hierarchy."
   ([tag parent]
    (assert (namespace parent))
-   ;; (assert (or (class? tag) (and (instance? cljs.core.Named tag) (namespace tag))))
+   ;; (assert (or (class? tag) (and (instance? cljscm.core.Named tag) (namespace tag))))
    (swap! global-hierarchy derive tag parent) nil)
   ([h tag parent]
    (assert (not= tag parent))
@@ -7542,12 +7542,12 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
   IFn
   (-invoke [coll args] (-dispatch coll args)))
 
-#_(set! cljs.core.MultiFn.prototype.call
+#_(set! cljscm.core.MultiFn.prototype.call
       (fn [_ & args]
         (this-as self
           (-dispatch self args))))
 
-#_(set! cljs.core.MultiFn.prototype.apply
+#_(set! cljscm.core.MultiFn.prototype.apply
       (fn [_ args]
         (this-as self
           (-dispatch self args))))
@@ -7605,8 +7605,8 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
 (deftype ExceptionInfo [message data cause])
 
 ;;; ExceptionInfo is a special case, do not emulate this
-#_(set! cljs.core.ExceptionInfo/prototype (js/Error.))
-#_(set! (.-constructor cljs.core.ExceptionInfo/prototype) ExceptionInfo)
+#_(set! cljscm.core.ExceptionInfo/prototype (js/Error.))
+#_(set! (.-constructor cljscm.core.ExceptionInfo/prototype) ExceptionInfo)
 
 (defn ex-info
   "Alpha - subject to change.

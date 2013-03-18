@@ -6,7 +6,7 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software.
 
-(ns cljs.reader
+(ns cljscm.reader
   (:require [goog.string :as gstring]))
 
 (defprotocol PushbackReader
@@ -513,7 +513,7 @@ nil if the end of stream has been reached")
 (defn ^:private read-queue
   [elems]
   (if (vector? elems)
-    (into cljs.core.PersistentQueue/EMPTY elems)
+    (into cljscm.core.PersistentQueue/EMPTY elems)
     (reader-error nil "Queue literal expects a vector for its elements.")))
 
 

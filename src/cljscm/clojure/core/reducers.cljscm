@@ -15,7 +15,7 @@
   clojure.core.reducers
   (:refer-clojure :exclude [reduce map mapcat filter remove take take-while drop flatten])
   (:require [clojure.walk :as walk]
-            [cljs.core :as core]))
+            [cljscm.core :as core]))
 
 (defn reduce
   "Like core/reduce except:
@@ -57,7 +57,7 @@
   reducing fn."
   ([coll xf]
      (reify
-       cljs.core/IReduce
+       cljscm.core/IReduce
        (-reduce [this f1]
          (-reduce this f1 (f1)))
        (-reduce [_ f1 init]
@@ -70,7 +70,7 @@
   reducing fn."
   ([coll xf]
      (reify
-       cljs.core/IReduce
+       cljscm.core/IReduce
        (-reduce [_ f1]
          (-reduce coll (xf f1) (f1)))
        (-reduce [_ f1 init]
@@ -180,13 +180,13 @@
 
 ;;do not construct this directly, use cat
 (deftype Cat [cnt left right]
-  cljs.core/ICounted
+  cljscm.core/ICounted
   (-count [_] cnt)
 
-  cljs.core/ISeqable
+  cljscm.core/ISeqable
   (-seq [_] (concat (seq left) (seq right)))
   
-  cljs.core/IReduce
+  cljscm.core/IReduce
   (-reduce [this f1] (-reduce this f1 (f1)))
   (-reduce
     [_  f1 init]
