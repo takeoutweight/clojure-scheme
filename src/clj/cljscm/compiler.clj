@@ -185,7 +185,7 @@
 (defn- emit-meta-constant [x & body]
   (if (meta x)
     (do
-      (emits "cljscm.core.with_meta(" body ",") ;TODO new cljs
+      (emits "(cljscm.core/with-meta " body " ")
       (emit-constant (meta x))
       (emits ")"))
     (emits body)))
