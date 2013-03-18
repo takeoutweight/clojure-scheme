@@ -1,3 +1,3 @@
-(ns cljs.binding-test-other-ns)
+(ns cljscm.binding-test-other-ns)
 
 (def ^:dynamic *foo* 1)

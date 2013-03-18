@@ -1,4 +1,4 @@
-(ns cljs.import-test.foo)
+(ns cljscm.import-test.foo)
 
 (defrecord Bar [x])
 

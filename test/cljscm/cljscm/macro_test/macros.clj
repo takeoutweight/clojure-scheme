@@ -1,4 +1,4 @@
-(ns cljs.macro-test.macros
+(ns cljscm.macro-test.macros
   (:refer-clojure :exclude [==]))
 
 (defmacro == [a b]

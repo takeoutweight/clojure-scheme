@@ -1,14 +1,14 @@
 (ns test-runner
-  (:require [cljs.core-test :as core-test]
-            [cljs.reader-test :as reader-test]
-            [cljs.binding-test :as binding-test]
-            [cljs.ns-test :as ns-test]
+  (:require [cljscm.core-test :as core-test]
+            [cljscm.reader-test :as reader-test]
+            [cljscm.binding-test :as binding-test]
+            [cljscm.ns-test :as ns-test]
             [clojure.string-test :as string-test]
             [clojure.data-test :as data-test]
-            [cljs.macro-test :as macro-test]
-            [cljs.letfn-test :as letfn-test]
+            [cljscm.macro-test :as macro-test]
+            [cljscm.letfn-test :as letfn-test]
             [foo.ns-shadow-test :as ns-shadow-test]
-            [cljs.top-level :as top-level]))
+            [cljscm.top-level :as top-level]))
 
 (set! *print-fn* js/print)
 

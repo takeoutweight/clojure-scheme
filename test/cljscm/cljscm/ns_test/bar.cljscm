@@ -1,3 +1,3 @@
-(ns cljs.ns-test.bar)
+(ns cljscm.ns-test.bar)
 
 (defn quux [] 123)

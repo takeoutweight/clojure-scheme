@@ -1,4 +1,4 @@
-(ns cljs.top-level)
+(ns cljscm.top-level)
 
 (let [foo 1]
   (defn bar []

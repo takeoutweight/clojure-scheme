@@ -1,7 +1,7 @@
-(ns cljs.import-test
+(ns cljscm.import-test
   (:import goog.math.Long
-           cljs.import-test.foo.Bar
-           cljs.import-test.foo.Quux))
+           cljscm.import-test.foo.Bar
+           cljscm.import-test.foo.Quux))
 
 (defn test-import []
   (assert (fn? Long))

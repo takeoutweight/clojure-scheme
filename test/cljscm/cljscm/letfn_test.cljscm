@@ -1,4 +1,4 @@
-(ns cljs.letfn-test)
+(ns cljscm.letfn-test)
 
 (defn test-letfn []
   (letfn [(ev? [x]

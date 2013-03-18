@@ -1,5 +1,5 @@
-(ns cljs.binding-test
-  (:require [cljs.binding-test-other-ns :as o]))
+(ns cljscm.binding-test
+  (:require [cljscm.binding-test-other-ns :as o]))
 
 (defn test-binding []
   (binding [o/*foo* 2]
