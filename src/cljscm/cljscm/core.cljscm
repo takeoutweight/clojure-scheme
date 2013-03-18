@@ -189,7 +189,7 @@
 (defprotocol IFn
   (-invoke [this args]))
 
-;(scm* {} (include "polymorphic-apply.scm")) ;to trap non-proc exceptions and calls -invoke
+(scm* {} (include "polymorphic-apply.scm")) ;to trap non-proc exceptions and calls -invoke
 
 (defprotocol ICounted
   (-count [coll] "constant time count"))
