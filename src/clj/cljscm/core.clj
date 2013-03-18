@@ -1055,10 +1055,10 @@
                             prim-types [:Number :Pair :Boolean :Nil :Null
                                         :Char :Array :Symbol :Keyword :Procedure :String]
                             prim-fnames (map #(symbol (str fname "---cljs_core$" (name %))) prim-types)
-                            prim-checks {'cljscm.core/Number 'scm-number?
-                                         'cljscm.core/Pair 'pair?
-                                         'cljscm.core/Boolean 'boolean?
-                                         'cljscm.core/Nil '(eq? nil :TODO)}
+                            #_prim-checks #_{'cljscm.core/Number 'scm-number?
+                                             'cljscm.core/Pair 'pair?
+                                             'cljscm.core/Boolean 'boolean?
+                                             'cljscm.core/Nil '(eq? nil :TODO)}
                             call-form (core/fn [p-fn]
                                         (if variadic?
                                           #_"capture locals that will be introduced later in scheme."
