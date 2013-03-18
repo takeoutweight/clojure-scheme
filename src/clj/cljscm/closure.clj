@@ -6,7 +6,7 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software.
 
-(ns cljs.closure
+(ns cljscm.closure
   "Compile ClojureScript to JavaScript with optimizations from Google
    Closure Compiler producing runnable JavaScript.
 
@@ -33,8 +33,8 @@
    The produced output is either a single string of optimized
    JavaScript or a deps file for use during development.
   "
-  (:require [cljs.compiler :as comp]
-            [cljs.analyzer :as ana]
+  (:require [cljscm.compiler :as comp]
+            [cljscm.analyzer :as ana]
             [clojure.java.io :as io]
             [clojure.string :as string])
   (:import java.io.File
@@ -329,7 +329,7 @@
   [forms]
   (comp/with-core-cljs
     (with-out-str
-      (binding [ana/*cljs-ns* 'cljs.user]
+      (binding [ana/*cljs-ns* 'cljscm.user]
         (doseq [form forms]
           (comp/emit (ana/analyze (ana/empty-env) form)))))))
 
@@ -596,11 +596,11 @@
 
 (comment
   ;; only get cljs deps
-  (cljs-dependencies {} ["goog.string" "cljs.core"])
+  (cljs-dependencies {} ["goog.string" "cljscm.core"])
   ;; get transitive deps
   (cljs-dependencies {} ["clojure.string"])
-  ;; don't get cljs.core twice
-  (cljs-dependencies {} ["cljs.core" "clojure.string"])
+  ;; don't get cljscm.core twice
+  (cljs-dependencies {} ["cljscm.core" "clojure.string"])
   )
 
 (defn add-dependencies
@@ -623,7 +623,7 @@
 
 (comment
   ;; add dependencies to literal js
-  (add-dependencies {} "goog.provide('test.app');\ngoog.require('cljs.core');")
+  (add-dependencies {} "goog.provide('test.app');\ngoog.require('cljscm.core');")
   (add-dependencies {} "goog.provide('test.app');\ngoog.require('goog.array');")
   (add-dependencies {} (str "goog.provide('test.app');\n"
                             "goog.require('goog.array');\n"
@@ -772,8 +772,8 @@
 
 (comment
   (path-relative-to (io/file "out/goog/base.js") {:url (to-url "out/cljs/core.js")})
-  (add-dep-string {} {:url (to-url "out/cljs/core.js") :requires ["goog.string"] :provides ["cljs.core"]})
-  (deps-file {} [{:url (to-url "out/cljs/core.js") :requires ["goog.string"] :provides ["cljs.core"]}])
+  (add-dep-string {} {:url (to-url "out/cljs/core.js") :requires ["goog.string"] :provides ["cljscm.core"]})
+  (deps-file {} [{:url (to-url "out/cljs/core.js") :requires ["goog.string"] :provides ["cljscm.core"]}])
   )
 
 (defn output-one-file [{:keys [output-to]} js]
@@ -843,18 +843,18 @@
 (comment
   
   ;; output unoptimized alone
-  (output-unoptimized {} "goog.provide('test');\ngoog.require('cljs.core');\nalert('hello');\n")
+  (output-unoptimized {} "goog.provide('test');\ngoog.require('cljscm.core');\nalert('hello');\n")
   ;; output unoptimized with all dependencies
   (apply output-unoptimized {}
          (add-dependencies {}
-                           "goog.provide('test');\ngoog.require('cljs.core');\nalert('hello');\n"))
+                           "goog.provide('test');\ngoog.require('cljscm.core');\nalert('hello');\n"))
   ;; output unoptimized with external library
   (apply output-unoptimized {}
          (add-dependencies {:libs ["closure/library/third_party/closure"]}
-                           "goog.provide('test');\ngoog.require('cljs.core');\ngoog.require('goog.dom.query');\n"))
+                           "goog.provide('test');\ngoog.require('cljscm.core');\ngoog.require('goog.dom.query');\n"))
   ;; output unoptimized and write deps file to 'out/test.js'
   (output-unoptimized {:output-to "out/test.js"}
-                      "goog.provide('test');\ngoog.require('cljs.core');\nalert('hello');\n")
+                      "goog.provide('test');\ngoog.require('cljscm.core');\nalert('hello');\n")
   )
 
 

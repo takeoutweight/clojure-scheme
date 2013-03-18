@@ -6,14 +6,14 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns cljs.repl.browser
+(ns cljscm.repl.browser
   (:refer-clojure :exclude [loaded-libs])
   (:require [clojure.java.io :as io]
-            [cljs.compiler :as comp]
-            [cljs.closure :as cljsc]
-            [cljs.repl :as repl]
-            [cljs.repl.server :as server])
-  (:import cljs.repl.IJavaScriptEnv))
+            [cljscm.compiler :as comp]
+            [cljscm.closure :as cljsc]
+            [cljscm.repl :as repl]
+            [cljscm.repl.server :as server])
+  (:import cljscm.repl.IJavaScriptEnv))
 
 (defonce browser-state (atom {:return-value-fn nil
                               :client-js nil}))
@@ -100,7 +100,7 @@
       (send ordering (fn [_] {:expecting nil :fns {}}))
       (send-for-eval conn
                      (cljsc/-compile
-                      '[(ns cljs.user)
+                      '[(ns cljscm.user)
                         (set! *print-fn* clojure.browser.repl/repl-print)] {})
                      identity)))
 
@@ -163,7 +163,7 @@
 (defrecord BrowserEnv []
   repl/IJavaScriptEnv
   (-setup [this]
-    (do (require 'cljs.repl.reflect)
+    (do (require 'cljscm.repl.reflect)
         (repl/analyze-source (:src this))
         (comp/with-core-cljs (server/start this))))
   (-evaluate [_ _ _ js] (browser-eval js))
@@ -246,8 +246,8 @@
 
 (comment
 
-  (require '[cljs.repl :as repl])
-  (require '[cljs.repl.browser :as browser])
+  (require '[cljscm.repl :as repl])
+  (require '[cljscm.repl.browser :as browser])
   (def env (browser/repl-env))
   (repl/repl env)
   ;; simulate the browser with curl

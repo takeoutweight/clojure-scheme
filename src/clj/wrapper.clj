@@ -1,6 +1,6 @@
 ;TODO: this is a prime example where datalog should be used to query different orders of class/method/ etc. so we don't have to fix the nested maps of lists of maps of lists of maps etc...!!! 
 (ns wrapper
-  #_(:use [cljs.core :only scm*])
+  #_(:use [cljscm.core :only scm*])
   (:require [clojure.string :as str]
             [clojure.set :as set]))
 
@@ -130,7 +130,7 @@ for now: size_t -> unsigned long
     (swap! defined-classes merge {classpath ta})
     `(do (~'scm* {} (~'c-define-type ~ta (~'pointer (~'type ~classpath) ~clj-name)))
          (deftype* ~clj-name [] :no-constructor)
-         (~'scm* {} (~'table-set! cljs.core/foreign-tags (quote ~clj-name) ~clj-name)))))
+         (~'scm* {} (~'table-set! cljscm.core/foreign-tags (quote ~clj-name) ~clj-name)))))
 
 (def foreign-types
   (for [c class-specs]
@@ -146,7 +146,7 @@ for now: size_t -> unsigned long
 (defn c-lambda
   ":returns assumed to be not-namespaced due to rpythonic. strip off the classpath's namespace, use that, and hope for the best."
   [c]
-  `(~'scm-str* ~(cljs.compiler/strict-str
+  `(~'scm-str* ~(cljscm.compiler/strict-str
                  "(c-lambda "(cons (predefined-type-alias (:classpath c))
                                    (map #(if (and (:fundamental %)
                                                   (not= 0 (:fundamental %)))
@@ -205,16 +205,16 @@ for now: size_t -> unsigned long
   (spit filename "(ns Ogre)\n")
   #_(doall
      (for [p foreign-protocols]
-       (spit filename (cljs.compiler/strict-str p "\n") :append true)))
+       (spit filename (cljscm.compiler/strict-str p "\n") :append true)))
   (doall
    (for [p foreign-types]
-     (spit filename (cljs.compiler/strict-str p "\n") :append true)))
+     (spit filename (cljscm.compiler/strict-str p "\n") :append true)))
   #_(doall
      (for [e extensions]
-       (spit filename (cljs.compiler/strict-str e "\n") :append true)))
+       (spit filename (cljscm.compiler/strict-str e "\n") :append true)))
   #_(doall
      (for [m foreign-monomorphs]
-       (spit filename (cljs.compiler/strict-str m "\n") :append true)))
+       (spit filename (cljscm.compiler/strict-str m "\n") :append true)))
   nil)
 
 ;TODO - a nice fn that calls the protocol methods with the right arity.
@@ -222,7 +222,7 @@ for now: size_t -> unsigned long
 ;TODO - operator equality
 ;TODO - docstrings wtih rpythonic info carried through.
 
-;(cljs.compiler/compile-file "/tmp/ogre-stubs.cljs")
+;(cljscm.compiler/compile-file "/tmp/ogre-stubs.cljs")
 ;(wrapper/write-stubs "/tmp/ogre-stubs.cljs")
 
 

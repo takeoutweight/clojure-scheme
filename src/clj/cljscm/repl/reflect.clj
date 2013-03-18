@@ -1,8 +1,8 @@
-(ns cljs.repl.reflect
+(ns cljscm.repl.reflect
   (:refer-clojure :exclude [macroexpand])
-  (:require [cljs.repl.server :as server]
-            [cljs.analyzer :as analyzer]
-            [cljs.compiler :as compiler]
+  (:require [cljscm.repl.server :as server]
+            [cljscm.analyzer :as analyzer]
+            [cljscm.compiler :as compiler]
             [clojure.string :as str]
             [clojure.pprint :as pprint]))
 
@@ -52,7 +52,7 @@
 (defn- compile-and-return
   "Compiles a form to javascript and returns it on conn."
   [conn form]
-  (let [ast (analyzer/analyze {:ns {:name 'cljs.user}} form)
+  (let [ast (analyzer/analyze {:ns {:name 'cljscm.user}} form)
         js  (try (compiler/emit-str ast)
                  (catch Exception e (println e)))]
     (server/send-and-close conn 200 js "text/javascript")))

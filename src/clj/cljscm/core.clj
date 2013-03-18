@@ -6,7 +6,7 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software.
 
-(ns cljs.core
+(ns cljscm.core
   (:refer-clojure :exclude [-> ->> .. amap and areduce alength aclone assert binding bound-fn comment cond condp
                             declare definline definterface defmethod defmulti defn defn- defonce
                             defprotocol defrecord defstruct deftype delay destructure doseq dosync dotimes doto
@@ -45,7 +45,7 @@
   memfn or 
   when when-first when-let when-not while])
 
-(def ^:dynamic *cljs-ns* 'cljs.user)
+(def ^:dynamic *cljs-ns* 'cljscm.user)
 
 (def protocol-hints (atom {}))
 (defmacro add-protocol-hints!
@@ -202,7 +202,7 @@
 
 (def fast-path-protocols
   "protocol fqn -> [partition number, bit]"
-  (zipmap (map #(symbol "cljs.core" (core/str %))
+  (zipmap (map #(symbol "cljscm.core" (core/str %))
                '[IFn ICounted IEmptyableCollection ICollection IIndexed ASeq ISeq INext
                  ILookup IAssociative IMap IMapEntry ISet IStack IVector IDeref
                  IDerefWithTimeout IMeta IWithMeta IReduce IKVReduce IEquiv IHash
@@ -275,18 +275,18 @@
   "aware of builtin scheme primitive type tests. lookup with namespace-qualified
   type symbols only."
   [type-sym o]
-  ((clojure.core/get {'cljs.core/Number scm-number?
-                      'cljs.core/Pair scm-pair?
-                      'cljs.core/Boolean scm-boolean?
-                      'cljs.core/Nil scm-nil?
-                      'cljs.core/Null scm-null?
-                      'cljs.core/Char scm-char?
-                      'cljs.core/Array scm-vector?
-                      'cljs.core/Symbol scm-symbol?
-                      'cljs.core/Keyword scm-keyword?
-                      'cljs.core/Procedure scm-procedure?
-                      'cljs.core/String scm-string?
-                      'cljs.core/Table scm-table?}
+  ((clojure.core/get {'cljscm.core/Number scm-number?
+                      'cljscm.core/Pair scm-pair?
+                      'cljscm.core/Boolean scm-boolean?
+                      'cljscm.core/Nil scm-nil?
+                      'cljscm.core/Null scm-null?
+                      'cljscm.core/Char scm-char?
+                      'cljscm.core/Array scm-vector?
+                      'cljscm.core/Symbol scm-symbol?
+                      'cljscm.core/Keyword scm-keyword?
+                      'cljscm.core/Procedure scm-procedure?
+                      'cljscm.core/String scm-string?
+                      'cljscm.core/Table scm-table?}
                      type-sym
                      (fn [o] `(scm-boolean* {:o ~o} (~(symbol (str type-sym "?")) :o))))
    o))
@@ -386,7 +386,7 @@
                        , (combine-arities dsigs)
                        meths (if any-variadic?
                                meths
-                               (concat meths [{:implforms `(throw (cljs.core/Error. (str "No arity method for " (+ ~num-shared (scm-length ~restparam)) " args.")))}]))]
+                               (concat meths [{:implforms `(throw (cljscm.core/Error. (str "No arity method for " (+ ~num-shared (scm-length ~restparam)) " args.")))}]))]
                    `(~combined-argform
                      (~'case (scm-length ~restparam)
                        ~@(mapcat (core/fn [{:keys [args inits implforms restcount]}]
@@ -607,7 +607,7 @@
         this-sym (gensym "_")
         locals (keys (:locals &env))
         ns     (-> &env :ns :name)
-        munge  cljs.compiler/munge
+        munge  cljscm.compiler/munge
         ns-t   (list 'js* (core/str (munge ns) "." (munge t)))]
     `(do
        (when (undefined? ~ns-t)
@@ -692,7 +692,7 @@
   (emit-extend-type t specs))
 
 #_(defmacro extend-type [tsym & impls]
-  (core/let [resolve #(core/let [ret (:name (cljs.analyzer/resolve-var (dissoc &env :locals) %))]
+  (core/let [resolve #(core/let [ret (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) %))]
                    (assert ret (core/str "Can't resolve: " %))
                    ret)
         impl-map (core/loop [ret {} s impls]
@@ -701,18 +701,18 @@
                             (drop-while seq? (next s)))
                      ret))
         warn-if-not-protocol #(when-not (= 'Object %)
-                                (if cljs.analyzer/*cljs-warn-on-undeclared*
-                                  (if-let [var (cljs.analyzer/resolve-existing-var (dissoc &env :locals) %)]
+                                (if cljscm.analyzer/*cljs-warn-on-undeclared*
+                                  (if-let [var (cljscm.analyzer/resolve-existing-var (dissoc &env :locals) %)]
                                     (do
                                      (when-not (:protocol-symbol var)
-                                       (cljs.analyzer/warning &env
+                                       (cljscm.analyzer/warning &env
                                          (core/str "WARNING: Symbol " % " is not a protocol")))
-                                     (when (and cljs.analyzer/*cljs-warn-protocol-deprecated*
+                                     (when (and cljscm.analyzer/*cljs-warn-protocol-deprecated*
                                                 (-> var :deprecated)
                                                 (not (-> % meta :deprecation-nowarn)))
-                                       (cljs.analyzer/warning &env
+                                       (cljscm.analyzer/warning &env
                                          (core/str "WARNING: Protocol " % " is deprecated"))))
-                                    (cljs.analyzer/warning &env
+                                    (cljscm.analyzer/warning &env
                                       (core/str "WARNING: Can't resolve protocol symbol " %)))))
         skip-flag (set (-> tsym meta :skip-protocol-flag))]
     (if (base-type tsym)
@@ -744,7 +744,7 @@
                                (concat (when-not (skip-flag psym)
                                          [`(set! ~(prototype-prefix pprefix) true)])
                                        (mapcat (fn [[f & meths :as form]]
-                                                 (if (= psym 'cljs.core/IFn)
+                                                 (if (= psym 'cljscm.core/IFn)
                                                    (core/let [adapt-params (fn [[[targ & args :as sig] & body]]
                                                                         (core/let [this-sym (with-meta 'self__ {:tag t})]
                                                                           `(~(vec (cons this-sym args))
@@ -775,7 +775,7 @@
         `(do ~@(mapcat assign-impls impl-map))))))
 
 (defn- prepare-protocol-masks [env t impls]
-  (core/let [resolve #(core/let [ret (:name (cljs.analyzer/resolve-var (dissoc env :locals) %))]
+  (core/let [resolve #(core/let [ret (:name (cljscm.analyzer/resolve-var (dissoc env :locals) %))]
                    (assert ret (core/str "Can't resolve: " %))
                    ret)
         impl-map (core/loop [ret {} s impls]
@@ -813,8 +813,8 @@
                                  (conj v (vary-meta (cons f (mapcat #(if (inline-arity? %)
                                                                        (drop 1 %)
                                                                        (list (drop 1 %))) sigs))
-                                                    assoc :cljs.analyzer/type t
-                                                    :cljs.analyzer/fields fields
+                                                    assoc :cljscm.analyzer/type t
+                                                    :cljscm.analyzer/fields fields
                                                     :protocol-impl true
                                                     :protocol-inline inline)))
                                []
@@ -825,11 +825,11 @@
 (defn collect-protocols [impls env]
   (->> impls
       (filter symbol?)
-      (map #(:name (cljs.analyzer/resolve-var (dissoc env :locals) %)))
+      (map #(:name (cljscm.analyzer/resolve-var (dissoc env :locals) %)))
       (into #{})))
 
 (defmacro deftype [t fields & impls]
-  (core/let [r (:name (cljs.analyzer/resolve-var (dissoc &env :locals) t))
+  (core/let [r (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) t))
         [fpps pmasks] (prepare-protocol-masks &env t impls)
         protocols (collect-protocols impls &env)
         t (vary-meta t assoc
@@ -856,7 +856,7 @@
   (core/let [hinted-fields fields
         fields (vec (map #(with-meta % nil) fields))
         base-fields fields
-        #_"depends on Gambit's record lookup i.e. cljs.core/MyRecord-__meta"
+        #_"depends on Gambit's record lookup i.e. cljscm.core/MyRecord-__meta"
         accessorize (core/fn [this fld] `(~(symbol (str tagname "-" fld)) ~this))
         fields (conj fields '__meta '__extmap)] ; (with-meta '__hash {:mutable true})
     (core/let [gs (gensym)
@@ -940,7 +940,7 @@
                    ~@fields))
          (~'scm* {::poly-constructor ~poly-constructor} (~'define ~poly-constructor-name ::poly-constructor))
          (def ~tagname (type (new ~tagname ~@(map (constantly nil) base-fields)))) ;hack in lieu of compiler hook to capture ##type-2-ns/tagname in scheme
-         (~'scm* {::tagname ~tagname} (~'table-set! ~'cljs.core/protocol-impls ::tagname ~'(make-table)))
+         (~'scm* {::tagname ~tagname} (~'table-set! ~'cljscm.core/protocol-impls ::tagname ~'(make-table)))
          (extend-type ~tagname ~@(dt->et tagname impls fields true))))))
 
 (defn- build-positional-factory
@@ -961,7 +961,7 @@
        (new ~rname ~@getters nil (dissoc ~ms ~@ks)))))
 
 (defmacro defrecord [rsym fields & impls]
-  (core/let [r (:name (cljs.analyzer/resolve-var (dissoc &env :locals) rsym))]
+  (core/let [r (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) rsym))]
     `(do
        ~(emit-defrecord &env rsym r fields impls)
        (set! (.-cljs$lang$ctorPrSeq ~r) (fn [this#] (list ~(core/str r))))
@@ -981,7 +981,7 @@
                                    ~(core/- (count sig) 2)) (rest (first methods)))))))
 
 (defmacro defprotocol [psym & doc+methods]
-  (core/let [p (:name (cljs.analyzer/resolve-var (dissoc &env :locals) psym))
+  (core/let [p (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) psym))
              psym (vary-meta psym assoc :protocol-symbol true)
              ns-name (-> &env :ns :name)
              fqn (core/fn [n] (symbol (str ns-name "." n)))
@@ -1008,30 +1008,30 @@
                                                                sig))
                                                  sigs))))
              known-implementing-types (clojure.core/get @protocol-hints p)
-             known-implementing-type-set (into #{} known-implementing-types) ;(:name (cljs.analyzer/resolve-var (dissoc &env :locals) fname))
+             known-implementing-type-set (into #{} known-implementing-types) ;(:name (cljscm.analyzer/resolve-var (dissoc &env :locals) fname))
              check-impl (core/fn [sym] (not (clojure.core/get known-implementing-type-set sym)))
              mk-prim
              , (fn [o prim-call call-form fn-vtable-name]
-                 `(~'case (cljs.core/scm-type-idx (scm* {} ~o))
-                    ~@(when (check-impl 'cljs.core/Number) `[0 ~(prim-call :Number)]) ;Fixnum
-                    ~@(when (check-impl 'cljs.core/Pair) `[3 ~(prim-call :Pair)])
-                    ~@(when (some check-impl ['cljs.core/Boolean 'cljs.core/Nil 'cljs.core/Null 'cljs.core/Char])
+                 `(~'case (cljscm.core/scm-type-idx (scm* {} ~o))
+                    ~@(when (check-impl 'cljscm.core/Number) `[0 ~(prim-call :Number)]) ;Fixnum
+                    ~@(when (check-impl 'cljscm.core/Pair) `[3 ~(prim-call :Pair)])
+                    ~@(when (some check-impl ['cljscm.core/Boolean 'cljscm.core/Nil 'cljscm.core/Null 'cljscm.core/Char])
                         `[2 (~'case (scm* {} ~o)
-                              ~@(when (check-impl 'cljs.core/Boolean) `[(true false) ~(prim-call :Boolean)])
-                              ~@(when (check-impl 'cljs.core/Nil) `[nil ~(prim-call :Nil)])
-                              ~@(when (check-impl 'cljs.core/Null) `[(scm* [] ()) ~(prim-call :Null)])
-                              ~@(when (check-impl 'cljs.core/Char) `[(when (char? (scm* {} ~o)) ~(prim-call :Char))]))])
-                    1 (~'case (cljs.core/scm-subtype-idx (scm* {} ~o))
-                        ~@(when (check-impl 'cljs.core/Array) `[0 ~(prim-call :Array)])
-                        ~@(when (check-impl 'cljs.core/Number) `[(2 3 30 31) ~(prim-call :Number)]) ;Rational ;Complex ;Flonum, ;Bignum
-                        4 ~(call-form `(cljs.core/scm-table-ref
+                              ~@(when (check-impl 'cljscm.core/Boolean) `[(true false) ~(prim-call :Boolean)])
+                              ~@(when (check-impl 'cljscm.core/Nil) `[nil ~(prim-call :Nil)])
+                              ~@(when (check-impl 'cljscm.core/Null) `[(scm* [] ()) ~(prim-call :Null)])
+                              ~@(when (check-impl 'cljscm.core/Char) `[(when (char? (scm* {} ~o)) ~(prim-call :Char))]))])
+                    1 (~'case (cljscm.core/scm-subtype-idx (scm* {} ~o))
+                        ~@(when (check-impl 'cljscm.core/Array) `[0 ~(prim-call :Array)])
+                        ~@(when (check-impl 'cljscm.core/Number) `[(2 3 30 31) ~(prim-call :Number)]) ;Rational ;Complex ;Flonum, ;Bignum
+                        4 ~(call-form `(cljscm.core/scm-table-ref
                                         ~fn-vtable-name
-                                        (cljs.core/scm-unsafe-vector-ref (scm* {} ~o) 0)))
-                        ~@(when (check-impl 'cljs.core/Symbol) `[8 ~(prim-call :Symbol)])
-                        ~@(when (check-impl 'cljs.core/Keyword) `[9 ~(prim-call :Keyword)])
-                        ~@(when (check-impl 'cljs.core/Procedure) `[14 ~(prim-call :Procedure)])
-                        ~@(when (check-impl 'cljs.core/String) `[19 ~(prim-call :String)])
-                        ~@(when (check-impl 'cljs.core/Array) `[(20 21 22 23 24 25 26 27 28 29) ~(prim-call :Array)]) ;Various numerically-typed arrays
+                                        (cljscm.core/scm-unsafe-vector-ref (scm* {} ~o) 0)))
+                        ~@(when (check-impl 'cljscm.core/Symbol) `[8 ~(prim-call :Symbol)])
+                        ~@(when (check-impl 'cljscm.core/Keyword) `[9 ~(prim-call :Keyword)])
+                        ~@(when (check-impl 'cljscm.core/Procedure) `[14 ~(prim-call :Procedure)])
+                        ~@(when (check-impl 'cljscm.core/String) `[19 ~(prim-call :String)])
+                        ~@(when (check-impl 'cljscm.core/Array) `[(20 21 22 23 24 25 26 27 28 29) ~(prim-call :Array)]) ;Various numerically-typed arrays
                         )))
              sat-o 'o
              fast-satisfies `(cond ~@(mapcat (core/fn [t] [(scm-instance?* t `(scm* {} ~sat-o)) true])
@@ -1055,10 +1055,10 @@
                             prim-types [:Number :Pair :Boolean :Nil :Null
                                         :Char :Array :Symbol :Keyword :Procedure :String]
                             prim-fnames (map #(symbol (str fname "---cljs_core$" (name %))) prim-types)
-                            prim-checks {'cljs.core/Number 'scm-number?
-                                         'cljs.core/Pair 'pair?
-                                         'cljs.core/Boolean 'boolean?
-                                         'cljs.core/Nil '(eq? nil :TODO)}
+                            prim-checks {'cljscm.core/Number 'scm-number?
+                                         'cljscm.core/Pair 'pair?
+                                         'cljscm.core/Boolean 'boolean?
+                                         'cljscm.core/Nil '(eq? nil :TODO)}
                             call-form (core/fn [p-fn]
                                         (if variadic?
                                           #_"capture locals that will be introduced later in scheme."
@@ -1069,7 +1069,7 @@
                             prim-call
                             , (into {} (map #(vector %1 (call-form %2)) prim-types prim-fnames))
                             test-sym (gensym "type")
-                            resolved-name (:name (cljs.analyzer/resolve-var (dissoc &env :locals) fname))
+                            resolved-name (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) fname))
 ;                            _ (println "Proto name: " p)
                             prim-dispatches ; the fat "else" clause when none of the hints apply. Careful not to extract type from prims -- skip the vtable lookup as we'll then know the type.
                             , (mk-prim o prim-call call-form fn-vtable-name)
@@ -1088,7 +1088,7 @@
                                                  true ~prim-dispatches)]
 ;                   (println "DISPATCH: "fname"->"resolved-name":"known-implementing-types)
                    `(do
-;                      ~@(map (fn [sf] `(defn ~sf [& args] (throw (cljs.core/Error. (str "Protocol/Type pair: " (quote ~sf) " not defined."))))) prim-fnames)
+;                      ~@(map (fn [sf] `(defn ~sf [& args] (throw (cljscm.core/Error. (str "Protocol/Type pair: " (quote ~sf) " not defined."))))) prim-fnames)
                       (def ~fn-vtable-name {})
                       ~(list 'scm*
                              {fn-name-sym fname
@@ -1108,12 +1108,12 @@
 (defmacro satisfies?
   "Returns true if x satisfies the protocol"
   [psym x]
-  (core/let [p (:name (cljs.analyzer/resolve-var (dissoc &env :locals) psym))
+  (core/let [p (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) psym))
              prefix (protocol-prefix p)]
     `(~(symbol (namespace p) (str "satisfies?---" (name p))) ~x)
     #_`(let [tx# (type ~x)]
        (scm* {:tx tx# :p ~p :f false}
-             ~'(table-ref (table-ref cljs.core/protocol-impls :tx)
+             ~'(table-ref (table-ref cljscm.core/protocol-impls :tx)
                           :p :f)))))
 
 (defmacro scm-table-ref [table key]
@@ -1135,7 +1135,7 @@
   `(scm* {:x ~x} ~(list 'object->class :x ) ))
 
 (defmacro lazy-seq [& body]
-  `(new cljs.core/LazySeq nil false (core/fn [] ~@body) nil))
+  `(new cljscm.core/LazySeq nil false (core/fn [] ~@body) nil))
 
 (defmacro seq [coll]
   `(-seq ~coll))
@@ -1145,7 +1145,7 @@
   invoke the body only the first time it is forced (with force or deref/@), and
   will cache the result and return it on all subsequent force
   calls."
-  `(new cljs.core/Delay (atom {:done false, :value nil}) (fn [] ~@body)))
+  `(new cljscm.core/Delay (atom {:done false, :value nil}) (fn [] ~@body)))
 
 (defmacro binding
   "binding => var-symbol init-expr
@@ -1161,7 +1161,7 @@
         tempnames (map (comp gensym name) names)
         binds (map vector names vals)
         resets (reverse (map vector names tempnames))]
-    (cljs.analyzer/confirm-bindings &env names)
+    (cljscm.analyzer/confirm-bindings &env names)
     `(let [~@(interleave tempnames names)]
        (try
         ~@(map
@@ -1226,7 +1226,7 @@
                                              test "'"
                                              (when (:line &env)
                                                (core/str " on line " (:line &env) " "
-                                                         cljs.analyzer/*cljs-file*)))))
+                                                         cljscm.analyzer/*cljs-file*)))))
                            (assoc m test expr)))
         pairs (reduce (fn [m [test expr]]
                         (cond
@@ -1242,7 +1242,7 @@
         esym (gensym)]
    `(let [~esym ~e]
       (cond
-        ~@(mapcat (fn [[m c]] `((cljs.core/= ~m ~esym) ~c)) pairs)
+        ~@(mapcat (fn [[m c]] `((cljscm.core/= ~m ~esym) ~c)) pairs)
         :else ~default))))
 
 (defmacro try
@@ -1281,13 +1281,13 @@
   ([x]
      (when *assert*
        `(when-not ~x
-          (throw (cljs.core/Error.
-                  (cljs.core/str "Assert failed: " (cljs.core/pr-str '~x)))))))
+          (throw (cljscm.core/Error.
+                  (cljscm.core/str "Assert failed: " (cljscm.core/pr-str '~x)))))))
   ([x message]
      (when *assert*
        `(when-not ~x
-          (throw (cljs.core/Error.
-                  (cljs.core/str "Assert failed: " ~message "\n" (cljs.core/pr-str '~x))))))))
+          (throw (cljscm.core/Error.
+                  (cljscm.core/str "Assert failed: " ~message "\n" (cljscm.core/pr-str '~x))))))))
 
 (defmacro for
   "List comprehension. Takes a vector of one or more
@@ -1511,14 +1511,14 @@
                prefer-table# (atom {})
                method-cache# (atom {})
                cached-hierarchy# (atom {})
-               hierarchy# (get ~options :hierarchy cljs.core/global-hierarchy)]
-           (cljs.core/MultiFn. ~(name mm-name) ~dispatch-fn ~default hierarchy#
+               hierarchy# (get ~options :hierarchy cljscm.core/global-hierarchy)]
+           (cljscm.core/MultiFn. ~(name mm-name) ~dispatch-fn ~default hierarchy#
                                method-table# prefer-table# method-cache# cached-hierarchy#))))))
 
 (defmacro defmethod
   "Creates and installs a new method of multimethod associated with dispatch-value. "
   [multifn dispatch-val & fn-tail]
-  `(-add-method ~(with-meta multifn {:tag 'cljs.core/MultiFn}) ~dispatch-val (core/fn ~@fn-tail)))
+  `(-add-method ~(with-meta multifn {:tag 'cljscm.core/MultiFn}) ~dispatch-val (core/fn ~@fn-tail)))
 
 (defmacro time
   "Evaluates expr and prints the time it took. Returns the value of expr."
@@ -1579,7 +1579,7 @@
   printing calls."
   [& body]
   `(let [sb# (goog.string/StringBuffer.)]
-     (binding [cljs.core/*print-fn* (fn [x#] (.append sb# x#))]
+     (binding [cljscm.core/*print-fn* (fn [x#] (.append sb# x#))]
        ~@body)
-     (cljs.core/str sb#)))
+     (cljscm.core/str sb#)))
 

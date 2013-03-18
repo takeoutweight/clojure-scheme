@@ -6,15 +6,15 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns cljs.repl
+(ns cljscm.repl
   (:refer-clojure :exclude [load-file])
   (:import java.io.File)
   (:require [clojure.string :as string]
             [clojure.java.io :as io]
-            [cljs.compiler :as comp]
-            [cljs.analyzer :as ana]
-            [cljs.tagged-literals :as tags]
-            [cljs.closure :as cljsc]))
+            [cljscm.compiler :as comp]
+            [cljscm.analyzer :as ana]
+            [cljscm.tagged-literals :as tags]
+            [cljscm.closure :as cljsc]))
 
 (def ^:dynamic *cljs-verbose* false)
 
@@ -104,15 +104,15 @@
 
 (defn load-file
   [repl-env f]
-  (binding [ana/*cljs-ns* 'cljs.user]
+  (binding [ana/*cljs-ns* 'cljscm.user]
     (let [res (if (= \/ (first f)) f (io/resource f))]
       (assert res (str "Can't find " f " in classpath"))
       (load-stream repl-env f res))))
 
 (defn- wrap-fn [form]
   (cond (and (seq? form) (= 'ns (first form))) identity
-        ('#{*1 *2 *3} form) (fn [x] `(cljs.core.pr-str ~x))
-        :else (fn [x] `(cljs.core.pr-str
+        ('#{*1 *2 *3} form) (fn [x] `(cljscm.core.pr-str ~x))
+        :else (fn [x] `(cljscm.core.pr-str
                        (let [ret# ~x]
                          (do (set! *3 *2)
                              (set! *2 *1)
@@ -152,7 +152,7 @@
 
 (defn analyze-source
   "Given a source directory, analyzes all .cljs files. Used to populate
-  cljs.analyzer/namespaces so as to support code reflection."
+  cljscm.analyzer/namespaces so as to support code reflection."
   [src-dir]
   (if-let [src-dir (and (not (empty? src-dir))
                      (File. src-dir))]
@@ -163,7 +163,7 @@
   "Note - repl will reload core.cljs every time, even if supplied old repl-env"
   [repl-env & {:keys [analyze-path verbose warn-on-undeclared special-fns]}]
   (prn "Type: " :cljs/quit " to quit")
-  (binding [ana/*cljs-ns* 'cljs.user
+  (binding [ana/*cljs-ns* 'cljscm.user
             *cljs-verbose* verbose
             ana/*cljs-warn-on-undeclared* warn-on-undeclared]
     (when analyze-path

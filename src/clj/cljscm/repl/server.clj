@@ -1,17 +1,17 @@
-(ns cljs.repl.server
+(ns cljscm.repl.server
   (:refer-clojure :exclude [loaded-libs])
   (:require [clojure.string :as str]
             [clojure.java.io :as io]
-            [cljs.compiler :as comp]
-            [cljs.closure :as cljsc]
-            [cljs.repl :as repl])
+            [cljscm.compiler :as comp]
+            [cljscm.closure :as cljsc]
+            [cljscm.repl :as repl])
   (:import java.io.BufferedReader
            java.io.BufferedWriter
            java.io.InputStreamReader
            java.io.OutputStreamWriter
            java.net.Socket
            java.net.ServerSocket
-           cljs.repl.IJavaScriptEnv))
+           cljscm.repl.IJavaScriptEnv))
 
 (defonce state (atom {:socket nil
                       :connection nil

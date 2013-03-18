@@ -1,10 +1,10 @@
-(ns cljs.tagged-literals
+(ns cljscm.tagged-literals
   (:require [clojure.instant :as inst]))
 
 (defn read-queue
   [form]
   (assert (vector? form) "Queue literal expects a vector for its elements.")
-  (list 'cljs.core/into 'cljs.core.PersistentQueue/EMPTY form))
+  (list 'cljscm.core/into 'cljscm.core.PersistentQueue/EMPTY form))
 
 (defn read-uuid
   [form]

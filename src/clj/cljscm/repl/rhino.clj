@@ -6,20 +6,20 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns cljs.repl.rhino
+(ns cljscm.repl.rhino
   (:require [clojure.string :as string]
             [clojure.java.io :as io]
-            [cljs.compiler :as comp]
-            [cljs.analyzer :as ana]
-            [cljs.repl :as repl])
-  (:import cljs.repl.IJavaScriptEnv
+            [cljscm.compiler :as comp]
+            [cljscm.analyzer :as ana]
+            [cljscm.repl :as repl])
+  (:import cljscm.repl.IJavaScriptEnv
            [org.mozilla.javascript Context ScriptableObject]))
 
 (def current-repl-env (atom nil))
 
 ;;todo - move to core.cljs, using js
 (def ^String bootjs (str "goog.require = function(rule){"
-                         "Packages.clojure.lang.RT[\"var\"](\"cljs.repl.rhino\",\"goog-require\")"
+                         "Packages.clojure.lang.RT[\"var\"](\"cljscm.repl.rhino\",\"goog-require\")"
                          ".invoke(___repl_env, rule);}"))
 
 (defprotocol IEval
@@ -75,7 +75,7 @@
                               "<cljs repl>"
                               1))]
       (if-let [res (io/resource cljs-path)]
-        (binding [ana/*cljs-ns* 'cljs.user]
+        (binding [ana/*cljs-ns* 'cljscm.user]
           (repl/load-stream repl-env res))
         (if-let [res (io/resource js-path)]
           (-eval (io/reader res) repl-env js-path 1)
@@ -95,11 +95,11 @@
   (let [env (ana/empty-env)
         scope (:scope repl-env)]
     (repl/load-file repl-env "cljs/core.cljs")
-    (swap! (:loaded-libs repl-env) conj "cljs.core")
+    (swap! (:loaded-libs repl-env) conj "cljscm.core")
     (repl/evaluate-form repl-env
                         env
                         "<cljs repl>"
-                        '(ns cljs.user))
+                        '(ns cljscm.user))
     (ScriptableObject/putProperty scope
                                   "out"
                                   (Context/javaToJS System/out scope))
@@ -143,8 +143,8 @@
 
 (comment
 
-  (require '[cljs.repl :as repl])
-  (require '[cljs.repl.rhino :as rhino])
+  (require '[cljscm.repl :as repl])
+  (require '[cljscm.repl.rhino :as rhino])
   (def env (rhino/repl-env))
   (repl/repl env)
   (+ 1 1)

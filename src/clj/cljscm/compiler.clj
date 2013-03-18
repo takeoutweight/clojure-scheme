@@ -6,13 +6,13 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software.
 
-(ns cljs.compiler
+(ns cljscm.compiler
   (:refer-clojure :exclude [munge macroexpand-1])
   (:require [clojure.java.io :as io]
             [clojure.string :as string]
             [clojure.walk :as walk]
-            [cljs.tagged-literals :as tags] 
-            [cljs.analyzer :as ana])
+            [cljscm.tagged-literals :as tags] 
+            [cljscm.analyzer :as ana])
   (:import java.lang.StringBuilder))
 (set! *warn-on-reflection* true)
                                         ;Game plan : use emits, not print.
@@ -185,7 +185,7 @@
 (defn- emit-meta-constant [x & body]
   (if (meta x)
     (do
-      (emits "cljs.core.with_meta(" body ",") ;TODO new cljs
+      (emits "cljscm.core.with_meta(" body ",") ;TODO new cljs
       (emit-constant (meta x))
       (emits ")"))
     (emits body)))
@@ -218,14 +218,14 @@
 
 (defmethod emit-constant clojure.lang.IPersistentMap [x]
   (emit-meta-constant x
-    "(cljs.core/hash-map "
+    "(cljscm.core/hash-map "
     (space-sep (map #(with-out-str (emit-constant %))
                     (apply concat x)))
     ")"))
 
 (defmethod emit-constant clojure.lang.PersistentHashSet [x]
   (emit-meta-constant x
-    "(cljs.core/set (list "
+    "(cljscm.core/set (list "
     (space-sep (map #(with-out-str (emit-constant %)) x))
     "))"))
 
@@ -253,7 +253,7 @@
 
 (defmethod emit :meta
   [{:keys [expr meta env]}]
-  (emits "(cljs.core/with-meta " expr " " emits meta ")"))
+  (emits "(cljscm.core/with-meta " expr " " emits meta ")"))
 
 (def ^:private array-map-threshold 16)
 (def ^:private obj-map-threshold 32)
@@ -272,7 +272,7 @@
 
 (defmethod emit :set
   [{:keys [items env]}]
-  (emits "(cljs.core/set (list "
+  (emits "(cljscm.core/set (list "
          (space-sep items)"))"))
 
 (defmethod emit :constant
@@ -413,22 +413,22 @@
         params (map munge params)]
     (emitln "(function (" arglist "){")
     (doseq [[i param] (map-indexed vector (butlast params))]
-      (emits "var " param " = cljs.core.first(")
-      (dotimes [_ i] (emits "cljs.core.next("))
+      (emits "var " param " = cljscm.core.first(")
+      (dotimes [_ i] (emits "cljscm.core.next("))
       (emits arglist ")")
       (dotimes [_ i] (emits ")"))
       (emitln ";"))
     (if (< 1 (count params))
       (do
-        (emits "var " (last params) " = cljs.core.rest(")
-        (dotimes [_ (- (count params) 2)] (emits "cljs.core.next("))
+        (emits "var " (last params) " = cljscm.core.rest(")
+        (dotimes [_ (- (count params) 2)] (emits "cljscm.core.next("))
         (emits arglist)
         (dotimes [_ (- (count params) 2)] (emits ")"))
         (emitln ");")
         (emitln "return " delegate-name "(" (string/join ", " params) ");"))
       (do
         (emits "var " (last params) " = ")
-        (emits "cljs.core.seq(" arglist ");")
+        (emits "cljscm.core.seq(" arglist ");")
         (emitln ";")
         (emitln "return " delegate-name "(" (string/join ", " params) ");")))
     (emits "})")))
@@ -458,7 +458,7 @@
                (when variadic
                  (emitln "var " (last params) " = null;")
                  (emitln "if (goog.isDef(var_args)) {")
-                 (emitln "  " (last params) " = cljs.core.array_seq(Array.prototype.slice.call(arguments, " (dec (count params)) "),0);")
+                 (emitln "  " (last params) " = cljscm.core.array_seq(Array.prototype.slice.call(arguments, " (dec (count params)) "),0);")
                  (emitln "} "))
                (emitln "return " delegate-name ".call(" (string/join ", " (cons "this" params)) ");")
                (emitln "};")
@@ -495,7 +495,7 @@
      (do
        (emit-comment (str "Implementing " (:name protocol)) nil)
        (emitln "(table-set! "
-               "(table-ref cljs.core/protocol-impls " (:name etype) ") "
+               "(table-ref cljscm.core/protocol-impls " (:name etype) ") "
                (:name protocol) " #t)")
        (doall
         (for [[meth-name meth-impl] meth-map]
@@ -611,7 +611,7 @@
                       (or (= protocol tag)
                           (when-let [ps (:protocols (ana/resolve-existing-var (dissoc env :locals) tag))]
                             (ps protocol)))))
-        opt-not? (and (= (:name info) 'cljs.core/not)
+        opt-not? (and (= (:name info) 'cljscm.core/not)
                       (= (infer-tag (first (:args expr))) 'boolean))
         ns (:ns info)
         js? (= ns 'js)
@@ -659,13 +659,13 @@
          (emits (first args) "." pimpl "(" (comma-sep args) ")"))
 
        keyword?
-       (emits "(new cljs.core.Keyword(" f ")).call(" (comma-sep (cons "null" args)) ")")
+       (emits "(new cljscm.core.Keyword(" f ")).call(" (comma-sep (cons "null" args)) ")")
        
        variadic-invoke
        (let [mfa (:max-fixed-arity variadic-invoke)]
         (emits f "(" (comma-sep (take mfa args))
                (when-not (zero? mfa) ",")
-               "cljs.core.array_seq([" (comma-sep (drop mfa args)) "], 0))"))
+               "cljscm.core.array_seq([" (comma-sep (drop mfa args)) "], 0))"))
        
        (or fn? js? goog?)
        (emits f "(" (comma-sep args)  ")")
@@ -689,19 +689,19 @@
     (and (= :var (:op target)) (:field (:info target)))
     , (if-let [tag (get-tag (ana/resolve-existing-var env (:this-name env)))]
         (emits "("(:name (ana/resolve-existing-var env tag))"-"(:name (:info target))"-set! "(:this-name env)" "val")")
-        (emits "(cljs.core/record-set! " (:this-name env) " '" (:name (:info target)) " " val")"))
+        (emits "(cljscm.core/record-set! " (:this-name env) " '" (:name (:info target)) " " val")"))
     (= :dot (:op target))
     , (if-let [tag (get-tag (:target target))]
         (emits "("(:name (ana/resolve-existing-var env tag))"-"(:field target)"-set! "(:target target)" "val")")
-        (emits "(cljs.core/record-set! " (:target target) " '" (:field target) " " val")"))
+        (emits "(cljscm.core/record-set! " (:target target) " '" (:field target) " " val")"))
     :else (emits "(set! " target " " val ")")))
 
 (defmethod emit :ns
   [{:keys [name requires uses requires-macros env]}]
   (swap! ns-first-segments conj (first (string/split (str name) #"\.")))
   (emits "(declare (standard-bindings) (extended-bindings) (block))")
-  (when-not (= name 'cljs.core)
-    (emits "(load \"cljs.core\")"))
+  (when-not (= name 'cljscm.core)
+    (emits "(load \"cljscm.core\")"))
   (doseq [lib (into (vals requires) (distinct (vals uses)))]
     (emits "(load \"" (munge lib) "\")")))
 
@@ -713,7 +713,7 @@
     (emitln "(define-type " t " " (space-sep fields) (if no-constructor " constructor: #f" "") ")")
     (emitln "(declare (safe))")
     (emitln "(define " t " ##type-" (count fields)  "-" t ")") 
-    (emitln "(table-set! cljs.core/protocol-impls " t " (make-table))" )))
+    (emitln "(table-set! cljscm.core/protocol-impls " t " (make-table))" )))
 
 
 (comment (defmethod emit :defrecord*
@@ -751,7 +751,7 @@
   (if field
     (if-let [tag (get-tag target)]
       (emits "("(:name (ana/resolve-existing-var env tag)) "-"field " " target ")")
-      (emits "(cljs.core/record-ref "target" '"field")"))
+      (emits "(cljscm.core/record-ref "target" '"field")"))
     (throw (Exception. (str "no special dot-method access: " (:line env)))) ;TODO
     #_(emits target "." (munge method #{}) "("
                       (comma-sep args)
@@ -800,7 +800,7 @@
 (defmacro with-core-cljs
   "Ensure that core.cljs has been loaded."
   [& body]
-  `(do (when-not (:defs (get @ana/namespaces 'cljs.core))
+  `(do (when-not (:defs (get @ana/namespaces 'cljscm.core))
          (ana/analyze-file "cljs/core.cljs"))
        ~@body))
 
@@ -808,7 +808,7 @@
   (with-core-cljs
     (with-open [out ^java.io.Writer (io/make-writer dest {})]
       (binding [*out* out
-                ana/*cljs-ns* 'cljs.user
+                ana/*cljs-ns* 'cljscm.user
                 ana/*cljs-file* (.getPath ^java.io.File src)
                 *data-readers* tags/*cljs-data-readers*
                 *position* (atom [0 0])
@@ -823,9 +823,9 @@
                   (if (= (:op ast) :ns)
                     (recur (rest forms) (:name ast) (merge (:uses ast) (:requires ast)))
                     (recur (rest forms) ns-name deps))))
-            {:ns (or ns-name 'cljs.user)
+            {:ns (or ns-name 'cljscm.user)
              :provides [ns-name]
-             :requires (if (= ns-name 'cljs.core) (set (vals deps)) (conj (set (vals deps)) 'cljs.core))
+             :requires (if (= ns-name 'cljscm.core) (set (vals deps)) (conj (set (vals deps)) 'cljscm.core))
              :file dest}))))))
 
 (defn requires-compilation?
@@ -836,7 +836,7 @@
 
 (defn parse-ns [src dest]
   (with-core-cljs
-    (binding [ana/*cljs-ns* 'cljs.user]
+    (binding [ana/*cljs-ns* 'cljscm.user]
       (loop [forms (forms-seq src)]
         (if (seq forms)
           (let [env (ana/empty-env)
@@ -844,11 +844,11 @@
             (if (= (:op ast) :ns)
               (let [ns-name (:name ast)
                     deps    (merge (:uses ast) (:requires ast))]
-                {:ns (or ns-name 'cljs.user)
+                {:ns (or ns-name 'cljscm.user)
                  :provides [ns-name]
-                 :requires (if (= ns-name 'cljs.core)
+                 :requires (if (= ns-name 'cljscm.core)
                              (set (vals deps))
-                             (conj (set (vals deps)) 'cljs.core))
+                             (conj (set (vals deps)) 'cljscm.core))
                  :file dest})
               (recur (rest forms)))))))))
 
@@ -950,7 +950,7 @@
 (comment
 
 ;;the new way - use the REPL!!
-(require '[cljs.compiler :as comp])
+(require '[cljscm.compiler :as comp])
 (def repl-env (comp/repl-env))
 (comp/repl repl-env)
 ;having problems?, try verbose mode
@@ -969,8 +969,8 @@
 
 (extend-type number ISeq (-seq [x] x))
 (seq 42)
-;(aset cljs.core.ISeq "number" true)
-;(aget cljs.core.ISeq "number")
+;(aset cljscm.core.ISeq "number" true)
+;(aget cljscm.core.ISeq "number")
 (satisfies? ISeq 42)
 (extend-type nil ISeq (-seq [x] x))
 (satisfies? ISeq nil)
@@ -986,7 +986,7 @@
 (defn f [& etc] etc)
 (f)
 
-(in-ns 'cljs.core)
+(in-ns 'cljscm.core)
 ;;hack on core
 
 
@@ -994,11 +994,11 @@
 ((-meta (Foo. 42)))
 
 ;;OLD way, don't you want to use the REPL?
-(in-ns 'cljs.compiler)
+(in-ns 'cljscm.compiler)
 (import '[javax.script ScriptEngineManager])
 (def jse (-> (ScriptEngineManager.) (.getEngineByName "JavaScript")))
-(.eval jse cljs.compiler/bootjs)
-(def envx {:ns (@namespaces 'cljs.user) :context :expr :locals '{ethel {:name ethel__123 :init nil}}})
+(.eval jse cljscm.compiler/bootjs)
+(def envx {:ns (@namespaces 'cljscm.user) :context :expr :locals '{ethel {:name ethel__123 :init nil}}})
 (analyze envx nil)
 (analyze envx 42)
 (analyze envx "foo")
@@ -1020,12 +1020,12 @@
 
 (analyze envx '(ns fred (:require [your.ns :as yn]) (:require-macros [clojure.core :as core])))
 (defmacro js [form]
-  `(emit (ana/analyze {:ns (@ana/namespaces 'cljs.user) :context :statement :locals {}} '~form)))
+  `(emit (ana/analyze {:ns (@ana/namespaces 'cljscm.user) :context :statement :locals {}} '~form)))
 
 (defn jscapture [form]
   "just grabs the js, doesn't print it"
   (with-out-str
-    (emit (analyze {:ns (@namespaces 'cljs.user) :context :expr :locals {}} form))))
+    (emit (analyze {:ns (@namespaces 'cljscm.user) :context :expr :locals {}} form))))
 
 (defn jseval [form]
   (let [js (jscapture form)]
@@ -1041,7 +1041,7 @@
 (js (do 1 2 3))
 (js (let [a 1 b 2 a b] a))
 
-(js (ns fred (:require [your.ns :as yn]) (:require-macros [cljs.core :as core])))
+(js (ns fred (:require [your.ns :as yn]) (:require-macros [cljscm.core :as core])))
 
 (js (def foo? (fn* ^{::fields [a? b c]} [x y] (if true a? (recur 1 x)))))
 (js (def foo (fn* ^{::fields [a b c]} [x y] (if true a (recur 1 x)))))
@@ -1051,7 +1051,7 @@
 (jseval '(defn foo [x y] (if true 46 (recur 1 x))))
 (jseval '(foo 1 2))
 (js (and fred ethel))
-(jseval '(ns fred (:require [your.ns :as yn]) (:require-macros [cljs.core :as core])))
+(jseval '(ns fred (:require [your.ns :as yn]) (:require-macros [cljscm.core :as core])))
 (js (def x 42))
 (jseval '(def x 42))
 (jseval 'x)
@@ -1059,21 +1059,21 @@
 (jseval '(or 1 2))
 (jseval '(fn* [x y] (if true 46 (recur 1 x))))
 (.eval jse "print(test)")
-(.eval jse "print(cljs.user.Foo)")
-(.eval jse  "print(cljs.user.Foo = function (){\n}\n)")
+(.eval jse "print(cljscm.user.Foo)")
+(.eval jse  "print(cljscm.user.Foo = function (){\n}\n)")
 (js (def fred 42))
 (js (deftype* Foo [a b-foo c]))
 (jseval '(deftype* Foo [a b-foo c]))
 (jseval '(. (new Foo 1 2 3) b-foo))
 (js (. (new Foo 1 2 3) b))
-(.eval jse "print(new cljs.user.Foo(1, 42, 3).b)")
+(.eval jse "print(new cljscm.user.Foo(1, 42, 3).b)")
 (.eval jse "(function (x, ys){return Array.prototype.slice.call(arguments, 1);})(1,2)[0]")
 
-(macroexpand-1 '(cljs.core/deftype Foo [a b c] Fred (fred [x] a) (fred [x y] b) (ethel [x] c) Ethel (foo [] d)))
-(-> (macroexpand-1 '(cljs.core/deftype Foo [a b c] Fred (fred [x] a) (fred [x y] b) (ethel [x] c) Ethel (foo [] d)))
+(macroexpand-1 '(cljscm.core/deftype Foo [a b c] Fred (fred [x] a) (fred [x y] b) (ethel [x] c) Ethel (foo [] d)))
+(-> (macroexpand-1 '(cljscm.core/deftype Foo [a b c] Fred (fred [x] a) (fred [x y] b) (ethel [x] c) Ethel (foo [] d)))
     last last last first meta)
 
-(macroexpand-1 '(cljs.core/extend-type Foo Fred (fred ([x] a) ([x y] b)) (ethel ([x] c)) Ethel (foo ([] d))))
+(macroexpand-1 '(cljscm.core/extend-type Foo Fred (fred ([x] a) ([x y] b)) (ethel ([x] c)) Ethel (foo ([] d))))
 (js (new foo.Bar 65))
 (js (defprotocol P (bar [a]) (baz [b c])))
 (js (. x y))
@@ -1103,8 +1103,8 @@
 (js (defn foo [a b c & ys] ys))
 (js ((fn [x & ys] ys) 1 2 3 4))
 (jseval '((fn [x & ys] ys) 1 2 3 4))
-(js (cljs.core/deftype Foo [a b c] Fred (fred [x] a) (fred [x y] a)  (ethel [x] c) Ethel (foo [] d)))
-(jseval '(cljs.core/deftype Foo [a b c] Fred (fred [x] a) (fred [x y] a)  (ethel [x] c) Ethel (foo [] d)))
+(js (cljscm.core/deftype Foo [a b c] Fred (fred [x] a) (fred [x y] a)  (ethel [x] c) Ethel (foo [] d)))
+(jseval '(cljscm.core/deftype Foo [a b c] Fred (fred [x] a) (fred [x y] a)  (ethel [x] c) Ethel (foo [] d)))
 
 (js (do
            (defprotocol Proto (foo [this]))

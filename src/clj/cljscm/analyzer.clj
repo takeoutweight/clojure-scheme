@@ -8,11 +8,11 @@
 
 (set! *warn-on-reflection* true)
 
-(ns cljs.analyzer
+(ns cljscm.analyzer
   (:refer-clojure :exclude [macroexpand-1])
   (:require [clojure.java.io :as io]
             [clojure.string :as string]
-            [cljs.tagged-literals :as tags]
+            [cljscm.tagged-literals :as tags]
             )
   (:import java.lang.StringBuilder))
 
@@ -29,13 +29,13 @@
 (def ^:dynamic *reader-ns-name* (gensym))
 (def ^:dynamic *reader-ns* (create-ns *reader-ns-name*))
 
-(defonce namespaces (atom '{cljs.core {:name cljs.core}
-                            cljs.user {:name cljs.user}}))
+(defonce namespaces (atom '{cljscm.core {:name cljscm.core}
+                            cljscm.user {:name cljscm.user}}))
 
 (defn reset-namespaces! []
   (reset! namespaces
-    '{cljs.core {:name cljs.core}
-      cljs.user {:name cljs.user}}))
+    '{cljscm.core {:name cljscm.core}
+      cljscm.user {:name cljscm.user}}))
 
 (defn get-namespace [key]
   (@namespaces key))
@@ -43,7 +43,7 @@
 (defn set-namespace [key val]
   (swap! namespaces assoc key val))
 
-(def ^:dynamic *cljs-ns* 'cljs.user)
+(def ^:dynamic *cljs-ns* 'cljscm.user)
 (def ^:dynamic *cljs-file* nil)
 (def ^:dynamic *cljs-warn-on-redef* true)
 (def ^:dynamic *cljs-warn-on-dynamic* true)
@@ -143,7 +143,7 @@
 (defn core-name?
   "Is sym visible from core in the current compilation namespace?"
   [env sym]
-  (and (get (:defs (@namespaces 'cljs.core)) sym)
+  (and (get (:defs (@namespaces 'cljscm.core)) sym)
        (not (contains? (-> env :ns :excludes) sym))))
 
 (defn resolve-var
@@ -162,7 +162,7 @@
 
            (namespace sym)
            (let [ns (namespace sym)
-                 ns (if (= "clojure.core" ns) "cljs.core" ns)
+                 ns (if (= "clojure.core" ns) "cljscm.core" ns)
                  full-ns (resolve-ns-alias env ns)]
              (when confirm
                (confirm env full-ns (symbol (name sym))))
@@ -196,7 +196,7 @@
 
            :else
            (let [full-ns (if (core-name? env sym)
-                           'cljs.core
+                           'cljscm.core
                            (-> env :ns :name))]
              (when confirm
                (confirm env full-ns sym))
@@ -233,9 +233,9 @@
                (keyword (-> env :ns :name name) (name sym))
                sym)})
 
-(def prim-types #{'cljs.core/Number 'cljs.core/Pair 'cljs.core/Boolean 'cljs.core/Nil 'cljs.core/Null
-                  'cljs.core/Char 'cljs.core/Array 'cljs.core/Symbol 'cljs.core/Keyword
-                  'cljs.core/Procedure 'cljs.core/String})
+(def prim-types #{'cljscm.core/Number 'cljscm.core/Pair 'cljscm.core/Boolean 'cljscm.core/Nil 'cljscm.core/Null
+                  'cljscm.core/Char 'cljscm.core/Array 'cljscm.core/Symbol 'cljscm.core/Keyword
+                  'cljscm.core/Procedure 'cljscm.core/String})
 
 (defmulti parse (fn [op & rest] op))
 
@@ -320,7 +320,7 @@
         dynamic (-> sym meta :dynamic)
         ns-name (-> env :ns :name)]
     (assert (not (namespace sym)) "Can't def ns-qualified name")
-    (let [env (if (or (and (not= ns-name 'cljs.core)
+    (let [env (if (or (and (not= ns-name 'cljscm.core)
                            (core-name? env sym))
                       (get-in @namespaces [ns-name :uses sym]))
                 (let [ev (resolve-existing-var (dissoc env :locals) sym)]
@@ -447,7 +447,7 @@
                        [name (seq args)])
         ;;turn (fn [] ...) into (fn ([]...))
         meths (if (vector? (first meths)) (list meths) meths)
-        recur-name (symbol (if name (str name "---recur$") "cljs.compiler/recurfn"))
+        recur-name (symbol (if name (str name "---recur$") "cljscm.compiler/recurfn"))
         locals (:locals env)
         name recur-name
         env (assoc env :recur-name recur-name)
@@ -564,7 +564,7 @@
   [encl-env [_ bindings & exprs :as form] is-loop]
   (assert (and (vector? bindings) (even? (count bindings))) "bindings must be vector of even number of elements")
   (let [context (:context encl-env)
-        recur-name (when is-loop "cljs.compiler/recurlet")
+        recur-name (when is-loop "cljscm.compiler/recurlet")
         [bes env]
         (disallowing-recur
           (loop [bes []
@@ -1017,14 +1017,14 @@
                                     (get-in @namespaces [(-> env :ns :name) :uses-macros sym])))))
           (if-let [nstr (namespace sym)]
             (when-let [ns (cond
-                           (= "clojure.core" nstr) (find-ns 'cljs.core)
+                           (= "clojure.core" nstr) (find-ns 'cljscm.core)
                            (.contains nstr ".") (find-ns (symbol nstr))
                            :else
                            (-> env :ns :requires-macros (get (symbol nstr))))]
               (.findInternedVar ^clojure.lang.Namespace ns (symbol (name sym))))
             (if-let [nsym (-> env :ns :uses-macros sym)]
               (.findInternedVar ^clojure.lang.Namespace (find-ns nsym) sym)
-              (.findInternedVar ^clojure.lang.Namespace (find-ns 'cljs.core) sym))))]
+              (.findInternedVar ^clojure.lang.Namespace (find-ns 'cljscm.core) sym))))]
     (when (and mvar (.isMacro ^clojure.lang.Var mvar))
       @mvar)))
 
@@ -1125,7 +1125,7 @@
   [^String f]
   (let [res (if (re-find #"^file://" f) (java.net.URL. f) (io/resource f))] ;res (or res (java.net.URL. (str "file:/Users/nathansorenson/src/c-clojure/src/cljs/" f)))
     (assert res (str "Can't find " f " in classpath"))
-    (binding [*cljs-ns* 'cljs.user
+    (binding [*cljs-ns* 'cljscm.user
               *cljs-file* (.getPath ^java.net.URL res)
               *ns* *reader-ns*]
       (with-open [r (io/reader res)]
