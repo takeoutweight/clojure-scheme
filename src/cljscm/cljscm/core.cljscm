@@ -4242,7 +4242,7 @@ reduces them without incurring seq initialization"
     ([table k] (-lookup table k nil))
     ([table k not-found]
        (scm* [table k not-found]
-             (lambda () (table-ref table k not-found)))))  
+             (table-ref table k not-found))))  
 
   IAssociative
   (-assoc [table k v]
