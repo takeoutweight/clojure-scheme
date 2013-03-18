@@ -472,7 +472,7 @@
   structures define -equiv (and thus =) as a value, not an identity,
   comparison."
   ([x] true)
-  ([x y] (or (identical? x y) (-equiv x y)))
+  ([x y] (or (identical? x y) (scm* [x y] (eqv? x y)) (-equiv x y)))
   ([x y & more]
      (if (= x y)
        (if (next more)
