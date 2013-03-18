@@ -53,7 +53,7 @@
 (def ^:dynamic *cljs-warn-protocol-deprecated* true)
 (def ^:dynamic *unchecked-if* (atom false))
 (def ^:dynamic *cljs-static-fns* false)
-(def ^:dynamic *cljs-macros-path* "/cljs/core")
+(def ^:dynamic *cljs-macros-path* "/cljscm/core")
 (def ^:dynamic *cljs-macros-is-classpath* true)
 (def  -cljs-macros-loaded (atom false))
 

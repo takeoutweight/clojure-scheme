@@ -787,10 +787,10 @@
        (.close rdr))))
 
 (defn rename-to-scm
-  "Change the file extension from .cljs to .js. Takes a File or a
+  "Change the file extension from .cljscm to .js. Takes a File or a
   String. Always returns a String."
   [file-str]
-  (clojure.string/replace file-str #".cljs$" ".scm"))
+  (clojure.string/replace file-str #".cljscm$" ".scm"))
 
 (defn mkdirs
   "Create all parent directories for the passed file."
@@ -798,10 +798,10 @@
   (.mkdirs (.getParentFile (.getCanonicalFile f))))
 
 (defmacro with-core-cljs
-  "Ensure that core.cljs has been loaded."
+  "Ensure that core.cljscm has been loaded."
   [& body]
   `(do (when-not (:defs (get @ana/namespaces 'cljscm.core))
-         (ana/analyze-file "cljs/core.cljs"))
+         (ana/analyze-file "cljscm/core.cljscm"))
        ~@body))
 
 (defn compile-file* [src dest]
@@ -912,10 +912,10 @@
     (java.io.File. parent-file ^String (rename-to-scm (last relative-path)))))
 
 (defn cljs-files-in
-  "Return a sequence of all .cljs files in the given directory."
+  "Return a sequence of all .cljscm files in the given directory."
   [dir]
   (filter #(let [name (.getName ^java.io.File %)]
-             (and (.endsWith name ".cljs")
+             (and (.endsWith name ".cljscm")
                   (not= \. (first name))
                   (not (contains? cljs-reserved-file-names name))))
           (file-seq dir)))
