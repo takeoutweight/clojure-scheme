@@ -12,9 +12,7 @@
   (:refer-clojure :exclude [macroexpand-1])
   (:require [clojure.java.io :as io]
             [clojure.string :as string]
-            [cljscm.tagged-literals :as tags]
-            )
-  (:import java.lang.StringBuilder))
+            [cljscm.conditional :as cond]))
 
 (declare resolve-var)
 (declare resolve-existing-var)
@@ -93,7 +91,7 @@
 (defn empty-env []
   {:ns (@namespaces *cljs-ns*) :context :statement :locals {}})
 
-(defmacro ^:private debug-prn
+#_(defmacro ^:private debug-prn
   [& args]
   `(.println System/err (str ~@args)))
 
@@ -121,12 +119,15 @@
   (= :cljs/analysis-error (:tag (ex-data ex))))
 
 (defmacro wrapping-errors [env & body]
-  `(try
-     ~@body
-     (catch Throwable err#
-       (if (analysis-error? err#)
-         (throw err#)
-         (throw (error ~env (.getMessage err#) err#))))))
+  (let [err (gensym "err")]
+    `(try
+       ~@body
+       (catch Throwable ~err
+         (if (analysis-error? ~err)
+           (throw ~err)
+           ~(if (= cond/*target-platform* :jvm)
+              `(throw (error ~env (.getMessage ~err) ~err))
+              `(throw (error ~env (str ~err) ~err))))))))
 
 (defn confirm-var-exists [env prefix suffix]
   (when *cljs-warn-on-undeclared*
@@ -144,7 +145,7 @@
   "Is sym visible from core in the current compilation namespace?"
   [env sym]
   (and (get (:defs (@namespaces 'cljscm.core)) sym)
-       (not (contains? (-> env :ns :excludes) sym))))
+       (not (contains? (set (-> env :ns :excludes)) sym))))
 
 (defn resolve-var
   "Resolve a var. Accepts a side-effecting confirm fn for producing
@@ -170,10 +171,9 @@
                     {:name (symbol (str full-ns) (str (name sym)))
                      :ns full-ns}))
 
-           (.contains s ".")
-           (let [idx (.indexOf s ".")
-                 prefix (symbol (subs s 0 idx))
-                 suffix (subs s (inc idx))
+           (some #{\.} (seq s))
+           (let [[prefix suffix] (split-with (complement #{\.}) (seq s))
+                 [prefix suffix] [(symbol (apply str prefix)) (apply str (drop 1 suffix))]
                  lb (-> env :locals prefix)]
              (if lb
                {:name (symbol (str (:name lb) suffix))}
@@ -218,7 +218,7 @@
 
 (declare analyze analyze-symbol analyze-seq)
 
-(def specials '#{if case def fn* do let* loop* throw try* recur new set! ns deftype* defrecord* . extend scm-str* scm* & quote})
+(def specials '#{if case def fn* do let* loop* letfn* throw try* recur new set! ns deftype* defrecord* . extend scm-str* scm* & quote})
 
 (def ^:dynamic *recur-frames* nil)
 (def ^:dynamic *loop-lets* nil)
@@ -308,6 +308,7 @@
 
 (defmethod parse 'def
   [op env form name]
+  (assert (<= (count form) 4) "Too many forms supplied to def")
   (let [pfn (fn
               ([_ sym] {:sym sym})
               ([_ sym init] {:sym sym :init init})
@@ -317,6 +318,7 @@
         sym-meta (meta sym)
         tag (-> sym meta :tag)
         protocol (-> sym meta :protocol)
+        macro (-> sym meta :macro)
         dynamic (-> sym meta :dynamic)
         ns-name (-> env :ns :name)]
     (assert (not (namespace sym)) "Can't def ns-qualified name")
@@ -359,6 +361,8 @@
                    ;; symbol for reified protocol
                    (when-let [protocol-symbol (-> sym meta :protocol-symbol)]
                      {:protocol-symbol protocol-symbol})
+                   (when macro
+                     {:macro macro})
                    (when fn-var?
                      {:fn-var true
                       ;; protocol implementation context
@@ -564,7 +568,7 @@
   [encl-env [_ bindings & exprs :as form] is-loop]
   (assert (and (vector? bindings) (even? (count bindings))) "bindings must be vector of even number of elements")
   (let [context (:context encl-env)
-        recur-name (when is-loop "cljscm.compiler/recurlet")
+        recur-name (when is-loop (symbol "cljscm.compiler" "recurlet"))
         [bes env]
         (disallowing-recur
           (loop [bes []
@@ -572,7 +576,7 @@
                  bindings (seq (partition 2 bindings))]
             (if-let [[name init] (first bindings)]
               (do
-                (assert (not (or (namespace name) (.contains (str name) "."))) (str "Invalid local name: " name))
+                (assert (not (or (namespace name) (some #{\.} (seq (str name))))) (str "Invalid local name: " name))
                 (let [init-expr (binding [*loop-lets* (cons {:params bes} (or *loop-lets* ()))]
                                   (analyze env init))
                       be {:name name
@@ -701,7 +705,7 @@
   (clojure.lang.Compiler/munge (str ss)))
 
 (defn ns->relpath [s]
-  (str (string/replace (munge-path s) \. \/) ".cljs"))
+  (str (string/replace (munge-path s) \. \/) ".cljscm"))
 
 (declare analyze-file)
 
@@ -895,7 +899,7 @@
 ;; (. (...) -p)
 (defmethod build-dot-form [::expr ::property ()]
   [[target prop _]]
-  {:dot-action ::access :target target :field (-> prop name (.substring 1) symbol)})
+  {:dot-action ::access :target target :field (-> prop name (subs 1) symbol)})
 
 ;; (. o -p <args>)
 (defmethod build-dot-form [::expr ::property ::list]
@@ -956,27 +960,28 @@
 (defmethod parse 'scm-str*
   [op env [_ jsform & args :as form] _]
   (assert (string? jsform))
-  (if args
-    (disallowing-recur
-     (let [seg (fn seg [^String s]
-                 (let [idx (.indexOf s "~{")]
-                   (if (= -1 idx)
-                     (list s)
-                     (let [end (.indexOf s "}" idx)]
-                       (cons (subs s 0 idx) (seg (subs s (inc end))))))))
-           enve (assoc env :context :expr)
-           argexprs (vec (map #(analyze enve %) args))]
-       {:env env :op :scm-str :segs (seg jsform) :args argexprs
-        :tag (-> form meta :tag) :form form :children argexprs}))
-    (let [interp (fn interp [^String s]
-                   (let [idx (.indexOf s "~{")]
-                     (if (= -1 idx)
-                       (list s)
-                       (let [end (.indexOf s "}" idx)
-                             inner (:name (resolve-existing-var env (symbol (subs s (+ 2 idx) end))))]
-                         (cons (subs s 0 idx) (cons inner (interp (subs s (inc end)))))))))]
-      {:env env :op :scm-str :form form :code (apply str (interp jsform))
-       :tag (-> form meta :tag)})))
+  (throw "Temporarily disabled")
+  #_(if args
+      (disallowing-recur
+        (let [seg (fn seg [^String s]
+                    (let [idx (.indexOf s "~{")]
+                      (if (= -1 idx)
+                        (list s)
+                        (let [end (.indexOf s "}" idx)]
+                          (cons (subs s 0 idx) (seg (subs s (inc end))))))))
+              enve (assoc env :context :expr)
+              argexprs (vec (map #(analyze enve %) args))]
+          {:env env :op :scm-str :segs (seg jsform) :args argexprs
+           :tag (-> form meta :tag) :form form :children argexprs}))
+      (let [interp (fn interp [^String s]
+                     (let [idx (.indexOf s "~{")]
+                       (if (= -1 idx)
+                         (list s)
+                         (let [end (.indexOf s "}" idx)
+                               inner (:name (resolve-existing-var env (symbol (subs s (+ 2 idx) end))))]
+                           (cons (subs s 0 idx) (cons inner (interp (subs s (inc end)))))))))]
+        {:env env :op :scm-str :form form :code (apply str (interp jsform))
+         :tag (-> form meta :tag)})))
 
 (defn parse-invoke
   [env [f & args :as form]]
@@ -1008,6 +1013,15 @@
       (assoc ret :op :var :info lb)
       (assoc ret :op :var :info (resolve-existing-var env sym)))))
 
+(defn find-interned-var [ns sym]
+  (cond/platform-case
+   :jvm (.findInternedVar ^clojure.lang.Namespace ns sym)
+   :gambit (throw "TODO")))
+(defn is-macro [mvar]
+  (cond/platform-case
+   :jvm (.isMacro ^clojure.lang.Var mvar)
+   :gambit (throw "TODO")))
+
 (defn get-expander [sym env]
   (let [mvar
         (when-not (or (-> env :locals sym)        ;locals hide macros
@@ -1018,14 +1032,14 @@
           (if-let [nstr (namespace sym)]
             (when-let [ns (cond
                            (= "clojure.core" nstr) (find-ns 'cljscm.core)
-                           (.contains nstr ".") (find-ns (symbol nstr))
+                           (some #{\.} (seq nstr)) (find-ns (symbol nstr))
                            :else
                            (-> env :ns :requires-macros (get (symbol nstr))))]
-              (.findInternedVar ^clojure.lang.Namespace ns (symbol (name sym))))
+              (find-interned-var ns (symbol (name sym))))
             (if-let [nsym (-> env :ns :uses-macros sym)]
-              (.findInternedVar ^clojure.lang.Namespace (find-ns nsym) sym)
-              (.findInternedVar ^clojure.lang.Namespace (find-ns 'cljscm.core) sym))))]
-    (when (and mvar (.isMacro ^clojure.lang.Var mvar))
+              (find-interned-var (find-ns nsym) sym)
+              (find-interned-var (find-ns 'cljscm.core) sym))))]
+    (when (and mvar (is-macro mvar))
       @mvar)))
 
 (defn macroexpand-1 [env form]
@@ -1127,7 +1141,8 @@
     (assert res (str "Can't find " f " in classpath"))
     (binding [*cljs-ns* 'cljscm.user
               *cljs-file* (.getPath ^java.net.URL res)
-              *ns* *reader-ns*]
+              *ns* *reader-ns*
+              cond/*target-platform* :gambit]
       (with-open [r (io/reader res)]
         (let [env (empty-env)
               pbr (clojure.lang.LineNumberingPushbackReader. r)
@@ -1137,3 +1152,26 @@
               (when-not (identical? eof r)
                 (analyze env r)
                 (recur (read pbr false eof false))))))))))
+
+#_(defn find-file-on-classpath-scm
+    [filename classpath]
+    (some #(scm* {::f %} (file-exists? ::f)) (map #(str % "/" filename) classpath)))
+
+#_(def readtable)
+
+#_(defn analyze-file-scm
+  [f]
+  (let [f (find-file-on-classpath-scm f)] ;res (or res (java.net.URL. (str "file:/Users/nathansorenson/src/c-clojure/src/cljs/" f)))
+    (assert f (str "Can't find " f " in classpath"))
+    (binding [*cljs-ns* 'cljscm.user
+              *cljs-file* f
+              *ns* *reader-ns*
+              cond/*target-platform* :gambit]
+      (let [port (scm* [f readtable]
+                       (open-input-file (list :path f :readtable readtable)))
+            env (empty-env)]
+        (loop [r (read port)]
+          (let [env (assoc env :ns (get-namespace *cljs-ns*))]
+            (when-not (scm* [r] (eof-object? r))
+              (analyze env r)
+              (recur (read port)))))))))

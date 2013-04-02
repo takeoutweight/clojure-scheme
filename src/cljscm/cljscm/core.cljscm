@@ -153,29 +153,6 @@
   "Returns true if x is a char, false otherwise."
   [x] (scm-boolean* [x] (char? x)))
 
-(defn type [x]
-  (case (cljscm.core/scm-type-idx x)
-    0 Number ;Fixnum
-    3 Pair
-    2 (case x
-        (true false) Boolean
-        nil Nil ;we hijack #!void to map to Clojure's nil
-        (scm* [x] ()) Null            ;raw scheme null = empty list.
-        (cond
-          (scm* [x] (char? x)) Char
-          :else (throw "Can't discern special type")))
-    1 (case (cljscm.core/scm-subtype-idx x)
-        0 Array ; raw scheme vector
-        (2 3 30 31) Number            ;Rational ;Complex ;Flonum, ;Bignum
-        4 (scm-unsafe-vector-ref x 0)
-        8 Symbol
-        9 Keyword
-        14 Procedure
-        18 (get foreign-type-table (first (scm* [x] (foreign-tags x)))) ;Foreign ptr.
-        19 String
-        (20 21 22 23 24 25 26 27 28 29) Array ;Various numerically-typed scheme vectors
-        )))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; core protocols ;;;;;;;;;;;;;
 (scm* {} (define cljscm.core/protocol-impls (make-table)))
 (scm* {} (define cljscm.core/foreign-tags (make-table)))
@@ -375,23 +352,29 @@
 (defn pair [coll]
   (-pair coll))
 
-#_(defn record-ref [obj field]
-  (let [field-params (pair (scm-unsafe-vector-ref (type obj) 5))
-        search (scm-boolean* [field field-params] (memq field field-params))]
-    (if search
-      (let [slot (inc (/ (- (count field-params) (count search)) 3))]
-        (scm-unsafe-vector-ref obj slot))
-      (throw (Error. (str "Field not defined: " field " on " field-params))))))
+(defn record-ref [obj field]
+  (if (and (identical? 1 (scm-type-idx obj))
+           (identical? 4 (scm-subtype-idx obj)))
+    (let [field-params (pair (scm-unsafe-vector-ref (scm-unsafe-vector-ref obj 0) 5))
+          search (scm-boolean* [field field-params] (memq field field-params))]
+      (if search
+        (let [slot (inc (/ (- (count field-params) (count search)) 3))]
+          (scm-unsafe-vector-ref obj slot))
+        (throw (Error. (str "Field not defined: " field " on " field-params)))))
+    (throw (Error. (str "Not a deftype: " obj)))))
 
-#_(defn record-set! [obj field val]
-  (let [field-params (pair (scm-unsafe-vector-ref (type obj) 5))
-        search (scm-boolean* [field field-params] (memq field field-params))]
-    (if search
-      (let [slot (inc (/ (- (count field-params) (count search)) 3))]
-        (scm-unsafe-vector-set! obj slot val))
-      (throw (Error. (str "Field not defined: " field " on " field-params))))))
+(defn record-set! [obj field val]
+  (if (and (identical? 1 (scm-type-idx obj))
+           (identical? 4 (scm-subtype-idx obj)))
+    (let [field-params (pair (scm-unsafe-vector-ref (scm-unsafe-vector-ref obj 0) 5))
+          search (scm-boolean* [field field-params] (memq field field-params))]
+      (if search
+        (let [slot (inc (/ (- (count field-params) (count search)) 3))]
+          (scm-unsafe-vector-set! obj slot val))
+        (throw (Error. (str "Field not defined: " field " on " field-params)))))
+    (throw (Error. (str "Not a deftype: " obj)))))
 
-(scm-str* "(define (cljscm.core/record-ref obj field)
+#_(scm-str* "(define (cljscm.core/record-ref obj field)
            (if (and (eqv? (##type obj) 1) (eqv? (##subtype obj) 4))
              (let* ((field-params (vector->list (##vector-ref (##vector-ref obj 0) 5)))
                     (search (memq field field-params)))
@@ -400,7 +383,7 @@
                      (raise (string-append \"No field: \" (symbol->string field)))))
              (raise (string-append \"Not a record: \" (object->string obj)))))")
 
-(scm-str* "(define (cljscm.core/record-set! obj field val)
+#_(scm-str* "(define (cljscm.core/record-set! obj field val)
            (if (and (eqv? (##type obj) 1) (eqv? (##subtype obj) 4))
              (let* ((field-params (vector->list (##vector-ref (##vector-ref obj 0) 5)))
                     (search (memq field field-params)))
@@ -422,6 +405,29 @@
 (deftype Keyword [])
 (deftype Procedure [])
 (deftype String [])
+
+(defn type [x]
+  (case (cljscm.core/scm-type-idx x)
+    0 Number ;Fixnum
+    3 Pair
+    2 (case x
+        (true false) Boolean
+        nil Nil ;we hijack #!void to map to Clojure's nil
+        (scm* [x] ()) Null            ;raw scheme null = empty list.
+        (cond
+          (scm* [x] (char? x)) Char
+          :else (throw "Can't discern special type")))
+    1 (case (cljscm.core/scm-subtype-idx x)
+        0 Array ; raw scheme vector
+        (2 3 30 31) Number            ;Rational ;Complex ;Flonum, ;Bignum
+        4 (scm-unsafe-vector-ref x 0)
+        8 Symbol
+        9 Keyword
+        14 Procedure
+        18 (get foreign-type-table (first (scm* [x] (foreign-tags x)))) ;Foreign ptr.
+        19 String
+        (20 21 22 23 24 25 26 27 28 29) Array ;Various numerically-typed scheme vectors
+        )))
 
 (defn ^seq seq
   "Returns a seq on the collection. If the collection is
@@ -484,11 +490,11 @@
   (identical? t (type o)))
 
 ;hijack existing scheme structure types
-(def Table (type {}))
+(def Table (type (scm* {} (make-table))))
 (scm* {} (table-set! cljscm.core/protocol-impls cljscm.core/Table (make-table)))
 (scm* {} (define (make-cljscm.core/Table) (make-table)))
 
-(def Class (type (type {})))
+(def Class (type (type (scm* {} (make-table)))))
 (scm* {} (table-set! cljscm.core/protocol-impls cljscm.core/Class (make-table)))
 ;(scm* {} (define (cljscm.core/Class? x) (equal? (cljscm.core/type x) )))
 (defn Class? [x] (identical? (type x) Class))
@@ -1595,99 +1601,55 @@ reduces them without incurring seq initialization"
 ;;; Math - variadic forms will not work until the following implemented:
 ;;; first, next, reduce
 
-(defn +
+(def +
   "Returns the sum of nums. (+) returns 0."
-  ([] 0)
-  ([x] x)
-  ([x y] (cljscm.core/+ x y))
-  ([x y & more] (reduce + (cljscm.core/+ x y) more)))
+  (scm* [] +))
 
-(defn -
+(def - 
   "If no ys are supplied, returns the negation of x, else subtracts
   the ys from x and returns the result."
-  ([x] (cljscm.core/- x))
-  ([x y] (cljscm.core/- x y))
-  ([x y & more] (reduce - (cljscm.core/- x y) more)))
+  (scm* [] -))
 
-(defn *
+(def *
   "Returns the product of nums. (*) returns 1."
-  ([] 1)
-  ([x] x)
-  ([x y] (cljscm.core/* x y))
-  ([x y & more] (reduce * (cljscm.core/* x y) more)))
+  (scm* [] *))
 
-(defn /
+(def /
   "If no denominators are supplied, returns 1/numerator,
   else returns numerator divided by all of the denominators."
-  ([x] (/ 1 x))
-  ([x y] (scm* [x y] (/ x y)))
-  ([x y & more] (reduce / (/ x y) more)))
+  (scm* [] /))
 
-(defn ^boolean <
+(def ^boolean <
   "Returns non-nil if nums are in monotonically increasing order,
   otherwise false."
-  ([x] true)
-  ([x y] (cljscm.core/< x y))
-  ([x y & more]
-     (if (cljscm.core/< x y)
-       (if (next more)
-         (recur y (first more) (next more))
-         (cljscm.core/< y (first more)))
-       false)))
+  (scm* [] <))
 
-(defn ^boolean <=
+(def ^boolean <=
   "Returns non-nil if nums are in monotonically non-decreasing order,
   otherwise false."
-  ([x] true)
-  ([x y] (cljscm.core/<= x y))
-  ([x y & more]
-   (if (cljscm.core/<= x y)
-     (if (next more)
-       (recur y (first more) (next more))
-       (cljscm.core/<= y (first more)))
-     false)))
+  (scm* [] <=))
 
-(defn ^boolean >
+(def ^boolean >
   "Returns non-nil if nums are in monotonically decreasing order,
   otherwise false."
-  ([x] true)
-  ([x y] (cljscm.core/> x y))
-  ([x y & more]
-   (if (cljscm.core/> x y)
-     (if (next more)
-       (recur y (first more) (next more))
-       (cljscm.core/> y (first more)))
-     false)))
+  (scm* [] >))
 
-(defn ^boolean >=
+(def ^boolean >=
   "Returns non-nil if nums are in monotonically non-increasing order,
   otherwise false."
-  ([x] true)
-  ([x y] (cljscm.core/>= x y))
-  ([x y & more]
-   (if (cljscm.core/>= x y)
-     (if (next more)
-       (recur y (first more) (next more))
-       (cljscm.core/>= y (first more)))
-     false)))
+  (scm* [] >=))
 
 (defn dec
   "Returns a number one less than num."
   [x] (- x 1))
 
-(defn max
+(def max
   "Returns the greatest of the nums."
-  ([x] x)
-  ([x y] (cljscm.core/max x y))
-  ([x y & more]
-   (reduce max (cljscm.core/max x y) more)))
+  (scm* [] max))
 
-(defn min
+(def min
   "Returns the least of the nums."
-  ([x] x)
-  ([x y] (cljscm.core/min x y))
-  ([x y & more]
-   (reduce min (cljscm.core/min x y) more)))
+  (scm* [] min))
 
 (defn- fix [q]
   (if (> q 0)
@@ -1864,8 +1826,8 @@ reduces them without incurring seq initialization"
   ([name] (cond
          (symbol? name) name
          (keyword? name) (scm* [name] (string->symbol (keyword->string name)))
-         (string? name) (scm* [name] (string->symbol name)))
-   ([ns name] (symbol (str ns "/" name)))))
+         (string? name) (scm* [name] (string->symbol name))))
+  ([ns name] (symbol (str ns "/" name))))
 
 (defn keyword
   "Returns a Keyword with the given namespace and name.  Do not use :
@@ -4400,7 +4362,7 @@ reduces them without incurring seq initialization"
 
   IEditableCollection
   (-as-transient [coll]
-    (TransientArrayMap. (js-obj) (alength arr) (aclone arr))))
+    (TransientArrayMap. (js-obj) (* 2 cnt) (aclone arr))))
 
 (def PersistentArrayMap-HASHMAP_THRESHOLD 16)
 
@@ -6442,7 +6404,7 @@ reduces them without incurring seq initialization"
   "Returns a lazy seq of nums from start (inclusive) to end
    (exclusive), by step, where start defaults to 0, step to 1,
    and end to infinity."
-  ([] (range 0 (scm-str* "+inf.0") 1)) ;js/Number.MAX_VALUE 1
+  ([] (range 0 '+inf.0 1)) ;js/Number.MAX_VALUE 1
   ([end] (range 0 end 1))
   ([start end] (range start end 1))
   ([start end step] (Range. nil start end step nil)))
@@ -6797,7 +6759,7 @@ reduces them without incurring seq initialization"
   [fmt & args]
   (print (apply format fmt args)))
 
-(def ^:private char-escapes {"\"" "\\\""
+#_(def ^:private char-escapes {"\"" "\\\""
                              "\\" "\\\\"
                              "\b" "\\b"
                              "\f" "\\f"
@@ -6805,7 +6767,7 @@ reduces them without incurring seq initialization"
                              "\r" "\\r"
                              "\t" "\\t"})
 
-(defn ^:private quote-string
+#_(defn ^:private quote-string
   [s]
   ;;TODO
   s
@@ -7313,9 +7275,7 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
   "Creates a hierarchy object for use with derive, isa? etc."
   [] {:parents {} :descendants {} :ancestors {}})
 
-(def
-  ^{:private true}
-  global-hierarchy (atom (make-hierarchy)))
+(declare global-hierarchy)
 
 (defn ^boolean isa?
   "Returns true if (= child parent), or child is directly or indirectly derived from
@@ -7542,6 +7502,18 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
   IFn
   (-invoke [coll args] (-dispatch coll args)))
 
+(def PersistentVector-EMPTY_NODE (pv-fresh-node nil))
+(def PersistentVector-EMPTY (PersistentVector. nil 0 5 PersistentVector-EMPTY_NODE (array) 0))
+(def PersistentArrayMap-EMPTY (PersistentArrayMap. nil 0 (make-array (* 2 PersistentArrayMap-HASHMAP_THRESHOLD)) nil))
+(def PersistentHashMap-EMPTY (PersistentHashMap. nil 0 nil false nil 0))
+(def PersistentTreeMap-EMPTY (PersistentTreeMap. compare nil 0 nil 0))
+(def PersistentTreeSet-EMPTY (PersistentTreeSet. nil (sorted-map) 0))
+(def PersistentHashSet-EMPTY (PersistentHashSet. nil (hash-map) 0))
+
+(def
+  ^{:private true}
+  global-hierarchy (atom (make-hierarchy)))
+
 #_(set! cljscm.core.MultiFn.prototype.call
       (fn [_ & args]
         (this-as self
@@ -7642,10 +7614,3 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
   (when (instance? ExceptionInfo ex)
     (.-cause ex)))
 
-(def PersistentVector-EMPTY_NODE (pv-fresh-node nil))
-(def PersistentVector-EMPTY (PersistentVector. nil 0 5 PersistentVector-EMPTY_NODE (array) 0))
-(def PersistentArrayMap-EMPTY (PersistentArrayMap. nil 0 (array) nil))
-(def PersistentHashMap-EMPTY (PersistentHashMap. nil 0 nil false nil 0))
-(def PersistentTreeMap-EMPTY (PersistentTreeMap. compare nil 0 nil 0))
-(def PersistentTreeSet-EMPTY (PersistentTreeSet. nil (sorted-map) 0))
-(def PersistentHashSet-EMPTY (PersistentHashSet. nil (hash-map) 0))

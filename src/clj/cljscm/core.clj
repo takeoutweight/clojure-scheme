@@ -23,7 +23,9 @@
                             bit-test bit-shift-left bit-shift-right bit-xor])
   (:require [clojure.walk]
             [clojure.set :as set]
-            [clojure.string :as string]))
+            [clojure.string :as string]
+            [cljscm.conditional :as cond]
+            [cljscm.analyzer]))
 
 (alias 'core 'clojure.core)
 
@@ -47,6 +49,54 @@
 
 (def ^:dynamic *cljs-ns* 'cljscm.user)
 
+(def
+
+ ^{:doc "Like defn, but the resulting function name is declared as a
+  macro and will be used as a macro by the compiler when it is
+  called."
+   :macro true
+   :arglists '([name doc-string? attr-map? [params*] body]
+                 [name doc-string? attr-map? ([params*] body)+ attr-map?])
+   :added "1.0"}
+ defmacro-scm (core/fn [&form &env 
+                name & args]
+             (core/let [prefix (core/loop [p (list (with-meta name {:macro true}))  args args] ;
+                            (core/let [f (first args)]
+                              (if (string? f)
+                                (recur (cons f p) (next args))
+                                (if (map? f)
+                                  (recur (cons f p) (next args))
+                                  p))))
+                   fdecl (core/loop [fd args]
+                           (if (string? (first fd))
+                             (recur (next fd))
+                             (if (map? (first fd))
+                               (recur (next fd))
+                               fd)))
+                   fdecl (if (vector? (first fdecl))
+                           (list fdecl)
+                           fdecl)
+                   add-implicit-args (core/fn [fd]
+                             (core/let [args (first fd)]
+                               (cons (vec (cons '&form (cons '&env args))) (next fd))))
+                   add-args (core/fn [acc ds]
+                              (if (core/nil? ds)
+                                acc
+                                (core/let [d (first ds)]
+                                  (if (map? d)
+                                    (conj acc d)
+                                    (recur (conj acc (add-implicit-args d)) (next ds))))))
+                   fdecl (core/seq (add-args [] fdecl))
+                   decl (core/loop [p prefix d fdecl]
+                          (if p
+                            (recur (next p) (cons (first p) d))
+                            d))]
+               (list 'do
+                     (cons `defn decl)
+                     (list '. (list 'var name) '(setMacro))
+                     (list 'var name)))))
+(. (var defmacro-scm) (setMacro))
+
 (def protocol-hints (atom {}))
 (defmacro add-protocol-hints!
   "given a map of fast-path hints for macro-expansion of protocol functions. Expands to nothing."
@@ -67,10 +117,8 @@
          (core/< (count arglist-a) (count arglist-b)))))))
 
 (defmacro js* [& forms])
-(defmacro scm-str* [& forms]
-  `(~'scm-str* ~@forms))
-(defmacro scm* [& forms]
-  `(~'scm* ~@forms))
+(defmacro scm-str* [& forms])
+(defmacro scm* [& forms] (cons 'scm* forms))
 
 (defmacro scm-boolean*
   "easy way to get unchecked scheme tests. Metadata is stored on the scm* symbol."
@@ -412,43 +460,27 @@
 
 (defmacro aget
   ([a i]
-     `(scm* {:a ~a :i ~i}
-            ~'(vector-ref :a :i)))
+     `(scm* {::a ~a ::i ~i}
+            ~'(vector-ref ::a ::i)))
   ([a i & idxs]
      `(aget (aget ~a ~i) ~@idxs)))
 
 (defmacro aset [a i v]
   `(let [ra# ~a]
-     (scm* {:ra ra# :i ~i :v ~v}
-           ~'(vector-set! :ra :i :v))
+     (scm* {::ra ra# ::i ~i ::v ~v}
+           ~'(vector-set! ::ra ::i ::v))
      ~v))
 
-(defmacro +
-  ([& more] `(scm* ~more ~(cons '+ more))))
+(defmacro + [& more] `(~'(scm* [] +) ~@more))
+(defmacro - [& more] `(~'(scm* [] -) ~@more))
+(defmacro * [& more] `(~'(scm* [] *) ~@more))
+(defmacro / [& more] `(~'(scm* [] /) ~@more))
 
-(defmacro -
-  ([& more] `(scm* ~more ~(cons '- more))))
-
-(defmacro *
-  ([& more] `(scm* ~more ~(cons '* more))))
-
-(defmacro /
-  ([& more] `(scm* ~more ~(cons '/ more))))
-
-(defmacro <
-  ([& more] (bool-expr `(scm-boolean* ~more ~(cons '< more)))))
-
-(defmacro <=
-  ([& more] (bool-expr `(scm-boolean* ~more ~(cons '<= more)))))
-
-(defmacro >
-  ([& more] (bool-expr `(scm-boolean* ~more ~(cons '> more)))))
-
-(defmacro >=
-  ([& more] (bool-expr `(scm-boolean* ~more ~(cons '>= more)))))
-
-(defmacro ==
-  ([& more] (bool-expr `(scm-boolean* ~more ~(cons '= more)))))
+(defmacro <  [& more] (bool-expr `(~'(scm* [] < ) ~@more)))
+(defmacro <= [& more] (bool-expr `(~'(scm* [] <=) ~@more)))
+(defmacro >  [& more] (bool-expr `(~'(scm* [] > ) ~@more)))
+(defmacro >= [& more] (bool-expr `(~'(scm* [] >=) ~@more)))
+(defmacro == [& more] (bool-expr `(~'(scm* [] = ) ~@more)))
 
 (defmacro dec [x]
   `(- ~x 1))
@@ -460,10 +492,10 @@
   `(== ~x 0))
 
 (defmacro pos? [x]
-  `(scm-boolean* {:x ~x} ~'(positive? :x)))
+  `(scm-boolean* {::x ~x} ~'(positive? ::x)))
 
 (defmacro neg? [x]
-  `(scm-boolean* {:x ~x} ~'(negative? :x)))
+  `(scm-boolean* {::x ~x} ~'(negative? ::x)))
 
 (defmacro max
   ([& more] `(scm* ~more ~(cons 'max more))))
@@ -472,25 +504,25 @@
   ([& more] `(scm* ~more ~(cons 'min more))))
 
 (defmacro mod [num div]
-  `(scm* {:num ~num :div ~div} ~'(if (or (flonum? :num) (flonum? :div))
-                                   (- :num (* :div (fltruncate (/ :num :div))))
-                                   (modulo :num :div))))
+  `(scm* {::num ~num ::div ~div} ~'(if (or (flonum? ::num) (flonum? ::div))
+                                   (- ::num (* :div (fltruncate (/ ::num ::div))))
+                                   (modulo ::num ::div))))
 
 (defmacro quot [num div]
-  `(scm* {:num ~num :div ~div} ~'(if (or (flonum? :num) (flonum? :div))
-                                   (- :num (* :div (fltruncate (/ :num :div))))
-                                   (quotient :num :div))))
+  `(scm* {::num ~num ::div ~div} ~'(if (or (flonum? ::num) (flonum? ::div))
+                                   (- ::num (* :div (fltruncate (/ ::num ::div))))
+                                   (quotient ::num ::div))))
 
 (defmacro rem [num div]
-  `(scm* {:num ~num :div ~div} ~'(if (or (flonum? :num) (flonum? :div))
-                                   (- :num (* :div (fltruncate (/ :num :div))))
-                                   (remainder :num :div))))
+  `(scm* {::num ~num ::div ~div} ~'(if (or (flonum? ::num) (flonum? ::div))
+                                   (- ::num (* ::div (fltruncate (/ ::num ::div))))
+                                   (remainder ::num ::div))))
 
 (defmacro bit-count [x]
-  `(scm* {:x ~x} ~'(bit-count :x)))
+  `(scm* {::x ~x} ~'(bit-count ::x)))
 
 (defmacro bit-not [x]
-  `(scm* {:x ~x} ~'(bitwise-not :x)))
+  `(scm* {::x ~x} ~'(bitwise-not ::x)))
 
 (defmacro bit-and
   ([& more] `(scm* ~more ~(cons 'bitwise-and more))))
@@ -521,20 +553,20 @@
 
 ;force 32 bit
 (defmacro bit-shift-left [x n]
-  `(scm* {:x ~x :n ~n} ~'(bitwise-and (arithmetic-shift :x :n) 4294967295)))
+  `(scm* {::x ~x ::n ~n} ~'(bitwise-and (arithmetic-shift ::x ::n) 4294967295)))
 
 (defmacro bit-shift-right [x n]
-  `(scm* {:x ~x :n ~n} ~'(arithmetic-shift :x (* -1 :n))))
+  `(scm* {::x ~x ::n ~n} ~'(arithmetic-shift ::x (* -1 ::n))))
 
 #_(defmacro bit-set [x n]
     (list 'js* "(~{} | (1 << ~{}))" x n))
 
 (defmacro bit-shift-right-zero-fill [x n]
-   `(scm* {:x ~x :n ~n} ~'(arithmetic-shift (bitwise-and :x 4294967295) (* -1 :n))))
+   `(scm* {::x ~x ::n ~n} ~'(arithmetic-shift (bitwise-and ::x 4294967295) (* -1 ::n))))
 
 ;; internal
 (defmacro mask [hash shift]
-  `(scm* {:r (bit-shift-right-zero-fill ~hash ~shift)} ~'(bitwise-and :r 31)))
+  `(scm* {::r (bit-shift-right-zero-fill ~hash ~shift)} ~'(bitwise-and ::r 31)))
 
 
 (defmacro bitpos [hash shift]
@@ -607,7 +639,7 @@
         this-sym (gensym "_")
         locals (keys (:locals &env))
         ns     (-> &env :ns :name)
-        munge  cljscm.compiler/munge
+        munge  str ;cljscm.compiler/munge
         ns-t   (list 'js* (core/str (munge ns) "." (munge t)))]
     `(do
        (when (undefined? ~ns-t)
@@ -1089,21 +1121,22 @@
 ;                   (println "DISPATCH: "fname"->"resolved-name":"known-implementing-types)
                    `(do
 ;                      ~@(map (fn [sf] `(defn ~sf [& args] (throw (cljscm.core/Error. (str "Protocol/Type pair: " (quote ~sf) " not defined."))))) prim-fnames)
-                      (def ~fn-vtable-name {})
+                      (def ~fn-vtable-name ~'(scm* {} (make-table)))
                       ~(list 'scm*
                              {fn-name-sym fname
                               ::prim-dispatches fast-dispatch}
                              (list 'define
                                    (apply list (concat [fn-name-sym]
                                                        [o]
-                                                       (map #(core/get {'& '.} % %) rst)))
+                                                       rst));(map #(core/get {'& '.} % %) rst)
                                    ::prim-dispatches)))))]
     `(do
-       (set! ~'*unchecked-if* true)
+       ;(set! ~'*unchecked-if* true)
        (def ~psym (quote ~p))
        (defn ~(with-meta (symbol (str "satisfies?---" psym)) {:tag 'boolean}) [~sat-o] ~fast-satisfies)
        ~@(map method methods)
-       (set! ~'*unchecked-if* false))))
+       ;(set! ~'*unchecked-if* false)
+       )))
 
 (defmacro satisfies?
   "Returns true if x satisfies the protocol"
@@ -1157,21 +1190,15 @@
   before the vars are bound to their new values."
   [bindings & body]
   (core/let [names (take-nth 2 bindings)
-        vals (take-nth 2 (drop 1 bindings))
-        tempnames (map (comp gensym name) names)
-        binds (map vector names vals)
-        resets (reverse (map vector names tempnames))]
+             qualnames (map #(:name (cljscm.analyzer/resolve-var (dissoc &env :locals) %)) names)
+             vals (take-nth 2 (drop 1 bindings))
+             tempnames (map (comp gensym name) names)
+             binds (map vector names vals)
+             resets (reverse (map vector names tempnames))]
     (cljscm.analyzer/confirm-bindings &env names)
-    `(let [~@(interleave tempnames names)]
-       (try
-        ~@(map
-           (core/fn [[k v]] (list 'set! k v))
-           binds)
-        ~@body
-        (finally
-         ~@(map
-            (core/fn [[k v]] (list 'set! k v))
-            resets))))))
+    `(~'(scm* {} parameterize)
+      (~'scm* ~(apply hash-map (interleave tempnames vals)) ~(map #(list %1 %2) qualnames tempnames))
+      ~@body)))
 
 (defmacro condp
   "Takes a binary predicate, an expression, and a set of clauses.
@@ -1582,4 +1609,3 @@
      (binding [cljscm.core/*print-fn* (fn [x#] (.append sb# x#))]
        ~@body)
      (cljscm.core/str sb#)))
-

@@ -247,9 +247,11 @@
             (name n)
             info)]
     (when-not (= :statement (:context env))
-      (if (:field info)
-        (emit (ana/analyze env `(. ~(:this-name env) ~(symbol (str "-" (munge n))))))
-        (emits (munge n))))))
+      (cond
+        (:field info)
+        , (emit (ana/analyze env `(. ~(:this-name env) ~(symbol (str "-" (munge n))))))
+        (:dynamic info) (emits "("(munge n)")")
+        :else (emits (munge n))))))
 
 (defmethod emit :meta
   [{:keys [expr meta env]}]
