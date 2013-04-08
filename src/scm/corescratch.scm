@@ -257,13 +257,14 @@
     (##readtable-char-class-set! rt #\^ #t c/read-meta)
     (##readtable-char-class-set! rt #\\ #t read-char)
     (##readtable-char-class-set! rt #\. #f bard-read-number/keyword/symbol)
-    (##readtable-char-class-set! rt #\& #t ##read-dot)
+;    (##readtable-char-class-set! rt #\& #t ##read-dot)
     (##readtable-char-class-set! rt #\[ #t c/read-vector)
     (##readtable-char-class-set! rt #\{ #t c/read-map)
     (##readtable-char-class-set! rt #\% #f c/read-arg)
 
 		(##readtable-char-sharp-handler-set! rt #\( c/read-fn)
-		(##readtable-char-sharp-handler-set! rt #\{ c/read-set)
+		(##readtable-char-sharp-handler-set! rt #\( c/read-fn)
+		(##readtable-char-sharp-handler-set! rt #\& c/read-dot)
 
     rt))
 
@@ -403,6 +404,9 @@
 								 (sym (string->symbol (string-append "%" st))))
 						(macro-readenv-filepos-set! re start-pos)
 						(macro-readenv-wrap re sym))))))
+
+(define (c/read-dot re next start-pos)
+	(##read-dot re next))
 
 (define (bard-read-number/keyword/symbol re c)
   (let ((start-pos (##readenv-current-filepos re)))
@@ -577,15 +581,17 @@
 																	o))))))
 	 (else o)))
 
+;(##include "~~lib/gambit#.scm")
+;(##include "~~lib/_gambit#.scm")
+;(include "corescratch.scm")
 ;(define oldt (##current-readtable))
 ;(##current-readtable (bard-make-readtable))
+;(include "~/src/c-clojure/src/cljscm/cljscm/core.scm")
+;(include "~/src/c-clojure/src/clj/cljscm/selfanalyzer.scm")
+;(include "in.clj")
 ;(##current-readtable oldt)
 ;(parameterize ((##current-readtable (bard-make-readtable))) (include "~/src/c-clojure/src/clj/cljscm/selfanalyzer.scm"))
 ;(parameterize ((##current-readtable (bard-make-readtable))) (include "in.clj"))
-;(include "corescratch.scm")
-;(include "~/src/c-clojure/src/clj/cljscm/selfanalyzer.scm")
-;(include "~/src/c-clojure/src/cljscm/cljscm/core.scm")
-;(include "in.clj")
 ;(let ((p (open-input-file (list path: "in.clj" readtable: (bard-make-readtable))))) (read-all p))
 ;(let ((p (open-input-file (list path: "in.clj")))) (read-all p))
 ;(let ((p (open-input-file (list path: "~/src/c-clojure/src/clj/cljscm/selfanalyzer.scm" readtable: (bard-make-readtable))))) (read-all p))

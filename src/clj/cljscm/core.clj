@@ -1128,7 +1128,7 @@
                              (list 'define
                                    (apply list (concat [fn-name-sym]
                                                        [o]
-                                                       rst));(map #(core/get {'& '.} % %) rst)
+                                                       (map #(core/get {'& (symbol "#&")} % %) rst)))
                                    ::prim-dispatches)))))]
     `(do
        ;(set! ~'*unchecked-if* true)

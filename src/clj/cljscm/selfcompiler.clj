@@ -263,7 +263,7 @@
     (if variadic
       (if (> max-fixed-arity 0)
         (map munge (concat (take max-fixed-arity params)
-                           ['& (last params)]))
+                           [(symbol "#&") (last params)]))
         (munge (first params)))
       (map munge params))))
 
@@ -280,7 +280,7 @@
                  params)]
     (if variadic
       (map munge (concat (take max-fixed-arity params)
-                         ['& (last params)]))
+                         [(symbol "#&") (last params)]))
       (map munge params))))
 
 ;single-arity means we haven't done a "safe" arity dispatch.
