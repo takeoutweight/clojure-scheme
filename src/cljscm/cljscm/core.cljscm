@@ -350,7 +350,9 @@
   (-pair [coll]))
 
 (defn pair [coll]
-  (-pair coll))
+  (if (satisfies? IPairable coll)
+    (-pair coll)
+    ((scm* {} cons) (first coll) (pair (rest coll)))))
 
 (defn record-ref [obj field]
   (if (and (identical? 1 (scm-type-idx obj))
@@ -1827,7 +1829,9 @@ reduces them without incurring seq initialization"
          (symbol? name) name
          (keyword? name) (scm* [name] (string->symbol (keyword->string name)))
          (string? name) (scm* [name] (string->symbol name))))
-  ([ns name] (symbol (str ns "/" name))))
+  ([ns name] (if ns
+               (symbol (str ns "/" name))
+               (symbol name))))
 
 (defn keyword
   "Returns a Keyword with the given namespace and name.  Do not use :
@@ -4275,7 +4279,7 @@ reduces them without incurring seq initialization"
   ISeqable
   (-seq [coll]
     (when (pos? cnt)
-      (let [len (alength arr)
+      (let [len (* 2 cnt)
             array-map-seq
             (fn array-map-seq [i]
               (lazy-seq
@@ -4305,7 +4309,7 @@ reduces them without incurring seq initialization"
         (if (< cnt PersistentArrayMap-HASHMAP_THRESHOLD)
           (PersistentArrayMap. meta
                                (inc cnt)
-                               (aclone-push2 arr k v)
+                               (aclone-push2 arr (* cnt 2) k v)
                                nil)
           (with-meta
             (assoc (into PersistentHashMap-EMPTY coll) k v)
@@ -4362,7 +4366,7 @@ reduces them without incurring seq initialization"
 
   IEditableCollection
   (-as-transient [coll]
-    (TransientArrayMap. (js-obj) (* 2 cnt) (aclone arr))))
+    (TransientArrayMap. (js-obj) (* 2 cnt) (aclone-padded arr (* 2 PersistentArrayMap-HASHMAP_THRESHOLD)))))
 
 (def PersistentArrayMap-HASHMAP_THRESHOLD 16)
 
@@ -5140,11 +5144,8 @@ reduces them without incurring seq initialization"
         :else                    init)))
 
   IFn
-  (-invoke [coll k]
-    (-lookup coll k))
-
-  (-invoke [coll k not-found]
-    (-lookup coll k not-found))
+  (-invoke [coll args]
+    (apply -lookup coll args))
 
   IEditableCollection
   (-as-transient [coll]
@@ -6035,9 +6036,9 @@ reduces them without incurring seq initialization"
     (PersistentHashSet. meta (dissoc hash-map v) nil))
 
   IFn
-  (-invoke [coll k]
-    (-lookup coll k))
-  (-invoke [coll k not-found]
+  (-invoke [coll args]
+    (apply -lookup coll args))
+  #_(-invoke [coll k not-found]
     (-lookup coll k not-found))
 
   IEditableCollection
@@ -6652,7 +6653,7 @@ reduces them without incurring seq initialization"
               ; for their custom types.
               (satisfies? IPrintable obj) (apply write-all writer (-pr-seq obj opts))
 
-              (regexp? obj) (write-all writer "#\"" (.-source obj) "\"")
+;              (regexp? obj) (write-all writer "#\"" (.-source obj) "\"")
 
               :else (write-all writer "#<" (str obj) ">")))))
 
@@ -7504,7 +7505,7 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
 
 (def PersistentVector-EMPTY_NODE (pv-fresh-node nil))
 (def PersistentVector-EMPTY (PersistentVector. nil 0 5 PersistentVector-EMPTY_NODE (array) 0))
-(def PersistentArrayMap-EMPTY (PersistentArrayMap. nil 0 (make-array (* 2 PersistentArrayMap-HASHMAP_THRESHOLD)) nil))
+(def PersistentArrayMap-EMPTY (PersistentArrayMap. nil 0 (make-array 0) nil))
 (def PersistentHashMap-EMPTY (PersistentHashMap. nil 0 nil false nil 0))
 (def PersistentTreeMap-EMPTY (PersistentTreeMap. compare nil 0 nil 0))
 (def PersistentTreeSet-EMPTY (PersistentTreeSet. nil (sorted-map) 0))

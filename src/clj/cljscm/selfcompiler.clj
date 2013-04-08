@@ -12,6 +12,7 @@
             [clojure.string :as string]
             [clojure.walk :as walk]
             [clojure.pprint :as pp]
+            [cljscm.conditional :as condc]
             [cljscm.tagged-literals :as tags] 
             [cljscm.analyzer :as ana])
   (:import java.lang.StringBuilder))
@@ -187,7 +188,7 @@
 (defmethod emit :vector [{:keys [items]}]
   (if (empty? items)
     'cljscm.core/PersistentVector-EMPTY
-    `(cljscm.core/PersistentVector-fromArray ~(cons 'vector (map emit items)))))
+    `(cljscm.core/PersistentVector-fromArray ~(cons 'vector (map emit items)) true)))
 (defmethod emit :set [{:keys [items]}]
   (if (empty? items)
     'cljscm.core/PersistentHashSet-EMPTY
@@ -285,7 +286,7 @@
 
 ;single-arity means we haven't done a "safe" arity dispatch.
 (defn emit-fn-method
-  [{:keys [gthis name variadic single-arity params expr env recurs max-fixed-arity] :as f}]
+  [{:keys [gthis name variadic single-arity params expr env recurs max-fixed-arity toplevel] :as f}]
   (let [eexpr (rest (emit expr)) ;strip unecessary begin
         lamb (concat ['lambda (schemify-method-arglist f)]
                      (if (and variadic single-arity)
@@ -295,12 +296,14 @@
                                    ~(munge (last params)))))
                                ~@eexpr)]
                        eexpr))]
-    (if (and recurs name (not (:protocol-impl env))) ; preserve open recursion in inline proto defns.
+    (if (and (or recurs name)
+             (not toplevel)
+             (not (:protocol-impl env))) ; preserve open recursion in inline proto defns.
       `(~'letrec ((~name ~lamb)) ~name)
       lamb)))
 
 (defmethod emit :fn
-  [{:keys [name env methods max-fixed-arity single-arity variadic recur-frames loop-lets]}]
+  [{:keys [name env methods max-fixed-arity single-arity variadic recur-frames loop-lets toplevel]}]
   (when-not (= :statement (:context env))
     (let [loop-locals (->> (concat (mapcat :params (filter #(and % @(:flag %)) recur-frames))
                                    (mapcat :params loop-lets))
@@ -309,6 +312,7 @@
           recur-name (:recur-name env)]
       (if (= 1 (count methods))
         (emit-fn-method (assoc (first methods)
+                          :toplevel toplevel
                           :name (or name (and (:recurs (first methods)) recur-name))
                           :single-arity single-arity))
         (throw (Exception. "Expected multiarity to be erased in macros."))))))
@@ -357,9 +361,15 @@
   [{:keys [env try catch name finally]}]
   (if (or name finally)
     (let [try-expr (if catch
-                     `(~'with-exception-catcher
-                        (~'lambda (~name) ~(emit catch))
-                        (~'lambda () ~(emit try)))
+                     `(let* ((cljscm.compiler/next-handler (~'current-exception-handler)))
+                        (~'continuation-capture
+                         (~'lambda (cljscm.compiler/unwinding-k)
+                                 (~'with-exception-handler
+                                   (~'lambda (~name)
+                                             (~'with-exception-handler
+                                               cljscm.compiler/next-handler
+                                               (~'lambda () ~(emit catch))))
+                                   (~'lambda () ~(emit try))))))
                      (emit try))
           rsym (gensym "ret")]
       (concat ['let* `((~rsym ~try-expr))]
@@ -619,7 +629,8 @@
                 ana/*cljs-file* (.getPath ^java.io.File src)
                 *data-readers* tags/*cljs-data-readers*
                 *position* (atom [0 0])
-                *emitted-provides* (atom #{})]
+                *emitted-provides* (atom #{})
+                condc/*target-platform* :gambit]
         (loop [forms (forms-seq src)
                ns-name nil
                deps nil]

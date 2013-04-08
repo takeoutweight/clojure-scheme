@@ -22,7 +22,6 @@
                             bit-and bit-and-not bit-clear bit-flip bit-not bit-or bit-set
                             bit-test bit-shift-left bit-shift-right bit-xor])
   (:require [clojure.walk]
-            [clojure.set :as set]
             [clojure.string :as string]
             [cljscm.conditional :as cond]
             [cljscm.analyzer]))
@@ -93,8 +92,9 @@
                             d))]
                (list 'do
                      (cons `defn decl)
-                     (list '. (list 'var name) '(setMacro))
-                     (list 'var name)))))
+                     ;(list '. (list 'var name) '(setMacro))
+                     ;(list 'var name)
+                     ))))
 (. (var defmacro-scm) (setMacro))
 
 (def protocol-hints (atom {}))
@@ -1294,7 +1294,10 @@
             (cond
              ~@(mapcat
                 (core/fn [[_ type name & cb]]
-                  `[(instance? ~type ~e) (let [~name ~e] ~@cb)])
+                  `[(instance? ~type ~e)
+                    (let [~name ~e]
+                      ((~'scm* {} ~'continuation-return) cljscm.compiler/unwinding-k
+                       (do ~@cb)))])
                 catches)
              :else (throw ~e)))
         ~@fin)
@@ -1407,8 +1410,14 @@
 
 (defn aclone
   "Returns a javascript array, cloned from the passed in array"
-  [a]
-  `(scm* {:a ~a} ~'(vector-copy :a)))
+  ([a]
+     `(scm* {:a ~a} ~'(vector-copy :a)))
+  ([a sz]
+     `(let [sz# ~sz
+            r# (scm* {:sz sz#} ~'(make-vector :sz))]
+        (scm* {:a ~a :sz sz# :r r#}
+              ~'(subvector-move! :a 0 :sz :r 0))
+        r#)))
 
 (defmacro aclone-push
   "Clones the array into an array one element larger; with the value pushed."
@@ -1422,15 +1431,26 @@
       r#))
 
 (defmacro aclone-push2
-  "Clones the array into an array one element larger; with the values pushed."
-  [a o1 o2]
-   `(let [sz# (scm* {:a ~a} ~'(vector-length :a))
+  "Clones the array into a new array of size (+ sz2);
+   with the values pushed after sz."
+  [a sz o1 o2]
+   `(let [sz# ~sz
          r# (scm* {:nsz (+ sz# 2)} ~'(make-vector :nsz))]
       (scm* {:a ~a :sz sz# :r r# :o1 ~o1 :o2 ~o2}
             ~'(begin
                (subvector-move! :a 0 :sz :r 0)
                (vector-set! :r :sz :o1)
                (vector-set! :r (+ :sz 1) :o2)))
+      r#))
+
+(defmacro aclone-padded
+  "Clones array a into a new array of size sz, padded with nil."
+  [a sz]
+   `(let [asz# (scm* {:a ~a} ~'(vector-length :a))
+          r# (scm* {:sz ~sz :nil nil} ~'(make-vector :sz :nil))]
+      (scm* {:a ~a :asz asz# :r r#}
+            ~'(begin
+               (subvector-move! :a 0 :asz :r 0)))
       r#))
 
 (defmacro slice
