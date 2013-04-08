@@ -129,6 +129,15 @@
               `(throw (error ~env (.getMessage ~err) ~err))
               `(throw (error ~env (str ~err) ~err))))))))
 
+(defmacro wrapping-errors-for-gambit [env & body]
+  (let [err (gensym "err")]
+    `(try
+       ~@body
+       (catch cljscm.core/ExceptionInfo ~err
+         (if (analysis-error? ~err)
+           (throw ~err)
+           ~`(throw (error ~env (str ~err) ~err)))))))
+
 (defn confirm-var-exists [env prefix suffix]
   (when *cljs-warn-on-undeclared*
     (let [crnt-ns (-> env :ns :name)]
@@ -218,13 +227,16 @@
 
 (declare analyze analyze-symbol analyze-seq)
 
-(def specials '#{if case def fn* do let* loop* letfn* throw try* recur new set! ns deftype* defrecord* . extend scm-str* scm* & quote})
+(def specials '#{if case def fn* do let* loop* letfn* throw try* recur new set! ns deftype* defrecord* . extend scm-str* scm* & quote in-ns require})
 
 (def ^:dynamic *recur-frames* nil)
 (def ^:dynamic *loop-lets* nil)
 
 (defmacro disallowing-recur [& body]
   `(binding [*recur-frames* (cons nil *recur-frames*)] ~@body))
+
+(defmacro disallowing-recur-for-gambit [& body]
+  `(binding [cljscm.selfanalyzer/*recur-frames* (cons nil cljscm.selfanalyzer/*recur-frames*)] ~@body))
 
 (defn analyze-keyword
     [env sym]
@@ -336,7 +348,8 @@
           name (:name (resolve-var (dissoc env :locals) sym))
           init-expr (when (contains? args :init)
                       (disallowing-recur
-                       (analyze (assoc env :context :expr) (:init args) sym)))
+                        (-> (analyze (assoc env :context :expr) (:init args) sym)
+                            (assoc :toplevel true))))
           fn-var? (and init-expr (= (:op init-expr) :fn))
           export-as (when-let [export-val (-> sym meta :export)]
                       (if (= true export-val) name export-val))
@@ -446,21 +459,26 @@
 
 (defmethod parse 'fn*
   [op env [_ & args :as form] name]
-  (let [[name meths] (if (symbol? (first args))
+  (let [named-by-def name
+        [name meths] (if (symbol? (first args))
                        [(first args) (next args)]
                        [name (seq args)])
         ;;turn (fn [] ...) into (fn ([]...))
         meths (if (vector? (first meths)) (list meths) meths)
-        recur-name (symbol (if name (str name "---recur$") "cljscm.compiler/recurfn"))
+        recur-name (symbol (or (and named-by-def (:name (resolve-var env name)))
+                               name
+                               "cljscm.compiler/recurfn")) ;  (str name "---recur$")
         locals (:locals env)
-        name recur-name
+;        name recur-name
         env (assoc env :recur-name recur-name)
         type (-> form meta ::type)
         fields (-> form meta ::fields)
         protocol-impl (-> form meta :protocol-impl)
         protocol-inline (-> form meta :protocol-inline)
         single-arity (-> form meta :single-arity)
-        locals (if (and name (not protocol-impl)) (assoc locals name {:name recur-name :shadow (locals recur-name)}) locals)
+        locals (if (and name (not named-by-def))
+                 (assoc locals name {:name recur-name :shadow (locals recur-name)})
+                 locals)
         locals (reduce (fn [m fld]
                          (assoc m fld
                                 {:name fld
@@ -472,14 +490,15 @@
 
         menv (if (> (count meths) 1) (assoc env :context :expr) env)
         menv (merge menv
-               {:protocol-impl protocol-impl
-                :protocol-inline protocol-inline})
+                    {:protocol-impl protocol-impl
+                     :protocol-inline protocol-inline})
         methods (map #(analyze-fn-method menv locals % type protocol-inline) meths)
         max-fixed-arity (apply max (map :max-fixed-arity methods))
         variadic (boolean (some :variadic methods))
-        locals (if name
+        locals (if (and name (not named-by-def))
                  (update-in locals [name] assoc
                             :fn-var true
+                            :name recur-name
                             :variadic variadic
                             :max-fixed-arity max-fixed-arity
                             :method-params (map :params methods))
@@ -716,6 +735,58 @@
         (when (io/resource relpath)
           (analyze-file relpath))))))
 
+(defn error-msg [spec msg] (str msg "; offending spec: " (pr-str spec)))
+
+(defn get-deps [ns-name]
+  (or (get-in @namespaces [ns-name :deps])
+      (let [a (atom #{})]
+        (swap! namespaces #(assoc-in % [ns-name :deps] a))
+        a)))
+(defn get-aliases [ns-name]
+  (or (get-in @namespaces [ns-name :aliases])
+      (let [a (atom {:fns #{} :macros #{}})]
+        (swap! namespaces #(assoc-in % [ns-name :aliases] a))
+        a)))
+
+(defn parse-require-spec [macros? ns-name spec]
+  (assert (or (symbol? spec) (vector? spec))
+          (error-msg spec "Only [lib.ns & options] and lib.ns specs supported in :require / :require-macros"))
+  (when (vector? spec)
+    (assert (symbol? (first spec))
+            (error-msg spec "Library name must be specified as a symbol in :require / :require-macros"))
+    (assert (odd? (count spec))
+            (error-msg spec "Only :as alias and :refer (names) options supported in :require"))
+    (assert (every? #{:as :refer} (map first (partition 2 (next spec))))
+            (error-msg spec "Only :as and :refer options supported in :require / :require-macros"))
+    (assert (let [fs (frequencies (next spec))]
+              (and (<= (fs :as 0) 1)
+                   (<= (fs :refer 0) 1)))
+            (error-msg spec "Each of :as and :refer options may only be specified once in :require / :require-macros")))
+  (if (symbol? spec)
+    (recur macros? ns-name [spec])
+    (let [deps (get-deps ns-name)
+          aliases (get-aliases ns-name)
+          [lib & opts] spec
+          {alias :as referred :refer :or {alias lib}} (apply hash-map opts)
+          [rk uk] (if macros? [:require-macros :use-macros] [:require :use])]
+      (when alias
+        (let [alias-type (if macros? :macros :fns)]
+          (when (not (contains? (alias-type @aliases)
+                                alias))
+            (println "CAUTION: " (error-msg spec ":as alias must be unique")))
+          (swap! aliases
+                 update-in [alias-type]
+                 conj alias)))
+      (assert (or (symbol? alias) (nil? alias))
+              (error-msg spec ":as must be followed by a symbol in :require / :require-macros"))
+      (assert (or (and (sequential? referred) (every? symbol? referred))
+                  (nil? referred))
+              (error-msg spec ":refer must be followed by a sequence of symbols in :require / :require-macros"))
+      (when-not macros?
+        (swap! deps conj lib))
+      (merge (when alias {rk {alias lib}})
+             (when referred {uk (apply hash-map (interleave referred (repeat lib)))})))))
+
 (defmethod parse 'ns
   [_ env [_ name & args :as form] _]
   (assert (symbol? name) "Namespaces must be named by a symbol.")
@@ -730,46 +801,9 @@
                       (into s xs))
                     s))
                 #{} args)
-        deps (atom #{})
-        aliases (atom {:fns #{} :macros #{}})
+        deps (get-deps name)
+        aliases (get-aliases name)
         valid-forms (atom #{:use :use-macros :require :require-macros :import})
-        error-msg (fn [spec msg] (str msg "; offending spec: " (pr-str spec)))
-        parse-require-spec (fn parse-require-spec [macros? spec]
-                             (assert (or (symbol? spec) (vector? spec))
-                                     (error-msg spec "Only [lib.ns & options] and lib.ns specs supported in :require / :require-macros"))
-                             (when (vector? spec)
-                               (assert (symbol? (first spec))
-                                       (error-msg spec "Library name must be specified as a symbol in :require / :require-macros"))
-                               (assert (odd? (count spec))
-                                       (error-msg spec "Only :as alias and :refer (names) options supported in :require"))
-                               (assert (every? #{:as :refer} (map first (partition 2 (next spec))))
-                                       (error-msg spec "Only :as and :refer options supported in :require / :require-macros"))
-                               (assert (let [fs (frequencies (next spec))]
-                                         (and (<= (fs :as 0) 1)
-                                              (<= (fs :refer 0) 1)))
-                                       (error-msg spec "Each of :as and :refer options may only be specified once in :require / :require-macros")))
-                             (if (symbol? spec)
-                               (recur macros? [spec])
-                               (let [[lib & opts] spec
-                                     {alias :as referred :refer :or {alias lib}} (apply hash-map opts)
-                                     [rk uk] (if macros? [:require-macros :use-macros] [:require :use])]
-                                 (when alias
-                                   (let [alias-type (if macros? :macros :fns)]
-                                     (assert (not (contains? (alias-type @aliases)
-                                                             alias))
-                                             (error-msg spec ":as alias must be unique"))
-                                     (swap! aliases
-                                            update-in [alias-type]
-                                            conj alias)))
-                                 (assert (or (symbol? alias) (nil? alias))
-                                         (error-msg spec ":as must be followed by a symbol in :require / :require-macros"))
-                                 (assert (or (and (sequential? referred) (every? symbol? referred))
-                                             (nil? referred))
-                                         (error-msg spec ":refer must be followed by a sequence of symbols in :require / :require-macros"))
-                                 (when-not macros?
-                                   (swap! deps conj lib))
-                                 (merge (when alias {rk {alias lib}})
-                                        (when referred {uk (apply hash-map (interleave referred (repeat lib)))})))))
         use->require (fn use->require [[lib kw referred :as spec]]
                        (assert (and (symbol? lib) (= :only kw) (sequential? referred) (every? symbol? referred))
                                (error-msg spec "Only [lib.ns :only (names)] specs supported in :use / :use-macros"))
@@ -781,10 +815,10 @@
                             (let [ctor-sym (symbol (last (string/split (str spec) #"\.")))]
                               {:import  {ctor-sym spec}
                                :require {ctor-sym spec}}))
-        spec-parsers {:require        (partial parse-require-spec false)
-                      :require-macros (partial parse-require-spec true)
-                      :use            (comp (partial parse-require-spec false) use->require)
-                      :use-macros     (comp (partial parse-require-spec true) use->require)
+        spec-parsers {:require        (partial parse-require-spec false name)
+                      :require-macros (partial parse-require-spec true name)
+                      :use            (comp (partial parse-require-spec false name) use->require)
+                      :use-macros     (comp (partial parse-require-spec true name) use->require)
                       :import         parse-import-spec}
         {uses :use requires :require uses-macros :use-macros requires-macros :require-macros imports :import :as params}
         (reduce (fn [m [k & libs]]
@@ -806,9 +840,9 @@
                            (assoc-in [name :doc] docstring)
                            (assoc-in [name :excludes] excludes)
                            (assoc-in [name :uses] uses)
-                           (assoc-in [name :requires] requires)
+                           (update-in [name :requires] merge requires)
                            (assoc-in [name :uses-macros] uses-macros)
-                           (assoc-in [name :requires-macros]
+                           (update-in [name :requires-macros] merge
                                      (into {} (map (fn [[alias nsym]]
                                                      [alias (find-ns nsym)])
                                                    requires-macros)))
@@ -866,7 +900,7 @@
                                 [prot-v
                                  (map (fn [[meth-key meth-impl]]
                                         [(analyze env (symbol (namespace (:name prot-v)) (name meth-key)))
-                                         (analyze (assoc env :context :return) meth-impl)])
+                                         (analyze (assoc env :context :return) meth-impl (name meth-key))])
                                       meth-map)]))
                             prot-impl-pairs)]
     (swap! namespaces update-in [:proto-implementers] ;for fast-path dispatch compilation. proto-methname-symbol => set-of-types lookup.
@@ -983,6 +1017,20 @@
         {:env env :op :scm-str :form form :code (apply str (interp jsform))
          :tag (-> form meta :tag)})))
 
+(defmethod parse 'in-ns [op env [_ [_ ns-name]] _]
+  (set! *cljs-ns* ns-name)
+  {:op :constant :env env :form (str "in-ns " ns-name)})
+
+(defmethod parse 'require [op env [_ & specs] _]
+  (doall (map (fn [spec]
+                (let [spec (if (and (coll? spec) (= 'quote (first spec))) (second spec) spec)
+                      preq (merge (parse-require-spec false *cljs-ns* spec)
+                                  (parse-require-spec true *cljs-ns* spec))]
+                  (do
+                    (println "; adding " preq)
+                    (swap! namespaces #(update-in % [*cljs-ns* :requires] merge (:require preq) (:require-macros preq)))))) specs))
+  {:op :constant :env env :form (str "require " specs)})
+
 (defn parse-invoke
   [env [f & args :as form]]
   (disallowing-recur
@@ -1023,22 +1071,33 @@
    :gambit (throw "TODO")))
 
 (defn get-expander [sym env]
+  #_(println "looking for " sym)
   (let [mvar
         (when-not (or (-> env :locals sym)        ;locals hide macros
-                      (and (or (-> env :ns :excludes sym)
+                      (and false ;TODO: excludes excludes by symbol, regardless of import namespace, including erasing your current *ns* deffed symbols.
+                           (or (-> env :ns :excludes sym)
                                (get-in @namespaces [(-> env :ns :name) :excludes sym]))
                            (not (or (-> env :ns :uses-macros sym)
                                     (get-in @namespaces [(-> env :ns :name) :uses-macros sym])))))
-          (if-let [nstr (namespace sym)]
+          (if-let [nstr (and (namespace sym)
+                             (str (resolve-ns-alias env (symbol (namespace sym)))))]
             (when-let [ns (cond
                            (= "clojure.core" nstr) (find-ns 'cljscm.core)
                            (some #{\.} (seq nstr)) (find-ns (symbol nstr))
                            :else
-                           (-> env :ns :requires-macros (get (symbol nstr))))]
-              (find-interned-var ns (symbol (name sym))))
+                           (do
+                             #_(println "looking in requires-macros")
+                             (-> env :ns :requires-macros (get (symbol nstr)))))]
+              (do
+                #_(println "found a 'real' ns: " ns " looking up: " sym)
+                (find-interned-var ns (symbol (name sym)))))
             (if-let [nsym (-> env :ns :uses-macros sym)]
-              (find-interned-var (find-ns nsym) sym)
-              (find-interned-var (find-ns 'cljscm.core) sym))))]
+              (do
+                #_(println "found in uses-macros " sym)
+                (find-interned-var (find-ns nsym) sym))
+              (do
+                #_(println "looking in cljscm.core " sym)
+                (find-interned-var (find-ns 'cljscm.core) sym)))))]
     (when (and mvar (is-macro mvar))
       @mvar)))
 

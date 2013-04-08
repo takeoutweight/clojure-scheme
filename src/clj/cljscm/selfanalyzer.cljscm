@@ -6,11 +6,11 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software.
 
-(set! *warn-on-reflection* true)
+;(set! *warn-on-reflection* true)
 
 (ns cljscm.selfanalyzer
   (:refer-clojure :exclude [macroexpand-1])
-  (:require [cljscm.conditional :as cond]))
+  (:require [cljscm.conditional :as condc]))
 
 (declare resolve-var)
 (declare resolve-existing-var)
@@ -23,10 +23,13 @@
 ;; must be determined during analysis - the reader
 ;; did not know
 (def ^:dynamic *reader-ns-name* (gensym))
-(def ^:dynamic *reader-ns* (create-ns *reader-ns-name*))
+(def ^:dynamic *reader-ns* :TODO) ;(create-ns *reader-ns-name*)
 
-(defonce namespaces (atom '{cljscm.core {:name cljscm.core}
-                            cljscm.user {:name cljscm.user}}))
+(def namespaces (atom '{cljscm.core {:name cljscm.core}
+                        cljscm.user {:name cljscm.user}})) ;defonce TODO
+
+;not sure what I need from the actual Namespace class
+(defn find-ns [sym] sym)
 
 (defn reset-namespaces! []
   (reset! namespaces
@@ -53,7 +56,7 @@
 (def ^:dynamic *cljs-macros-is-classpath* true)
 (def  -cljs-macros-loaded (atom false))
 
-(defmacro no-warn [& body]
+(defmacro-scm no-warn [& body]
   `(binding [*cljs-warn-on-undeclared* false
              *cljs-warn-on-redef* false
              *cljs-warn-on-dynamic* false
@@ -69,7 +72,7 @@
       (load *cljs-macros-path*)
       (load-file *cljs-macros-path*))))
 
-(defmacro with-core-macros
+(defmacro-scm with-core-macros
   [path & body]
   `(do
      (when (not= *cljs-macros-path* ~path)
@@ -77,7 +80,7 @@
      (binding [*cljs-macros-path* ~path]
        ~@body)))
 
-(defmacro with-core-macros-file
+(defmacro-scm with-core-macros-file
   [path & body]
   `(do
      (when (not= *cljs-macros-path* ~path)
@@ -89,7 +92,7 @@
 (defn empty-env []
   {:ns (@namespaces *cljs-ns*) :context :statement :locals {}})
 
-#_(defmacro ^:private debug-prn
+#_(defmacro-scm ^:private debug-prn
   [& args]
   `(.println System/err (str ~@args)))
 
@@ -116,14 +119,14 @@
 (defn analysis-error? [ex]
   (= :cljs/analysis-error (:tag (ex-data ex))))
 
-(defmacro wrapping-errors [env & body]
+(defmacro-scm wrapping-errors [env & body]
   (let [err (gensym "err")]
     `(try
        ~@body
        (catch Throwable ~err
          (if (analysis-error? ~err)
            (throw ~err)
-           ~(if (= cond/*current-platform* :jvm)
+           ~(if (= condc/*current-platform* :jvm)
               `(throw (error ~env (.getMessage ~err) ~err))
               `(throw (error ~env (str ~err) ~err))))))))
 
@@ -221,7 +224,7 @@
 (def ^:dynamic *recur-frames* nil)
 (def ^:dynamic *loop-lets* nil)
 
-(defmacro disallowing-recur [& body]
+(defmacro-scm disallowing-recur [& body]
   `(binding [*recur-frames* (cons nil *recur-frames*)] ~@body))
 
 (defn analyze-keyword
@@ -240,7 +243,7 @@
 (defmethod parse 'if
   [op env [_ test then else :as form] name]
   (assert (>= (count form) 3) "Too few arguments to if")
-  (let [test-expr (disallowing-recur (analyze (assoc env :context :expr) test))
+  (let [test-expr (cljscm.analyzer/disallowing-recur-for-gambit (analyze (assoc env :context :expr) test))
         then-expr (analyze env then)
         else-expr (analyze env else)]
     {:env env :op :if :form form
@@ -250,7 +253,7 @@
 
 (defmethod parse 'case
   [op env [_ test & clauses :as form] _]
-  (let [test-expr (disallowing-recur (analyze (assoc env :context :expr) test))
+  (let [test-expr (cljscm.analyzer/disallowing-recur-for-gambit (analyze (assoc env :context :expr) test))
         [paired-clauses else] (if (odd? (count clauses))
                                 [(butlast clauses) (last clauses)]
                                 [clauses ::no-else])
@@ -268,7 +271,7 @@
 
 (defmethod parse 'throw
   [op env [_ throw :as form] name]
-  (let [throw-expr (disallowing-recur (analyze (assoc env :context :expr) throw))]
+  (let [throw-expr (cljscm.analyzer/disallowing-recur-for-gambit (analyze (assoc env :context :expr) throw))]
     {:env env :op :throw :form form
      :throw throw-expr
      :children [throw-expr]}))
@@ -333,7 +336,7 @@
                 env)
           name (:name (resolve-var (dissoc env :locals) sym))
           init-expr (when (contains? args :init)
-                      (disallowing-recur
+                      (cljscm.analyzer/disallowing-recur-for-gambit
                        (analyze (assoc env :context :expr) (:init args) sym)))
           fn-var? (and init-expr (= (:op init-expr) :fn))
           export-as (when-let [export-val (-> sym meta :export)]
@@ -449,9 +452,9 @@
                        [name (seq args)])
         ;;turn (fn [] ...) into (fn ([]...))
         meths (if (vector? (first meths)) (list meths) meths)
-        recur-name (symbol (if name (str name "---recur$") "cljscm.compiler/recurfn"))
+        recur-name (symbol (or name "cljscm.compiler/recurfn"))
         locals (:locals env)
-        name recur-name
+;        name recur-name
         env (assoc env :recur-name recur-name)
         type (-> form meta ::type)
         fields (-> form meta ::fields)
@@ -523,7 +526,7 @@
 
 (defmethod parse 'do
   [op env [_ & exprs :as form] _]
-  (let [statements (disallowing-recur
+  (let [statements (cljscm.analyzer/disallowing-recur-for-gambit
                      (seq (map #(analyze (assoc env :context :statement) %) (butlast exprs))))
         ret (if (<= (count exprs) 1)
               (analyze env (first exprs))
@@ -537,7 +540,7 @@
   (assert (and (vector? bindings) (even? (count bindings))) "bindings must be vector of even number of elements")
   (let [context (:context encl-env)
         [bes env]
-        (disallowing-recur
+        (cljscm.analyzer/disallowing-recur-for-gambit
           (loop [bes []
                  env (assoc encl-env :context :expr)
                  bindings (seq (partition 2 bindings))]
@@ -568,7 +571,7 @@
   (let [context (:context encl-env)
         recur-name (when is-loop (symbol "cljscm.compiler" "recurlet"))
         [bes env]
-        (disallowing-recur
+        (cljscm.analyzer/disallowing-recur-for-gambit
           (loop [bes []
                  env (assoc encl-env :context :expr)
                  bindings (seq (partition 2 bindings))]
@@ -628,13 +631,13 @@
     (reset! (:flag frame) true)
     (assoc {:env env :op :recur}
       :frame frame
-      :exprs (disallowing-recur (vec (map #(analyze (assoc env :context :expr) %) exprs)))))))
+      :exprs (cljscm.analyzer/disallowing-recur-for-gambit (vec (map #(analyze (assoc env :context :expr) %) exprs)))))))
 
 (defmethod parse 'recur
   [op env [_ & exprs :as form] _]
   (let [context (:context env)
         frame (first *recur-frames*)
-        exprs (disallowing-recur (vec (map #(analyze (assoc env :context :expr) %) exprs)))]
+        exprs (cljscm.analyzer/disallowing-recur-for-gambit (vec (map #(analyze (assoc env :context :expr) %) exprs)))]
     (assert frame "Can't recur here")
     (assert (= (count exprs) (count (:params frame))) "recur argument count mismatch")
     (reset! (:flag frame) true)
@@ -650,7 +653,7 @@
 (defmethod parse 'new
   [_ env [_ ctor & args :as form] _]
   (assert (symbol? ctor) "First arg to new must be a symbol")
-  (disallowing-recur
+  (cljscm.analyzer/disallowing-recur-for-gambit
    (let [enve (assoc env :context :expr)
          ctorexpr (analyze enve ctor)
          argexprs (vec (map #(analyze enve %) args))
@@ -669,7 +672,7 @@
                        ;; (set! o -prop val)
                        [`(. ~target ~val) alt]
                        [target val])]
-    (disallowing-recur
+    (cljscm.analyzer/disallowing-recur-for-gambit
      (let [enve (assoc env :context :expr)
            targetexpr (cond
                        ;; TODO: proper resolve
@@ -933,7 +936,7 @@
 
 (defmethod parse '.
   [_ env [_ target & [field & member+] :as form] _]
-  (disallowing-recur
+  (cljscm.analyzer/disallowing-recur-for-gambit
    (let [{:keys [dot-action target method field args]} (build-dot-form [target field member+])
          enve        (assoc env :context :expr)
          targetexpr  (analyze enve target)]
@@ -959,7 +962,7 @@
   (assert (string? jsform))
   (throw "Temporarily disabled")
   #_(if args
-      (disallowing-recur
+      (cljscm.analyzer/disallowing-recur-for-gambit
         (let [seg (fn seg [^String s]
                     (let [idx (.indexOf s "~{")]
                       (if (= -1 idx)
@@ -982,7 +985,7 @@
 
 (defn parse-invoke
   [env [f & args :as form]]
-  (disallowing-recur
+  (cljscm.analyzer/disallowing-recur-for-gambit
    (let [enve (assoc env :context :expr)
          fexpr (analyze enve f)
          argexprs (vec (map #(analyze enve %) args))
@@ -1066,7 +1069,7 @@
       (assert (not (nil? op)) "Can't call nil")
       (let [mform (macroexpand-1 env form)]
         (if (identical? form mform)
-          (wrapping-errors env
+          (cljscm.analyzer/wrapping-errors-for-gambit env
             (if (specials op)
               (parse op env form name)
               (parse-invoke env form)))
@@ -1079,8 +1082,8 @@
   (let [expr-env (assoc env :context :expr)
         simple-keys? (every? #(or (string? %) (keyword? %))
                              (keys form))
-        ks (disallowing-recur (vec (map #(analyze expr-env % name) (keys form))))
-        vs (disallowing-recur (vec (map #(analyze expr-env % name) (vals form))))]
+        ks (cljscm.analyzer/disallowing-recur-for-gambit (vec (map #(analyze expr-env % name) (keys form))))
+        vs (cljscm.analyzer/disallowing-recur-for-gambit (vec (map #(analyze expr-env % name) (vals form))))]
     (analyze-wrap-meta {:op :map :env env :form form
                         :keys ks :vals vs :simple-keys? simple-keys?
                         :children (vec (interleave ks vs))}
@@ -1089,13 +1092,13 @@
 (defn analyze-vector
   [env form name]
   (let [expr-env (assoc env :context :expr)
-        items (disallowing-recur (vec (map #(analyze expr-env % name) form)))]
+        items (cljscm.analyzer/disallowing-recur-for-gambit (vec (map #(analyze expr-env % name) form)))]
     (analyze-wrap-meta {:op :vector :env env :form form :items items :children items} name)))
 
 (defn analyze-set
   [env form name]
   (let [expr-env (assoc env :context :expr)
-        items (disallowing-recur (vec (map #(analyze expr-env % name) form)))]
+        items (cljscm.analyzer/disallowing-recur-for-gambit (vec (map #(analyze expr-env % name) form)))]
     (analyze-wrap-meta {:op :set :env env :form form :items items :children items} name)))
 
 (defn analyze-wrap-meta [expr name]
@@ -1117,11 +1120,11 @@
   facilitate code walking without knowing the details of the op set."
   ([env form] (analyze env form nil))
   ([env form name]
-   (wrapping-errors env
-     (let [form (if (instance? clojure.lang.LazySeq form)
+   (cljscm.analyzer/wrapping-errors-for-gambit env
+     (let [form (if (instance? cljscm.core/LazySeq form)
                   (or (seq form) ())
                   form)]
-       (load-core)
+;       (load-core)
        (cond
         (symbol? form) (analyze-symbol env form)
         (and (seq? form) (seq form)) (analyze-seq env form name)
@@ -1144,7 +1147,7 @@
     (binding [*cljs-ns* 'cljscm.user
               *cljs-file* f
               *ns* *reader-ns*
-              cond/*target-platform* :gambit]
+              condc/*target-platform* :gambit]
       (let [port (cljscm.core/scm* [f readtable]
                        (open-input-file (list :path f :readtable readtable)))
             env (empty-env)]
