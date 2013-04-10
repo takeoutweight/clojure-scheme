@@ -12,6 +12,9 @@
   (:refer-clojure :exclude [macroexpand-1])
   (:require [cljscm.conditional :as condc]))
 
+(condc/platform-case
+ :jvm (require '[clojure.java.io :as io]))
+
 (declare resolve-var)
 (declare resolve-existing-var)
 (declare warning)
@@ -28,8 +31,8 @@
 (def namespaces (atom '{cljscm.core {:name cljscm.core}
                         cljscm.user {:name cljscm.user}})) ;defonce TODO
 
-;not sure what I need from the actual Namespace class
-(defn find-ns [sym] sym)
+;TODO not sure what I need from the actual Namespace class
+(condc/platform-case :gambit (defn find-ns [sym] sym))
 
 (defn reset-namespaces! []
   (reset! namespaces
@@ -56,7 +59,7 @@
 (def ^:dynamic *cljs-macros-is-classpath* true)
 (def  -cljs-macros-loaded (atom false))
 
-(defmacro-scm no-warn [& body]
+(defmacro no-warn [& body]
   `(binding [*cljs-warn-on-undeclared* false
              *cljs-warn-on-redef* false
              *cljs-warn-on-dynamic* false
@@ -72,7 +75,7 @@
       (load *cljs-macros-path*)
       (load-file *cljs-macros-path*))))
 
-(defmacro-scm with-core-macros
+(defmacro with-core-macros
   [path & body]
   `(do
      (when (not= *cljs-macros-path* ~path)
@@ -80,7 +83,7 @@
      (binding [*cljs-macros-path* ~path]
        ~@body)))
 
-(defmacro-scm with-core-macros-file
+(defmacro with-core-macros-file
   [path & body]
   `(do
      (when (not= *cljs-macros-path* ~path)
@@ -119,16 +122,21 @@
 (defn analysis-error? [ex]
   (= :cljs/analysis-error (:tag (ex-data ex))))
 
-(defmacro-scm wrapping-errors [env & body]
+(defmacro wrapping-errors [env & body]
   (let [err (gensym "err")]
     `(try
        ~@body
-       (catch Throwable ~err
-         (if (analysis-error? ~err)
-           (throw ~err)
-           ~(if (= condc/*current-platform* :jvm)
-              `(throw (error ~env (.getMessage ~err) ~err))
-              `(throw (error ~env (str ~err) ~err))))))))
+       ~(condc/platform-case
+         :jvm `(catch Throwable ~err
+                 (if (analysis-error? ~err)
+                   (throw ~err)
+                   ~(if (= condc/*current-platform* :jvm)
+                      `(throw (error ~env (.getMessage ~err) ~err))
+                      `(throw (error ~env (str ~err) ~err)))))
+         :gambit `(catch cljscm.core/ExceptionInfo ~err
+                    (if (analysis-error? ~err)
+                      (throw ~err)
+                      ~`(throw (error ~env (str ~err) ~err))))))))
 
 (defn confirm-var-exists [env prefix suffix]
   (when *cljs-warn-on-undeclared*
@@ -224,7 +232,7 @@
 (def ^:dynamic *recur-frames* nil)
 (def ^:dynamic *loop-lets* nil)
 
-(defmacro-scm disallowing-recur [& body]
+(defmacro disallowing-recur [& body]
   `(binding [*recur-frames* (cons nil *recur-frames*)] ~@body))
 
 (defn analyze-keyword
@@ -243,7 +251,7 @@
 (defmethod parse 'if
   [op env [_ test then else :as form] name]
   (assert (>= (count form) 3) "Too few arguments to if")
-  (let [test-expr (cljscm.analyzer/disallowing-recur-for-gambit (analyze (assoc env :context :expr) test))
+  (let [test-expr (disallowing-recur (analyze (assoc env :context :expr) test))
         then-expr (analyze env then)
         else-expr (analyze env else)]
     {:env env :op :if :form form
@@ -253,7 +261,7 @@
 
 (defmethod parse 'case
   [op env [_ test & clauses :as form] _]
-  (let [test-expr (cljscm.analyzer/disallowing-recur-for-gambit (analyze (assoc env :context :expr) test))
+  (let [test-expr (disallowing-recur (analyze (assoc env :context :expr) test))
         [paired-clauses else] (if (odd? (count clauses))
                                 [(butlast clauses) (last clauses)]
                                 [clauses ::no-else])
@@ -271,7 +279,7 @@
 
 (defmethod parse 'throw
   [op env [_ throw :as form] name]
-  (let [throw-expr (cljscm.analyzer/disallowing-recur-for-gambit (analyze (assoc env :context :expr) throw))]
+  (let [throw-expr (disallowing-recur (analyze (assoc env :context :expr) throw))]
     {:env env :op :throw :form form
      :throw throw-expr
      :children [throw-expr]}))
@@ -336,8 +344,9 @@
                 env)
           name (:name (resolve-var (dissoc env :locals) sym))
           init-expr (when (contains? args :init)
-                      (cljscm.analyzer/disallowing-recur-for-gambit
-                       (analyze (assoc env :context :expr) (:init args) sym)))
+                      (disallowing-recur
+                        (-> (analyze (assoc env :context :expr) (:init args) sym)
+                            (assoc :toplevel true))))
           fn-var? (and init-expr (= (:op init-expr) :fn))
           export-as (when-let [export-val (-> sym meta :export)]
                       (if (= true export-val) name export-val))
@@ -447,12 +456,15 @@
 
 (defmethod parse 'fn*
   [op env [_ & args :as form] name]
-  (let [[name meths] (if (symbol? (first args))
+  (let [named-by-def name
+        [name meths] (if (symbol? (first args))
                        [(first args) (next args)]
                        [name (seq args)])
         ;;turn (fn [] ...) into (fn ([]...))
         meths (if (vector? (first meths)) (list meths) meths)
-        recur-name (symbol (or name "cljscm.compiler/recurfn"))
+        recur-name (symbol (or (and named-by-def (:name (resolve-var env name)))
+                               name
+                               "cljscm.compiler/recurfn"))
         locals (:locals env)
 ;        name recur-name
         env (assoc env :recur-name recur-name)
@@ -461,7 +473,9 @@
         protocol-impl (-> form meta :protocol-impl)
         protocol-inline (-> form meta :protocol-inline)
         single-arity (-> form meta :single-arity)
-        locals (if (and name (not protocol-impl)) (assoc locals name {:name recur-name :shadow (locals recur-name)}) locals)
+        locals (if (and name (not named-by-def))
+                 (assoc locals name {:name recur-name :shadow (locals recur-name)})
+                 locals)
         locals (reduce (fn [m fld]
                          (assoc m fld
                                 {:name fld
@@ -473,14 +487,15 @@
 
         menv (if (> (count meths) 1) (assoc env :context :expr) env)
         menv (merge menv
-               {:protocol-impl protocol-impl
-                :protocol-inline protocol-inline})
+                    {:protocol-impl protocol-impl
+                     :protocol-inline protocol-inline})
         methods (map #(analyze-fn-method menv locals % type protocol-inline) meths)
         max-fixed-arity (apply max (map :max-fixed-arity methods))
         variadic (boolean (some :variadic methods))
-        locals (if name
+        locals (if (and name (not named-by-def))
                  (update-in locals [name] assoc
                             :fn-var true
+                            :name recur-name
                             :variadic variadic
                             :max-fixed-arity max-fixed-arity
                             :method-params (map :params methods))
@@ -526,7 +541,7 @@
 
 (defmethod parse 'do
   [op env [_ & exprs :as form] _]
-  (let [statements (cljscm.analyzer/disallowing-recur-for-gambit
+  (let [statements (disallowing-recur
                      (seq (map #(analyze (assoc env :context :statement) %) (butlast exprs))))
         ret (if (<= (count exprs) 1)
               (analyze env (first exprs))
@@ -540,7 +555,7 @@
   (assert (and (vector? bindings) (even? (count bindings))) "bindings must be vector of even number of elements")
   (let [context (:context encl-env)
         [bes env]
-        (cljscm.analyzer/disallowing-recur-for-gambit
+        (disallowing-recur
           (loop [bes []
                  env (assoc encl-env :context :expr)
                  bindings (seq (partition 2 bindings))]
@@ -571,7 +586,7 @@
   (let [context (:context encl-env)
         recur-name (when is-loop (symbol "cljscm.compiler" "recurlet"))
         [bes env]
-        (cljscm.analyzer/disallowing-recur-for-gambit
+        (disallowing-recur
           (loop [bes []
                  env (assoc encl-env :context :expr)
                  bindings (seq (partition 2 bindings))]
@@ -631,13 +646,13 @@
     (reset! (:flag frame) true)
     (assoc {:env env :op :recur}
       :frame frame
-      :exprs (cljscm.analyzer/disallowing-recur-for-gambit (vec (map #(analyze (assoc env :context :expr) %) exprs)))))))
+      :exprs (disallowing-recur (vec (map #(analyze (assoc env :context :expr) %) exprs)))))))
 
 (defmethod parse 'recur
   [op env [_ & exprs :as form] _]
   (let [context (:context env)
         frame (first *recur-frames*)
-        exprs (cljscm.analyzer/disallowing-recur-for-gambit (vec (map #(analyze (assoc env :context :expr) %) exprs)))]
+        exprs (disallowing-recur (vec (map #(analyze (assoc env :context :expr) %) exprs)))]
     (assert frame "Can't recur here")
     (assert (= (count exprs) (count (:params frame))) "recur argument count mismatch")
     (reset! (:flag frame) true)
@@ -653,7 +668,7 @@
 (defmethod parse 'new
   [_ env [_ ctor & args :as form] _]
   (assert (symbol? ctor) "First arg to new must be a symbol")
-  (cljscm.analyzer/disallowing-recur-for-gambit
+  (disallowing-recur
    (let [enve (assoc env :context :expr)
          ctorexpr (analyze enve ctor)
          argexprs (vec (map #(analyze enve %) args))
@@ -672,7 +687,7 @@
                        ;; (set! o -prop val)
                        [`(. ~target ~val) alt]
                        [target val])]
-    (cljscm.analyzer/disallowing-recur-for-gambit
+    (disallowing-recur
      (let [enve (assoc env :context :expr)
            targetexpr (cond
                        ;; TODO: proper resolve
@@ -716,6 +731,58 @@
       (let [relpath (ns->relpath dep)]
         (analyze-file relpath)))))
 
+(defn error-msg [spec msg] (str msg "; offending spec: " (pr-str spec)))
+
+(defn get-deps [ns-name]
+  (or (get-in @namespaces [ns-name :deps])
+      (let [a (atom #{})]
+        (swap! namespaces #(assoc-in % [ns-name :deps] a))
+        a)))
+(defn get-aliases [ns-name]
+  (or (get-in @namespaces [ns-name :aliases])
+      (let [a (atom {:fns #{} :macros #{}})]
+        (swap! namespaces #(assoc-in % [ns-name :aliases] a))
+        a)))
+
+(defn parse-require-spec [macros? ns-name spec]
+  (assert (or (symbol? spec) (vector? spec))
+          (error-msg spec "Only [lib.ns & options] and lib.ns specs supported in :require / :require-macros"))
+  (when (vector? spec)
+    (assert (symbol? (first spec))
+            (error-msg spec "Library name must be specified as a symbol in :require / :require-macros"))
+    (assert (odd? (count spec))
+            (error-msg spec "Only :as alias and :refer (names) options supported in :require"))
+    (assert (every? #{:as :refer} (map first (partition 2 (next spec))))
+            (error-msg spec "Only :as and :refer options supported in :require / :require-macros"))
+    (assert (let [fs (frequencies (next spec))]
+              (and (<= (fs :as 0) 1)
+                   (<= (fs :refer 0) 1)))
+            (error-msg spec "Each of :as and :refer options may only be specified once in :require / :require-macros")))
+  (if (symbol? spec)
+    (recur macros? ns-name [spec])
+    (let [deps (get-deps ns-name)
+          aliases (get-aliases ns-name)
+          [lib & opts] spec
+          {alias :as referred :refer :or {alias lib}} (apply hash-map opts)
+          [rk uk] (if macros? [:require-macros :use-macros] [:require :use])]
+      (when alias
+        (let [alias-type (if macros? :macros :fns)]
+          (when (not (contains? (alias-type @aliases)
+                                alias))
+            (println "CAUTION: " (error-msg spec ":as alias must be unique")))
+          (swap! aliases
+                 update-in [alias-type]
+                 conj alias)))
+      (assert (or (symbol? alias) (nil? alias))
+              (error-msg spec ":as must be followed by a symbol in :require / :require-macros"))
+      (assert (or (and (sequential? referred) (every? symbol? referred))
+                  (nil? referred))
+              (error-msg spec ":refer must be followed by a sequence of symbols in :require / :require-macros"))
+      (when-not macros?
+        (swap! deps conj lib))
+      (merge (when alias {rk {alias lib}})
+             (when referred {uk (apply hash-map (interleave referred (repeat lib)))})))))
+
 (defmethod parse 'ns
   [_ env [_ name & args :as form] _]
   (assert (symbol? name) "Namespaces must be named by a symbol.")
@@ -730,46 +797,9 @@
                       (into s xs))
                     s))
                 #{} args)
-        deps (atom #{})
-        aliases (atom {:fns #{} :macros #{}})
+        deps (get-deps name)
+        aliases (get-aliases name)
         valid-forms (atom #{:use :use-macros :require :require-macros :import})
-        error-msg (fn [spec msg] (str msg "; offending spec: " (pr-str spec)))
-        parse-require-spec (fn parse-require-spec [macros? spec]
-                             (assert (or (symbol? spec) (vector? spec))
-                                     (error-msg spec "Only [lib.ns & options] and lib.ns specs supported in :require / :require-macros"))
-                             (when (vector? spec)
-                               (assert (symbol? (first spec))
-                                       (error-msg spec "Library name must be specified as a symbol in :require / :require-macros"))
-                               (assert (odd? (count spec))
-                                       (error-msg spec "Only :as alias and :refer (names) options supported in :require"))
-                               (assert (every? #{:as :refer} (map first (partition 2 (next spec))))
-                                       (error-msg spec "Only :as and :refer options supported in :require / :require-macros"))
-                               (assert (let [fs (frequencies (next spec))]
-                                         (and (<= (fs :as 0) 1)
-                                              (<= (fs :refer 0) 1)))
-                                       (error-msg spec "Each of :as and :refer options may only be specified once in :require / :require-macros")))
-                             (if (symbol? spec)
-                               (recur macros? [spec])
-                               (let [[lib & opts] spec
-                                     {alias :as referred :refer :or {alias lib}} (apply hash-map opts)
-                                     [rk uk] (if macros? [:require-macros :use-macros] [:require :use])]
-                                 (when alias
-                                   (let [alias-type (if macros? :macros :fns)]
-                                     (assert (not (contains? (alias-type @aliases)
-                                                             alias))
-                                             (error-msg spec ":as alias must be unique"))
-                                     (swap! aliases
-                                            update-in [alias-type]
-                                            conj alias)))
-                                 (assert (or (symbol? alias) (nil? alias))
-                                         (error-msg spec ":as must be followed by a symbol in :require / :require-macros"))
-                                 (assert (or (and (sequential? referred) (every? symbol? referred))
-                                             (nil? referred))
-                                         (error-msg spec ":refer must be followed by a sequence of symbols in :require / :require-macros"))
-                                 (when-not macros?
-                                   (swap! deps conj lib))
-                                 (merge (when alias {rk {alias lib}})
-                                        (when referred {uk (apply hash-map (interleave referred (repeat lib)))})))))
         use->require (fn use->require [[lib kw referred :as spec]]
                        (assert (and (symbol? lib) (= :only kw) (sequential? referred) (every? symbol? referred))
                                (error-msg spec "Only [lib.ns :only (names)] specs supported in :use / :use-macros"))
@@ -781,10 +811,10 @@
                             (let [ctor-sym (symbol (apply str (drop 1 (drop-while (complement #{\.}) (seq (str spec))))))]
                               {:import  {ctor-sym spec}
                                :require {ctor-sym spec}}))
-        spec-parsers {:require        (partial parse-require-spec false)
-                      :require-macros (partial parse-require-spec true)
-                      :use            (comp (partial parse-require-spec false) use->require)
-                      :use-macros     (comp (partial parse-require-spec true) use->require)
+        spec-parsers {:require        (partial parse-require-spec false name)
+                      :require-macros (partial parse-require-spec true name)
+                      :use            (comp (partial parse-require-spec false name) use->require)
+                      :use-macros     (comp (partial parse-require-spec true name) use->require)
                       :import         parse-import-spec}
         {uses :use requires :require uses-macros :use-macros requires-macros :require-macros imports :import :as params}
         (reduce (fn [m [k & libs]]
@@ -806,9 +836,9 @@
                            (assoc-in [name :doc] docstring)
                            (assoc-in [name :excludes] excludes)
                            (assoc-in [name :uses] uses)
-                           (assoc-in [name :requires] requires)
+                           (update-in [name :requires] merge requires)
                            (assoc-in [name :uses-macros] uses-macros)
-                           (assoc-in [name :requires-macros]
+                           (update-in [name :requires-macros] merge
                                      (into {} (map (fn [[alias nsym]]
                                                      [alias (find-ns nsym)])
                                                    requires-macros)))
@@ -936,7 +966,7 @@
 
 (defmethod parse '.
   [_ env [_ target & [field & member+] :as form] _]
-  (cljscm.analyzer/disallowing-recur-for-gambit
+  (disallowing-recur
    (let [{:keys [dot-action target method field args]} (build-dot-form [target field member+])
          enve        (assoc env :context :expr)
          targetexpr  (analyze enve target)]
@@ -962,7 +992,7 @@
   (assert (string? jsform))
   (throw "Temporarily disabled")
   #_(if args
-      (cljscm.analyzer/disallowing-recur-for-gambit
+      (disallowing-recur
         (let [seg (fn seg [^String s]
                     (let [idx (.indexOf s "~{")]
                       (if (= -1 idx)
@@ -983,9 +1013,23 @@
         {:env env :op :scm-str :form form :code (apply str (interp jsform))
          :tag (-> form meta :tag)})))
 
+(defmethod parse 'in-ns [op env [_ [_ ns-name]] _]
+  (set! *cljs-ns* ns-name)
+  {:op :constant :env env :form (str "in-ns " ns-name)})
+
+(defmethod parse 'require [op env [_ & specs] _]
+  (doall (map (fn [spec]
+                (let [spec (if (and (coll? spec) (= 'quote (first spec))) (second spec) spec)
+                      preq (merge (parse-require-spec false *cljs-ns* spec)
+                                  (parse-require-spec true *cljs-ns* spec))]
+                  (do
+                    (println "; adding " preq)
+                    (swap! namespaces #(update-in % [*cljs-ns* :requires] merge (:require preq) (:require-macros preq)))))) specs))
+  {:op :constant :env env :form (str "require " specs)})
+
 (defn parse-invoke
   [env [f & args :as form]]
-  (cljscm.analyzer/disallowing-recur-for-gambit
+  (disallowing-recur
    (let [enve (assoc env :context :expr)
          fexpr (analyze enve f)
          argexprs (vec (map #(analyze enve %) args))
@@ -1013,33 +1057,38 @@
       (assoc ret :op :var :info lb)
       (assoc ret :op :var :info (resolve-existing-var env sym)))))
 
-(defn find-interned-analysis
-  "Not actually returning the var in selfanalyzer - returning the def info."
-  [ns sym]
-  (get-in @namespaces [ns :defs sym]))
-(def is-macro :macro)
+(defn find-interned-var [ns sym]
+  "returns var in jvm. returns the def info in gambit."
+  (condc/platform-case
+   :jvm (.findInternedVar ^clojure.lang.Namespace ns sym)
+   :gambit (get-in @namespaces [ns :defs sym])))
 
-(defn get-expander
-  "returns resolved name"
-  [sym env]
+(defn is-macro [mvar]
+  (condc/platform-case
+   :jvm (.isMacro ^clojure.lang.Var mvar)
+   :gambit (throw "TODO")))
+
+(defn get-expander [sym env]
   (let [mvar
         (when-not (or (-> env :locals sym)        ;locals hide macros
-                      (and (or (-> env :ns :excludes sym)
+                      (and false ;TODO: excludes excludes by symbol, regardless of import namespace, including erasing your current *ns* deffed symbols.
+                           (or (-> env :ns :excludes sym)
                                (get-in @namespaces [(-> env :ns :name) :excludes sym]))
                            (not (or (-> env :ns :uses-macros sym)
                                     (get-in @namespaces [(-> env :ns :name) :uses-macros sym])))))
-          (if-let [nstr (namespace sym)]
+          (if-let [nstr (and (namespace sym)
+                             (str (resolve-ns-alias env (symbol (namespace sym)))))]
             (when-let [ns (cond
                            (= "clojure.core" nstr) (find-ns 'cljscm.core)
                            (some #{\.} (seq nstr)) (find-ns (symbol nstr))
                            :else
                            (-> env :ns :requires-macros (get (symbol nstr))))]
-              (find-interned-analysis ns (symbol (name sym))))
+              (find-interned-var ns (symbol (name sym))))
             (if-let [nsym (-> env :ns :uses-macros sym)]
-              (find-interned-analysis (find-ns nsym) sym)
-              (find-interned-analysis (find-ns 'cljscm.core) sym))))]
+              (find-interned-var (find-ns nsym) sym)
+              (find-interned-var (find-ns 'cljscm.core) sym))))]
     (when (and mvar (is-macro mvar))
-      (:name mvar))))
+      @mvar)))
 
 (defn macroexpand-1 [env form]
   (let [op (first form)]
@@ -1051,13 +1100,13 @@
         (if (symbol? op)
           (let [opname (str op)]
             (cond
-             (= (first opname) \.) (let [[target & args] (next form)]
-                                     (with-meta (list* '. target (symbol (subs opname 1)) args)
-                                       (meta form)))
-             (= (last opname) \.) (with-meta
-                                    (list* 'new (symbol (subs opname 0 (dec (count opname)))) (next form))
-                                    (meta form))
-             :else form))
+              (= (first opname) \.) (let [[target & args] (next form)]
+                                      (with-meta (list* '. target (symbol (subs opname 1)) args)
+                                        (meta form)))
+              (= (last opname) \.) (with-meta
+                                     (list* 'new (symbol (subs opname 0 (dec (count opname)))) (next form))
+                                     (meta form))
+              :else form))
           form)))))
 
 (defn analyze-seq
@@ -1069,7 +1118,7 @@
       (assert (not (nil? op)) "Can't call nil")
       (let [mform (macroexpand-1 env form)]
         (if (identical? form mform)
-          (cljscm.analyzer/wrapping-errors-for-gambit env
+          (wrapping-errors env
             (if (specials op)
               (parse op env form name)
               (parse-invoke env form)))
@@ -1082,8 +1131,8 @@
   (let [expr-env (assoc env :context :expr)
         simple-keys? (every? #(or (string? %) (keyword? %))
                              (keys form))
-        ks (cljscm.analyzer/disallowing-recur-for-gambit (vec (map #(analyze expr-env % name) (keys form))))
-        vs (cljscm.analyzer/disallowing-recur-for-gambit (vec (map #(analyze expr-env % name) (vals form))))]
+        ks (disallowing-recur (vec (map #(analyze expr-env % name) (keys form))))
+        vs (disallowing-recur (vec (map #(analyze expr-env % name) (vals form))))]
     (analyze-wrap-meta {:op :map :env env :form form
                         :keys ks :vals vs :simple-keys? simple-keys?
                         :children (vec (interleave ks vs))}
@@ -1092,13 +1141,13 @@
 (defn analyze-vector
   [env form name]
   (let [expr-env (assoc env :context :expr)
-        items (cljscm.analyzer/disallowing-recur-for-gambit (vec (map #(analyze expr-env % name) form)))]
+        items (disallowing-recur (vec (map #(analyze expr-env % name) form)))]
     (analyze-wrap-meta {:op :vector :env env :form form :items items :children items} name)))
 
 (defn analyze-set
   [env form name]
   (let [expr-env (assoc env :context :expr)
-        items (cljscm.analyzer/disallowing-recur-for-gambit (vec (map #(analyze expr-env % name) form)))]
+        items (disallowing-recur (vec (map #(analyze expr-env % name) form)))]
     (analyze-wrap-meta {:op :set :env env :form form :items items :children items} name)))
 
 (defn analyze-wrap-meta [expr name]
@@ -1120,8 +1169,10 @@
   facilitate code walking without knowing the details of the op set."
   ([env form] (analyze env form nil))
   ([env form name]
-   (cljscm.analyzer/wrapping-errors-for-gambit env
-     (let [form (if (instance? cljscm.core/LazySeq form)
+   (wrapping-errors env
+     (let [form (if (instance? (condc/platform-case
+                                :jvm clojure.lang.LazySeq
+                                :gambit cljscm.core/LazySeq) form)
                   (or (seq form) ())
                   form)]
 ;       (load-core)
@@ -1134,25 +1185,44 @@
         (keyword? form) (analyze-keyword env form)
         :else {:op :constant :env env :form form})))))
 
-(defn find-file-on-classpath-scm
-    [filename classpath]
-    (some #(cljscm.core/scm* {::f %} (file-exists? ::f)) (map #(str % "/" filename) classpath)))
+(def readtable) ;TODO
 
-(def readtable)
-
-(defn analyze-file
-  [f]
-  (let [f (find-file-on-classpath-scm f)] ;res (or res (java.net.URL. (str "file:/Users/nathansorenson/src/c-clojure/src/cljs/" f)))
-    (assert f (str "Can't find " f " in classpath"))
-    (binding [*cljs-ns* 'cljscm.user
-              *cljs-file* f
-              *ns* *reader-ns*
-              condc/*target-platform* :gambit]
-      (let [port (cljscm.core/scm* [f readtable]
-                       (open-input-file (list :path f :readtable readtable)))
-            env (empty-env)]
-        (loop [r ((scm* {} read) port)]
-          (let [env (assoc env :ns (get-namespace *cljs-ns*))]
-            (when-not (cljscm.core/scm* [r] (eof-object? r))
-              (analyze env r)
-              (recur ((scm* {} read) port)))))))))
+(condc/platform-case
+ :jvm
+ (defn analyze-file
+   [^String f]
+   (let [res (if (re-find #"^file://" f) (java.net.URL. f) (io/resource f))] ;res (or res (java.net.URL. (str "file:/Users/nathansorenson/src/c-clojure/src/cljs/" f)))
+     (assert res (str "Can't find " f " in classpath"))
+     (binding [*cljs-ns* 'cljscm.user
+               *cljs-file* (.getPath ^java.net.URL res)
+               *ns* *reader-ns*
+               condc/*target-platform* :gambit]
+       (with-open [r (io/reader res)]
+         (let [env (empty-env)
+               pbr (clojure.lang.LineNumberingPushbackReader. r)
+               eof (Object.)]
+           (loop [r (read pbr false eof false)]
+             (let [env (assoc env :ns (get-namespace *cljs-ns*))]
+               (when-not (identical? eof r)
+                 (analyze env r)
+                 (recur (read pbr false eof false))))))))))
+ :gambit
+ (defn analyze-file
+   [f]
+   (let [find-file (fn [filename classpath]
+                     (some #(cljscm.core/scm* {::f %} (file-exists? ::f))
+                           (map #(str % "/" filename) classpath)))
+         f (find-file-on-classpath-scm f ["."])]
+     (assert f (str "Can't find " f " in classpath"))
+     (binding [*cljs-ns* 'cljscm.user
+               *cljs-file* f
+               *ns* *reader-ns*
+               condc/*target-platform* :gambit]
+       (let [port (cljscm.core/scm* [f readtable]
+                                    (open-input-file (list :path f :readtable readtable)))
+             env (empty-env)]
+         (loop [r ((scm* {} read) port)]
+           (let [env (assoc env :ns (get-namespace *cljs-ns*))]
+             (when-not (cljscm.core/scm* [r] (eof-object? r))
+               (analyze env r)
+               (recur ((scm* {} read) port))))))))))
