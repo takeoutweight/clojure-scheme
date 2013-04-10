@@ -65,6 +65,10 @@
              (println "; firing the gambit-runtime-safe macro code.")))
   (str "aliased " alias " to " lib))
 
+(condc/platform-case
+ :jvm (cljscm.core/alias core clojure.core)
+ :gambit (cljscm.core/alias core cljscm.core))
+
 (def
 
   ^{:doc "Like defn, but the resulting function name is declared as a
@@ -115,10 +119,6 @@
 
 (condc/platform-case
  :jvm (. (var defmacro) (setMacro)))
-
-(condc/platform-case
- :jvm (cljscm.core/alias core clojure.core)
- :gambit (cljscm.core/alias core cljscm.core))
 
 (defmacro ->
   "Threads the expr through the forms. Inserts x as the
