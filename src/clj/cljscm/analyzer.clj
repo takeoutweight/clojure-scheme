@@ -1071,7 +1071,6 @@
    :gambit (throw "TODO")))
 
 (defn get-expander [sym env]
-  #_(println "looking for " sym)
   (let [mvar
         (when-not (or (-> env :locals sym)        ;locals hide macros
                       (and false ;TODO: excludes excludes by symbol, regardless of import namespace, including erasing your current *ns* deffed symbols.
@@ -1085,19 +1084,11 @@
                            (= "clojure.core" nstr) (find-ns 'cljscm.core)
                            (some #{\.} (seq nstr)) (find-ns (symbol nstr))
                            :else
-                           (do
-                             #_(println "looking in requires-macros")
-                             (-> env :ns :requires-macros (get (symbol nstr)))))]
-              (do
-                #_(println "found a 'real' ns: " ns " looking up: " sym)
-                (find-interned-var ns (symbol (name sym)))))
+                           (-> env :ns :requires-macros (get (symbol nstr))))]
+              (find-interned-var ns (symbol (name sym))))
             (if-let [nsym (-> env :ns :uses-macros sym)]
-              (do
-                #_(println "found in uses-macros " sym)
-                (find-interned-var (find-ns nsym) sym))
-              (do
-                #_(println "looking in cljscm.core " sym)
-                (find-interned-var (find-ns 'cljscm.core) sym)))))]
+              (find-interned-var (find-ns nsym) sym)
+              (find-interned-var (find-ns 'cljscm.core) sym))))]
     (when (and mvar (is-macro mvar))
       @mvar)))
 
