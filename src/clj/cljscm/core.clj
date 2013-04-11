@@ -24,7 +24,7 @@
   (:require [clojure.walk]
             [clojure.string :as string]
             [cljscm.conditional :as cond]
-            [cljscm.analyzer]))
+            [cljscm.selfanalyzer :as ana]))
 
 (alias 'core 'clojure.core)
 
@@ -724,7 +724,7 @@
   (emit-extend-type t specs))
 
 #_(defmacro extend-type [tsym & impls]
-  (core/let [resolve #(core/let [ret (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) %))]
+  (core/let [resolve #(core/let [ret (:name (ana/resolve-var (dissoc &env :locals) %))]
                    (assert ret (core/str "Can't resolve: " %))
                    ret)
         impl-map (core/loop [ret {} s impls]
@@ -733,18 +733,18 @@
                             (drop-while seq? (next s)))
                      ret))
         warn-if-not-protocol #(when-not (= 'Object %)
-                                (if cljscm.analyzer/*cljs-warn-on-undeclared*
-                                  (if-let [var (cljscm.analyzer/resolve-existing-var (dissoc &env :locals) %)]
+                                (if ana/*cljs-warn-on-undeclared*
+                                  (if-let [var (ana/resolve-existing-var (dissoc &env :locals) %)]
                                     (do
                                      (when-not (:protocol-symbol var)
-                                       (cljscm.analyzer/warning &env
+                                       (ana/warning &env
                                          (core/str "WARNING: Symbol " % " is not a protocol")))
-                                     (when (and cljscm.analyzer/*cljs-warn-protocol-deprecated*
+                                     (when (and ana/*cljs-warn-protocol-deprecated*
                                                 (-> var :deprecated)
                                                 (not (-> % meta :deprecation-nowarn)))
-                                       (cljscm.analyzer/warning &env
+                                       (ana/warning &env
                                          (core/str "WARNING: Protocol " % " is deprecated"))))
-                                    (cljscm.analyzer/warning &env
+                                    (ana/warning &env
                                       (core/str "WARNING: Can't resolve protocol symbol " %)))))
         skip-flag (set (-> tsym meta :skip-protocol-flag))]
     (if (base-type tsym)
@@ -807,7 +807,7 @@
         `(do ~@(mapcat assign-impls impl-map))))))
 
 (defn- prepare-protocol-masks [env t impls]
-  (core/let [resolve #(core/let [ret (:name (cljscm.analyzer/resolve-var (dissoc env :locals) %))]
+  (core/let [resolve #(core/let [ret (:name (ana/resolve-var (dissoc env :locals) %))]
                    (assert ret (core/str "Can't resolve: " %))
                    ret)
         impl-map (core/loop [ret {} s impls]
@@ -845,8 +845,8 @@
                                  (conj v (vary-meta (cons f (mapcat #(if (inline-arity? %)
                                                                        (drop 1 %)
                                                                        (list (drop 1 %))) sigs))
-                                                    assoc :cljscm.analyzer/type t
-                                                    :cljscm.analyzer/fields fields
+                                                    assoc ::ana/type t
+                                                    ::ana/fields fields
                                                     :protocol-impl true
                                                     :protocol-inline inline)))
                                []
@@ -857,11 +857,11 @@
 (defn collect-protocols [impls env]
   (->> impls
       (filter symbol?)
-      (map #(:name (cljscm.analyzer/resolve-var (dissoc env :locals) %)))
+      (map #(:name (ana/resolve-var (dissoc env :locals) %)))
       (into #{})))
 
 (defmacro deftype [t fields & impls]
-  (core/let [r (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) t))
+  (core/let [r (:name (ana/resolve-var (dissoc &env :locals) t))
         [fpps pmasks] (prepare-protocol-masks &env t impls)
         protocols (collect-protocols impls &env)
         t (vary-meta t assoc
@@ -993,7 +993,7 @@
        (new ~rname ~@getters nil (dissoc ~ms ~@ks)))))
 
 (defmacro defrecord [rsym fields & impls]
-  (core/let [r (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) rsym))]
+  (core/let [r (:name (ana/resolve-var (dissoc &env :locals) rsym))]
     `(do
        ~(emit-defrecord &env rsym r fields impls)
        (set! (.-cljs$lang$ctorPrSeq ~r) (fn [this#] (list ~(core/str r))))
@@ -1013,7 +1013,7 @@
                                    ~(core/- (count sig) 2)) (rest (first methods)))))))
 
 (defmacro defprotocol [psym & doc+methods]
-  (core/let [p (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) psym))
+  (core/let [p (:name (ana/resolve-var (dissoc &env :locals) psym))
              psym (vary-meta psym assoc :protocol-symbol true)
              ns-name (-> &env :ns :name)
              fqn (core/fn [n] (symbol (str ns-name "." n)))
@@ -1040,7 +1040,7 @@
                                                                sig))
                                                  sigs))))
              known-implementing-types (clojure.core/get @protocol-hints p)
-             known-implementing-type-set (into #{} known-implementing-types) ;(:name (cljscm.analyzer/resolve-var (dissoc &env :locals) fname))
+             known-implementing-type-set (into #{} known-implementing-types) ;(:name (ana/resolve-var (dissoc &env :locals) fname))
              check-impl (core/fn [sym] (not (clojure.core/get known-implementing-type-set sym)))
              mk-prim
              , (fn [o prim-call call-form fn-vtable-name]
@@ -1101,7 +1101,7 @@
                             prim-call
                             , (into {} (map #(vector %1 (call-form %2)) prim-types prim-fnames))
                             test-sym (gensym "type")
-                            resolved-name (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) fname))
+                            resolved-name (:name (ana/resolve-var (dissoc &env :locals) fname))
 ;                            _ (println "Proto name: " p)
                             prim-dispatches ; the fat "else" clause when none of the hints apply. Careful not to extract type from prims -- skip the vtable lookup as we'll then know the type.
                             , (mk-prim o prim-call call-form fn-vtable-name)
@@ -1141,7 +1141,7 @@
 (defmacro satisfies?
   "Returns true if x satisfies the protocol"
   [psym x]
-  (core/let [p (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) psym))
+  (core/let [p (:name (ana/resolve-var (dissoc &env :locals) psym))
              prefix (protocol-prefix p)]
     `(~(symbol (namespace p) (str "satisfies?---" (name p))) ~x)
     #_`(let [tx# (type ~x)]
@@ -1190,12 +1190,12 @@
   before the vars are bound to their new values."
   [bindings & body]
   (core/let [names (take-nth 2 bindings)
-             qualnames (map #(:name (cljscm.analyzer/resolve-var (dissoc &env :locals) %)) names)
+             qualnames (map #(:name (ana/resolve-var (dissoc &env :locals) %)) names)
              vals (take-nth 2 (drop 1 bindings))
              tempnames (map (comp gensym name) names)
              binds (map vector names vals)
              resets (reverse (map vector names tempnames))]
-    (cljscm.analyzer/confirm-bindings &env names)
+    (ana/confirm-bindings &env names)
     `(~'(scm* {} parameterize)
       (~'scm* ~(apply hash-map (interleave tempnames vals)) ~(map #(list %1 %2) qualnames tempnames))
       ~@body)))
@@ -1253,7 +1253,7 @@
                                              test "'"
                                              (when (:line &env)
                                                (core/str " on line " (:line &env) " "
-                                                         cljscm.analyzer/*cljs-file*)))))
+                                                         ana/*cljs-file*)))))
                            (assoc m test expr)))
         pairs (reduce (fn [m [test expr]]
                         (cond
