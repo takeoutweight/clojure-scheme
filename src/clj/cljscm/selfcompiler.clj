@@ -14,7 +14,7 @@
             [clojure.pprint :as pp]
             [cljscm.conditional :as condc]
             [cljscm.tagged-literals :as tags] 
-            [cljscm.analyzer :as ana])
+            [cljscm.selfanalyzer :as ana])
   (:import java.lang.StringBuilder))
 (set! *warn-on-reflection* true)
                                         ;Game plan : use emits, not print.
