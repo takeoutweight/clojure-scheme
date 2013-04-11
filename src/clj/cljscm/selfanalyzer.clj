@@ -26,7 +26,7 @@
 ;; must be determined during analysis - the reader
 ;; did not know
 (def ^:dynamic *reader-ns-name* (gensym))
-(def ^:dynamic *reader-ns* :TODO) ;(create-ns *reader-ns-name*)
+(def ^:dynamic *reader-ns* (condc/platform-case :jvm (create-ns *reader-ns-name*)))
 
 (def namespaces (atom '{cljscm.core {:name cljscm.core}
                         cljscm.user {:name cljscm.user}})) ;defonce TODO
@@ -154,7 +154,7 @@
   "Is sym visible from core in the current compilation namespace?"
   [env sym]
   (and (get (:defs (@namespaces 'cljscm.core)) sym)
-       (not (contains? (-> env :ns :excludes) sym))))
+       (not (contains? (set (-> env :ns :excludes)) sym))))
 
 (defn resolve-var
   "Resolve a var. Accepts a side-effecting confirm fn for producing
@@ -227,7 +227,7 @@
 
 (declare analyze analyze-symbol analyze-seq)
 
-(def specials '#{if case def fn* do let* loop* letfn* throw try* recur new set! ns deftype* defrecord* . extend scm-str* scm* & quote})
+(def specials '#{if case def fn* do let* loop* letfn* throw try* recur new set! ns deftype* defrecord* . extend scm-str* scm* & quote in-ns require})
 
 (def ^:dynamic *recur-frames* nil)
 (def ^:dynamic *loop-lets* nil)
@@ -339,8 +339,8 @@
                     (warning env
                       (str "WARNING: " sym " already refers to: " (symbol (str (:ns ev)) (str sym))
                            " being replaced by: " (symbol (str ns-name) (str sym)))))
-                  (swap! namespaces update-in [ns-name :excludes] conj sym)
-                  (update-in env [:ns :excludes] conj sym))
+                  (swap! namespaces update-in [ns-name :excludes] (fn [c o] (conj (or c #{}) o)) sym)
+                  (update-in env [:ns :excludes] (fn [c o] (conj (or c #{}) o)) sym))
                 env)
           name (:name (resolve-var (dissoc env :locals) sym))
           init-expr (when (contains? args :init)
@@ -896,7 +896,7 @@
                                 [prot-v
                                  (map (fn [[meth-key meth-impl]]
                                         [(analyze env (symbol (namespace (:name prot-v)) (name meth-key)))
-                                         (analyze (assoc env :context :return) meth-impl)])
+                                         (analyze (assoc env :context :return) meth-impl (name meth-key))])
                                       meth-map)]))
                             prot-impl-pairs)]
     (swap! namespaces update-in [:proto-implementers] ;for fast-path dispatch compilation. proto-methname-symbol => set-of-types lookup.
@@ -1059,9 +1059,10 @@
 
 (defn find-interned-var [ns sym]
   "returns var in jvm. returns the def info in gambit."
-  (condc/platform-case
-   :jvm (.findInternedVar ^clojure.lang.Namespace ns sym)
-   :gambit (get-in @namespaces [ns :defs sym])))
+  (when ns
+    (condc/platform-case
+     :jvm (.findInternedVar ^clojure.lang.Namespace ns sym)
+     :gambit (get-in @namespaces [ns :defs sym]))))
 
 (defn is-macro [mvar]
   (condc/platform-case
@@ -1096,7 +1097,8 @@
       form
       (if-let [mac (and (symbol? op) (get-expander op env))]
         (binding [*ns* (create-ns *cljs-ns*)]
-          (apply (eval mac) form env (rest form)))
+          (apply (condc/platform-case :jvm mac
+                                      :gambit (eval mac)) form env (rest form)))
         (if (symbol? op)
           (let [opname (str op)]
             (cond
@@ -1175,7 +1177,7 @@
                                 :gambit cljscm.core/LazySeq) form)
                   (or (seq form) ())
                   form)]
-;       (load-core)
+       (load-core)
        (cond
         (symbol? form) (analyze-symbol env form)
         (and (seq? form) (seq form)) (analyze-seq env form name)
