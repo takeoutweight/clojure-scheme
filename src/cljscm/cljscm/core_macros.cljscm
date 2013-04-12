@@ -15,7 +15,7 @@
 (condc/platform-case
  :jvm (ns cljscm.core
         (:refer-clojure :exclude [-> ->> .. amap and areduce alength alias aclone assert binding bound-fn comment cond condp
-                                  declare definline definterface defmethod defmulti defn defn- defonce
+                                  declare definline definterface defmacro defmethod defmulti defn defn- defonce
                                   defprotocol defrecord defstruct deftype delay destructure doseq dosync dotimes doto
                                   extend-protocol extend-type fn for future gen-class gen-interface
                                   if-let if-not import io! lazy-cat lazy-seq let letfn locking loop
@@ -33,7 +33,7 @@
                   [cljscm.analyzer]))
  :gambit (ns cljscm.core
            (:refer-clojure :exclude [-> ->> .. amap and areduce alength alias aclone assert binding bound-fn comment cond condp
-                                     declare definline definterface defmethod defmulti defn defn- defonce
+                                     declare definline definterface defmacro defmethod defmulti defn defn- defonce
                                      defprotocol defrecord defstruct deftype delay destructure doseq dosync dotimes doto
                                      extend-protocol extend-type fn for future gen-class gen-interface
                                      if-let if-not import io! lazy-cat lazy-seq let letfn locking loop
@@ -111,16 +111,18 @@
                                (if p
                                  (recur (next p) (cons (first p) d))
                                  d))]
-               (list 'do
-                     (cons `defn decl)
-;(list '. (list 'var name) '(setMacro))
-;(list 'var name)
-                     ))))
+               (concat ['do]
+                       [(cons `defn decl)]
+                       (case condc/*target-platform*
+                         :jvm [(list '. (list 'var name) '(setMacro))
+                               (list 'var name)]
+                         :gambit :TODO)
+                       ))))
 
 (condc/platform-case
  :jvm (. (var defmacro) (setMacro)))
 
-(defmacro ->
+(core/defmacro ->
   "Threads the expr through the forms. Inserts x as the
   second item in the first form, making a list of it if it is not a
   list already. If there are more forms, inserts the first form as the
@@ -132,7 +134,7 @@
               (list form x)))
   ([x form & more] `(-> (-> ~x ~form) ~@more)))
 
-(defmacro ->>
+(core/defmacro ->>
   "Threads the expr through the forms. Inserts x as the
   last item in the first form, making a list of it if it is not a
   list already. If there are more forms, inserts the first form as the
@@ -143,7 +145,7 @@
               (list form x)))
   ([x form & more] `(->> (->> ~x ~form) ~@more)))
 
-(defmacro ..
+(core/defmacro ..
   "form => fieldName-symbol or (instanceMethodName-symbol args*)
 
   Expands into a member access (.) of the first member on the first
@@ -161,7 +163,7 @@
   ([x form] `(. ~x ~form))
   ([x form & more] `(.. (. ~x ~form) ~@more)))
 
-(defmacro and
+(core/defmacro and
   "Evaluates exprs one at a time, from left to right. If a form
   returns logical false (nil or false), and returns that value and
   doesn't evaluate any of the other expressions, otherwise it returns
@@ -173,7 +175,7 @@
    `(let [and# ~x]
       (if and# (and ~@next) and#))))
 
-(defmacro assert
+(core/defmacro assert
   "Evaluates expr and throws an exception if it does not evaluate to
   logical true."
   {:added "1.0"}
@@ -186,12 +188,12 @@
        `(when-not ~x
           (throw (new AssertionError (str "Assert failed: " ~message "\n" (pr-str '~x))))))))
 
-(defmacro comment
+(core/defmacro comment
   "Ignores body, yields nil"
   {:added "1.0"}
   [& body])
 
-(defmacro cond
+(core/defmacro cond
   "Takes a set of test/expr pairs. It evaluates each test one at a
   time.  If a test returns logical true, cond evaluates and returns
   the value of the corresponding expr and doesn't evaluate any of the
@@ -206,38 +208,13 @@
                          "cond requires an even number of forms")))
             (cons 'clojure.core/cond (next (next clauses))))))
 
-(defmacro declare
+(core/defmacro declare
   "defs the supplied var names with no bindings, useful for making forward declarations."
   {:added "1.0"}
   [& names] `(do ~@(map #(list 'def (vary-meta % assoc :declared true)) names)))
 
 (declare seq emit-extend-protocol)
-
-(def
- ^{:private true}
- sigs
- (fn [fdecl]
-   ;(assert-valid-fdecl fdecl)
-   (let [asig 
-         (fn [fdecl]
-           (let [arglist (first fdecl)
-                 ;elide implicit macro args
-                 arglist (if (clojure.lang.Util/equals '&form (first arglist)) 
-                           (clojure.lang.RT/subvec arglist 2 (clojure.lang.RT/count arglist))
-                           arglist)
-                 body (next fdecl)]
-             (if (map? (first body))
-               (if (next body)
-                 (with-meta arglist (conj (if (meta arglist) (meta arglist) {}) (first body)))
-                 arglist)
-               arglist)))]
-     (if (seq? (first fdecl))
-       (loop [ret [] fdecls fdecl]
-         (if fdecls
-           (recur (conj ret (asig (first fdecls))) (next fdecls))
-           (seq ret)))
-       (list (asig fdecl))))))
-
+(condc/platform-case :jvm (def sigs #'core/sigs))
 (def 
 
  ^{:doc "Same as (def name (fn [params* ] exprs*)) or (def
@@ -290,13 +267,16 @@
                 ;;must figure out how to convey primitive hints to self calls first
                 (cons `fn fdecl) ))))
 
-(defmacro defn-
+(condc/platform-case
+ :jvm (. (var defn) (setMacro)))
+
+(core/defmacro defn-
   "same as defn, yielding non-public def"
   {:added "1.0"}
   [name & decls]
   (list* `defn (with-meta name (assoc (meta name) :private true)) decls))
 
-(defmacro doto
+(core/defmacro doto
   "Evaluates x then calls all of the methods and functions with the
   value of x supplied at the front of the given arguments.  The forms
   are evaluated in order.  Returns x.
@@ -306,23 +286,15 @@
   [x & forms]
     (let [gx (gensym)]
       `(let [~gx ~x]
-         ~@(map (fn [f]
+         ~@(map (core/fn [f]
                   (if (seq? f)
                     `(~(first f) ~gx ~@(next f))
                     `(~f ~gx)))
                 forms)
          ~gx)))
 
-;from core_deftype.
-(declare emit-extend-protocol)
-#_(defn- emit-extend-protocol [p specs]
-  (let [impls (parse-impls specs)]
-    `(do
-       ~@(map (fn [[t fs]]
-                `(extend-type ~t ~p ~@fs))
-              impls))))
-
-(defmacro extend-protocol 
+(condc/platform-case :jvm (def emit-extend-protocol #'core/emit-extend-protocol))
+(core/defmacro extend-protocol 
   "Useful when you want to provide several implementations of the same
   protocol all at once. Takes a single protocol and the implementation
   of that protocol for one or more types. Expands into calls to
@@ -362,87 +334,9 @@
   [p & specs]
   (emit-extend-protocol p specs))
 
-(defmacro fn
-  "params => positional-params* , or positional-params* & next-param
-  positional-param => binding-form
-  next-param => binding-form
-  name => symbol
+(condc/platform-case :jvm (def reduce1 #'core/reduce1))
 
-  Defines a function"
-  {:added "1.0", :special-form true,
-   :forms '[(fn name? [params* ] exprs*) (fn name? ([params* ] exprs*)+)]}
-  [& sigs]
-    (let [name (if (symbol? (first sigs)) (first sigs) nil)
-          sigs (if name (next sigs) sigs)
-          sigs (if (vector? (first sigs)) 
-                 (list sigs) 
-                 (if (seq? (first sigs))
-                   sigs
-                   ;; Assume single arity syntax
-                   (throw (IllegalArgumentException. 
-                            (if (seq sigs)
-                              (str "Parameter declaration " 
-                                   (first sigs)
-                                   " should be a vector")
-                              (str "Parameter declaration missing"))))))
-          psig (fn* [sig]
-                 ;; Ensure correct type before destructuring sig
-                 (when (not (seq? sig))
-                   (throw (IllegalArgumentException.
-                            (str "Invalid signature " sig
-                                 " should be a list"))))
-                 (let [[params & body] sig
-                       _ (when (not (vector? params))
-                           (throw (IllegalArgumentException. 
-                                    (if (seq? (first sigs))
-                                      (str "Parameter declaration " params
-                                           " should be a vector")
-                                      (str "Invalid signature " sig
-                                           " should be a list")))))
-                       conds (when (and (next body) (map? (first body))) 
-                                           (first body))
-                       body (if conds (next body) body)
-                       conds (or conds (meta params))
-                       pre (:pre conds)
-                       post (:post conds)                       
-                       body (if post
-                              `((let [~'% ~(if (< 1 (count body)) 
-                                            `(do ~@body) 
-                                            (first body))]
-                                 ~@(map (fn* [c] `(assert ~c)) post)
-                                 ~'%))
-                              body)
-                       body (if pre
-                              (concat (map (fn* [c] `(assert ~c)) pre) 
-                                      body)
-                              body)]
-                   (maybe-destructured params body)))
-          new-sigs (map psig sigs)]
-      (with-meta
-        (if name
-          (list* 'fn* name new-sigs)
-          (cons 'fn* new-sigs))
-        (meta &form))))
-
-;(declare reduce1)
-(defn ^:private ^:static
-  reduce1
-       ([f coll]
-             (let [s (seq coll)]
-               (if s
-         (reduce1 f (first s) (next s))
-                 (f))))
-       ([f val coll]
-          (let [s (seq coll)]
-            (if s
-              (if (chunked-seq? s)
-                (recur f 
-                       (.reduce (chunk-first s) f val)
-                       (chunk-next s))
-                (recur f (f val (first s)) (next s)))
-         val))))
-
-(defmacro for
+(core/defmacro for
   "List comprehension. Takes a vector of one or more
    binding-form/collection-expr pairs, each followed by zero or more
    modifiers, and yields a lazy sequence of evaluations of expr.
@@ -457,18 +351,18 @@
   (assert-args
      (vector? seq-exprs) "a vector for its binding"
      (even? (count seq-exprs)) "an even number of forms in binding vector")
-  (let [to-groups (fn [seq-exprs]
-                    (reduce1 (fn [groups [k v]]
+  (let [to-groups (core/fn [seq-exprs]
+                    (reduce1 (core/fn [groups [k v]]
                               (if (keyword? k)
                                 (conj (pop groups) (conj (peek groups) [k v]))
                                 (conj groups [k v])))
                             [] (partition 2 seq-exprs)))
-        err (fn [& msg] (throw (IllegalArgumentException. ^String (apply str msg))))
-        emit-bind (fn emit-bind [[[bind expr & mod-pairs]
+        err (core/fn [& msg] (throw (IllegalArgumentException. ^String (apply str msg))))
+        emit-bind (core/fn emit-bind [[[bind expr & mod-pairs]
                                   & [[_ next-expr] :as next-groups]]]
                     (let [giter (gensym "iter__")
                           gxs (gensym "s__")
-                          do-mod (fn do-mod [[[k v :as pair] & etc]]
+                          do-mod (core/fn do-mod [[[k v :as pair] & etc]]
                                    (cond
                                      (= k :let) `(let ~v ~(do-mod etc))
                                      (= k :while) `(when ~v ~(do-mod etc))
@@ -494,7 +388,7 @@
                         #_"inner-most loop"
                         (let [gi (gensym "i__")
                               gb (gensym "b__")
-                              do-cmod (fn do-cmod [[[k v :as pair] & etc]]
+                              do-cmod (core/fn do-cmod [[[k v :as pair] & etc]]
                                         (cond
                                           (= k :let) `(let ~v ~(do-cmod etc))
                                           (= k :while) `(when ~v ~(do-cmod etc))
@@ -529,7 +423,7 @@
     `(let [iter# ~(emit-bind (to-groups seq-exprs))]
        (iter# ~(second seq-exprs)))))
 
-(defmacro if-let
+(core/defmacro if-let
   "bindings => binding-form test
 
   If test is true, evaluates then with binding-form bound to the value of 
@@ -549,7 +443,7 @@
             ~then)
           ~else)))))
 
-(defmacro if-not
+(core/defmacro if-not
   "Evaluates test. If logical false, evaluates and returns then expr, 
   otherwise else expr, if supplied, else nil."
   {:added "1.0"}
@@ -557,7 +451,7 @@
   ([test then else]
      `(if (not ~test) ~then ~else)))
 
-(defmacro letfn 
+(core/defmacro letfn 
   "fnspec ==> (fname [params*] exprs) or (fname ([params*] exprs)+)
 
   Takes a vector of function specs and a body, and generates a set of
@@ -570,7 +464,7 @@
                              (map #(cons `fn %) fnspecs)))
            ~@body))
 
-(defmacro memfn
+(core/defmacro memfn
   "Expands into code that creates a fn that expects to be passed an
   object and any args and calls the named instance method on the
   object passing the args. Use when you want to treat a Java method as
@@ -583,7 +477,7 @@
     `(fn [~t ~@args]
        (. ~t (~name ~@args)))))
 
-(defmacro or
+(core/defmacro or
   "Evaluates exprs one at a time, from left to right. If a form
   returns a logical true value, or returns that value and doesn't
   evaluate any of the other expressions, otherwise it returns the
@@ -595,13 +489,13 @@
       `(let [or# ~x]
          (if or# or# (or ~@next)))))
 
-(defmacro when
+(core/defmacro when
   "Evaluates test. If logical true, evaluates body in an implicit do."
   {:added "1.0"}
   [test & body]
   (list 'if test (cons 'do body)))
 
-(defmacro when-first
+(core/defmacro when-first
   "bindings => x xs
 
   Roughly the same as (when (seq xs) (let [x (first xs)] body)) but xs is evaluated only once"
@@ -615,7 +509,7 @@
        (let [~x (first xs#)]
          ~@body))))
 
-(defmacro when-let
+(core/defmacro when-let
   "bindings => binding-form test
 
   When test is true, evaluates body with binding-form bound to the value of test"
@@ -630,13 +524,13 @@
          (let [~form temp#]
            ~@body)))))
 
-(defmacro when-not
+(core/defmacro when-not
   "Evaluates test. If logical false, evaluates body in an implicit do."
   {:added "1.0"}
   [test & body]
   (list 'if test nil (cons 'do body)))
 
-(defmacro while
+(core/defmacro while
   "Repeatedly executes body while test expression is true. Presumes
   some side-effect will cause test to become false/nil. Returns nil"
   {:added "1.0"}
@@ -647,14 +541,14 @@
        (recur))))
 
 (def protocol-hints (atom {}))
-(defmacro add-protocol-hints!
+(core/defmacro add-protocol-hints!
   "given a map of fast-path hints for macro-expansion of protocol functions. Expands to nothing."
   [hints]
   (swap! protocol-hints (constantly {})) ;TODO don't obliterate hints on every new file?
-  (swap! protocol-hints (fn [ph] (merge-with (fn [o n] (conj (or o []) n)) ph hints)))
+  (swap! protocol-hints (core/fn [ph] (merge-with (core/fn [o n] (conj (or o []) n)) ph hints)))
   nil
-  #_(core/let [forward-types (reduce (fn [a [k v]] (into a v)) #{} hints)] ;generate forward defs for typechecks
-      `(do ~@(map (fn [ft] `(def ~(symbol (str (name ft) "?")))) forward-types))))
+  #_(core/let [forward-types (reduce (core/fn [a [k v]] (into a v)) #{} hints)] ;generate forward defs for typechecks
+      `(do ~@(map (core/fn [ft] `(def ~(symbol (str (name ft) "?")))) forward-types))))
 
 (def compare-arglist
   (comparator
@@ -665,16 +559,16 @@
          true
          (core/< (count arglist-a) (count arglist-b)))))))
 
-(defmacro js* [& forms])
-(defmacro scm-str* [& forms])
-(defmacro scm* [& forms] (cons 'scm* forms))
+(core/defmacro js* [& forms])
+(core/defmacro scm-str* [& forms])
+(core/defmacro scm* [& forms] (cons 'scm* forms))
 
-(defmacro scm-boolean*
+(core/defmacro scm-boolean*
   "easy way to get unchecked scheme tests. Metadata is stored on the scm* symbol."
   [& forms]
   `(~(with-meta 'scm* {:tag 'boolean}) ~@forms))
 
-(defn
+(core/defn
   maybe-destructured
   [params body]
   (if (every? symbol? params)
@@ -692,7 +586,7 @@
           (let ~lets
             ~@body))))))
 
-(defmacro ^{:private true} assert-args [fnname & pairs]
+(core/defmacro ^{:private true} assert-args [fnname & pairs]
   `(do (when-not ~(first pairs)
          (throw (IllegalArgumentException.
                   ~(core/str fnname " requires " (second pairs)))))
@@ -700,11 +594,11 @@
         (when more
           (list* `assert-args fnname more)))))
 
-(defn destructure [bindings]
+(core/defn destructure [bindings]
   (core/let [bents (partition 2 bindings)
-         pb (fn pb [bvec b v]
+         pb (core/fn pb [bvec b v]
               (core/let [pvec
-                     (fn [bvec b val]
+                     (core/fn [bvec b val]
                        (core/let [gvec (gensym "vec__")]
                          (core/loop [ret (-> bvec (conj gvec) (conj val))
                                      n 0
@@ -726,17 +620,17 @@
                                                 seen-rest?))))
                              ret))))
                      pmap
-                     (fn [bvec b v]
+                     (core/fn [bvec b v]
                        (core/let [gmap (gensym "map__")
                                   defaults (:or b)]
                          (core/loop [ret (-> bvec (conj gmap) (conj v)
                                              (conj gmap) (conj `(if (core/seq? ~gmap) (apply hash-map ~gmap) ~gmap))
-                                             ((fn [ret]
+                                             ((core/fn [ret]
                                                 (if (:as b)
                                                   (conj ret (:as b) gmap)
                                                   ret))))
                                      bes (reduce
-                                          (fn [bes entry]
+                                          (core/fn [bes entry]
                                             (reduce #(assoc %1 %2 ((val entry) %2))
                                                     (dissoc bes (key entry))
                                                     ((key entry) bes)))
@@ -756,12 +650,12 @@
                       (vector? b) (pvec bvec b v)
                       (map? b) (pmap bvec b v)
                       :else (throw (new Exception (core/str "Unsupported binding form: " b))))))
-         process-entry (fn [bvec b] (pb bvec (first b) (second b)))]
+         process-entry (core/fn [bvec b] (pb bvec (first b) (second b)))]
         (if (every? symbol? (map first bents))
           bindings
           (reduce process-entry [] bents))))
 
-(defmacro let
+(core/defmacro let
   "binding => binding-form init-expr
 
   Evaluates the exprs in a lexical context in which the symbols in
@@ -773,7 +667,7 @@
      (even? (count bindings)) "an even number of forms in binding vector")
   `(let* ~(destructure bindings) ~@body))
 
-(defmacro loop
+(core/defmacro loop
   "Evaluates the exprs in a lexical context in which the symbols in
   the binding-forms are bound to their respective init-exprs or parts
   therein. Acts as a recur target."
@@ -786,8 +680,8 @@
         `(loop* ~bindings ~@body)
         (core/let [vs (take-nth 2 (drop 1 bindings))
               bs (take-nth 2 bindings)
-              gs (map (fn [b] (if (symbol? b) b (gensym))) bs)
-              bfs (reduce (fn [ret [b v g]]
+              gs (map (core/fn [b] (if (symbol? b) b (gensym))) bs)
+              bfs (reduce (core/fn [ret [b v g]]
                             (if (symbol? b)
                               (conj ret g v)
                               (conj ret g v b g)))
@@ -807,7 +701,7 @@
                  IPrintWithWriter IPending IWatchable IEditableCollection ITransientCollection
                  ITransientAssociative ITransientMap ITransientVector ITransientSet
                  IMultiFn IChunkedSeq IChunkedNext IComparable])
-          (iterate (fn [[p b]]
+          (iterate (core/fn [[p b]]
                      (if (core/== 2147483648 b)
                        [(core/inc p) 1]
                        [p (core/bit-shift-left b 1)]))
@@ -821,54 +715,54 @@
       (core/quot c 32)
       (core/inc (core/quot c 32)))))
 
-(defn bool-expr [e]
+(core/defn bool-expr [e]
   (vary-meta e assoc :tag 'boolean))
 
-(defmacro nil? [x]
+(core/defmacro nil? [x]
   (bool-expr `(identical? ~x nil)))
 
 ;; internal - do not use.
-(defmacro coercive-not [x]
+(core/defmacro coercive-not [x]
    (bool-expr `(scm-boolean* {:x ~x}
                      ~'(not :x))))
 
 ;; internal - do not use.
-(defmacro coercive-not= [x y]
+(core/defmacro coercive-not= [x y]
   (bool-expr `(scm* {:x ~x :y ~y}
                     ~'(not (eqv? :x :y)))))
 
 ;; internal - do not use.
-(defmacro coercive-= [x y]
+(core/defmacro coercive-= [x y]
   (bool-expr `(scm* {:x ~x :y ~y}
                     ~'(equal? :x :y))))
 
-(defmacro true? [x]
+(core/defmacro true? [x]
   (bool-expr `(identical? ~x true)))
 
-(defmacro false? [x]
+(core/defmacro false? [x]
   (bool-expr `(identical? ~x false)))
 
-(defmacro undefined? [x]
+(core/defmacro undefined? [x]
   `(nil? ~x))
   
-(defmacro identical? [a b]
+(core/defmacro identical? [a b]
   `(scm-boolean* {:a ~a :b ~b}
          ~'(eq? :a :b)))
 
-(defn scm-number? [x] `(scm-boolean* {:x ~x} ~'(number? :x)))
-(defn scm-pair? [x] `(scm-boolean* {:x ~x} ~'(pair? :x)))
-(defn scm-boolean? [x] `(scm-boolean* {:x ~x} ~'(boolean? :x)))
-(defn scm-nil? [x] (with-meta `(identical? nil ~x) {:tag :boolean}))
-(defn scm-null? [x] `(identical? () ~x))
-(defn scm-char? [x] `(scm-boolean* {:x ~x} ~'(char? :x)))
-(defn scm-vector? [x] `(scm-boolean* {:x ~x} ~'(vector? :x)))
-(defn scm-symbol? [x] `(scm-boolean* {:x ~x} ~'(symbol? :x)))
-(defn scm-keyword? [x] `(scm-boolean* {:x ~x} ~'(keyword? :x)))
-(defn scm-procedure? [x] `(scm-boolean* {:x ~x} ~'(procedure? :x)))
-(defn scm-string? [x] `(scm-boolean* {:x ~x} ~'(string? :x)))
-(defn scm-table? [x] `(scm-boolean* {:x ~x} ~'(table? :x)))
+(core/defn scm-number? [x] `(scm-boolean* {:x ~x} ~'(number? :x)))
+(core/defn scm-pair? [x] `(scm-boolean* {:x ~x} ~'(pair? :x)))
+(core/defn scm-boolean? [x] `(scm-boolean* {:x ~x} ~'(boolean? :x)))
+(core/defn scm-nil? [x] (with-meta `(identical? nil ~x) {:tag :boolean}))
+(core/defn scm-null? [x] `(identical? () ~x))
+(core/defn scm-char? [x] `(scm-boolean* {:x ~x} ~'(char? :x)))
+(core/defn scm-vector? [x] `(scm-boolean* {:x ~x} ~'(vector? :x)))
+(core/defn scm-symbol? [x] `(scm-boolean* {:x ~x} ~'(symbol? :x)))
+(core/defn scm-keyword? [x] `(scm-boolean* {:x ~x} ~'(keyword? :x)))
+(core/defn scm-procedure? [x] `(scm-boolean* {:x ~x} ~'(procedure? :x)))
+(core/defn scm-string? [x] `(scm-boolean* {:x ~x} ~'(string? :x)))
+(core/defn scm-table? [x] `(scm-boolean* {:x ~x} ~'(table? :x)))
 
-(defn scm-instance?*
+(core/defn scm-instance?*
   "aware of builtin scheme primitive type tests. lookup with namespace-qualified
   type symbols only."
   [type-sym o]
@@ -885,30 +779,30 @@
                       'cljscm.core/String scm-string?
                       'cljscm.core/Table scm-table?}
                      type-sym
-                     (fn [o] `(scm-boolean* {:o ~o} (~(symbol (str type-sym "?")) :o))))
+                     (core/fn [o] `(scm-boolean* {:o ~o} (~(symbol (str type-sym "?")) :o))))
    o))
 
-(defmacro scm-instance?
+(core/defmacro scm-instance?
   "giveen the resolved symbol of the type, generates a fast type check."
   [type-sym o]
   (scm-instance?* type-sym o))
 
-(defmacro scm-length [lst]
+(core/defmacro scm-length [lst]
   `(scm* {:lst ~lst} ~'(length :lst)))
 
-(defmacro scm-nillify [lst]
+(core/defmacro scm-nillify [lst]
   `(scm* {:lst ~lst :nil ~nil} ~'(if (null? :lst) :nil :lst)))
 
-(defn make-car [lst cnt]
+(core/defn make-car [lst cnt]
   (if (core/<= cnt 3) (core/list (core/symbol (core/str "ca" (apply str (repeat cnt "d")) "r")) lst)
       (core/list 'list-ref lst cnt)))
 
-(defn make-cdr [lst cnt]
+(core/defn make-cdr [lst cnt]
   (if (core/= cnt 0) lst
       (if (core/<= cnt 4) (core/list (core/symbol (core/str "c" (apply str (repeat cnt "d")) "r")) lst)
           (make-cdr (make-cdr lst 4) (core/- cnt 4)))))
 
-(defn- combine-arities
+(core/defn- combine-arities
   [methods]
   (let [[smallest-meth & other-meths :as meths] (sort-by first compare-arglist methods)
         middle-meths (butlast other-meths)
@@ -916,7 +810,7 @@
         num-shared (count (first smallest-meth))
         restparam (gensym "rest")
         find-inits
-        , (fn [meth]
+        , (core/fn [meth]
             (let [args (first meth)
                   variadic? (some #{'&} args)
                   shared-args (take num-shared args)
@@ -926,7 +820,7 @@
                   variadic-arg (when variadic? (last args))
                   inits (concat
                          (map vector shared-args (first smallest-meth))
-                         (map-indexed (fn [i a] [a `(~'scm* [~restparam] ~(make-car restparam i))])
+                         (map-indexed (core/fn [i a] [a `(~'scm* [~restparam] ~(make-car restparam i))])
                                       fixed-args)
                          (when variadic? [[variadic-arg
                                              `(scm-nillify (~'scm* [~restparam] ~(make-cdr restparam (core/count fixed-args))))]]))]
@@ -940,7 +834,7 @@
      :combined-argform (vec (concat (first smallest-meth) ['& restparam]))}))
 
 ;-- compiles variadic methods into a case dispatch.
-(defmacro fn
+(core/defmacro fn
   "params => positional-params* , or positional-params* & next-param
   positional-param => binding-form
   next-param => binding-form
@@ -953,6 +847,7 @@
   (core/let [name (if (symbol? (first sigs)) (first sigs) nil)
              sigs (if name (next sigs) sigs)
              sigs (if (vector? (first sigs)) (list sigs) sigs)
+             _ (when (core/> (count sigs) 1) (throw (Exception. "multi-arity not erased.")))
              psig (fn* [sig]
                        (core/let [[params & body] sig
                                   conds (when (and (next body) (map? (first body))) 
@@ -1007,122 +902,122 @@
       (assoc (meta &form)
         :single-arity single-arity?))))
 
-(defmacro aget
+(core/defmacro aget
   ([a i]
      `(scm* {::a ~a ::i ~i}
             ~'(vector-ref ::a ::i)))
   ([a i & idxs]
      `(aget (aget ~a ~i) ~@idxs)))
 
-(defmacro aset [a i v]
+(core/defmacro aset [a i v]
   `(let [ra# ~a]
      (scm* {::ra ra# ::i ~i ::v ~v}
            ~'(vector-set! ::ra ::i ::v))
      ~v))
 
-(defmacro + [& more] `(~'(scm* [] +) ~@more))
-(defmacro - [& more] `(~'(scm* [] -) ~@more))
-(defmacro * [& more] `(~'(scm* [] *) ~@more))
-(defmacro / [& more] `(~'(scm* [] /) ~@more))
+(core/defmacro + [& more] `(~'(scm* [] +) ~@more))
+(core/defmacro - [& more] `(~'(scm* [] -) ~@more))
+(core/defmacro * [& more] `(~'(scm* [] *) ~@more))
+(core/defmacro / [& more] `(~'(scm* [] /) ~@more))
 
-(defmacro <  [& more] (bool-expr `(~'(scm* [] < ) ~@more)))
-(defmacro <= [& more] (bool-expr `(~'(scm* [] <=) ~@more)))
-(defmacro >  [& more] (bool-expr `(~'(scm* [] > ) ~@more)))
-(defmacro >= [& more] (bool-expr `(~'(scm* [] >=) ~@more)))
-(defmacro == [& more] (bool-expr `(~'(scm* [] = ) ~@more)))
+(core/defmacro <  [& more] (bool-expr `(~'(scm* [] < ) ~@more)))
+(core/defmacro <= [& more] (bool-expr `(~'(scm* [] <=) ~@more)))
+(core/defmacro >  [& more] (bool-expr `(~'(scm* [] > ) ~@more)))
+(core/defmacro >= [& more] (bool-expr `(~'(scm* [] >=) ~@more)))
+(core/defmacro == [& more] (bool-expr `(~'(scm* [] = ) ~@more)))
 
-(defmacro dec [x]
+(core/defmacro dec [x]
   `(- ~x 1))
 
-(defmacro inc [x]
+(core/defmacro inc [x]
   `(+ ~x 1))
 
-(defmacro zero? [x]
+(core/defmacro zero? [x]
   `(== ~x 0))
 
-(defmacro pos? [x]
+(core/defmacro pos? [x]
   `(scm-boolean* {::x ~x} ~'(positive? ::x)))
 
-(defmacro neg? [x]
+(core/defmacro neg? [x]
   `(scm-boolean* {::x ~x} ~'(negative? ::x)))
 
-(defmacro max
+(core/defmacro max
   ([& more] `(scm* ~more ~(cons 'max more))))
 
-(defmacro min
+(core/defmacro min
   ([& more] `(scm* ~more ~(cons 'min more))))
 
-(defmacro mod [num div]
+(core/defmacro mod [num div]
   `(scm* {::num ~num ::div ~div} ~'(if (or (flonum? ::num) (flonum? ::div))
                                    (- ::num (* :div (fltruncate (/ ::num ::div))))
                                    (modulo ::num ::div))))
 
-(defmacro quot [num div]
+(core/defmacro quot [num div]
   `(scm* {::num ~num ::div ~div} ~'(if (or (flonum? ::num) (flonum? ::div))
                                    (- ::num (* :div (fltruncate (/ ::num ::div))))
                                    (quotient ::num ::div))))
 
-(defmacro rem [num div]
+(core/defmacro rem [num div]
   `(scm* {::num ~num ::div ~div} ~'(if (or (flonum? ::num) (flonum? ::div))
                                    (- ::num (* ::div (fltruncate (/ ::num ::div))))
                                    (remainder ::num ::div))))
 
-(defmacro bit-count [x]
+(core/defmacro bit-count [x]
   `(scm* {::x ~x} ~'(bit-count ::x)))
 
-(defmacro bit-not [x]
+(core/defmacro bit-not [x]
   `(scm* {::x ~x} ~'(bitwise-not ::x)))
 
-(defmacro bit-and
+(core/defmacro bit-and
   ([& more] `(scm* ~more ~(cons 'bitwise-and more))))
 
 ;; internal do not use
-(defmacro unsafe-bit-and
+(core/defmacro unsafe-bit-and
   ([x y] (bool-expr (list 'js* "(~{} & ~{})" x y)))
   ([x y & more] `(unsafe-bit-and (unsafe-bit-and ~x ~y) ~@more)))
 
-(defmacro bit-or
+(core/defmacro bit-or
   ([& more] `(scm* ~more ~(cons 'bitwise-ior more))))
 
-(defmacro bit-xor
+(core/defmacro bit-xor
   ([& more] `(scm* ~more ~(cons 'bitwise-xor more))))
 
-(defmacro bit-and-not
+(core/defmacro bit-and-not
   [x y]
   `(bit-and ~x (bit-not ~y)))
 
-#_(defmacro bit-clear [x n]
+#_(core/defmacro bit-clear [x n]
   (list 'js* "(~{} & ~(1 << ~{}))" x n))
 
-#_(defmacro bit-flip [x n]
+#_(core/defmacro bit-flip [x n]
   (list 'js* "(~{} ^ (1 << ~{}))" x n))
 
-#_(defmacro bit-test [x n]
+#_(core/defmacro bit-test [x n]
   (list 'js* "((~{} & (1 << ~{})) != 0)" x n))
 
 ;force 32 bit
-(defmacro bit-shift-left [x n]
+(core/defmacro bit-shift-left [x n]
   `(scm* {::x ~x ::n ~n} ~'(bitwise-and (arithmetic-shift ::x ::n) 4294967295)))
 
-(defmacro bit-shift-right [x n]
+(core/defmacro bit-shift-right [x n]
   `(scm* {::x ~x ::n ~n} ~'(arithmetic-shift ::x (* -1 ::n))))
 
-#_(defmacro bit-set [x n]
+#_(core/defmacro bit-set [x n]
     (list 'js* "(~{} | (1 << ~{}))" x n))
 
-(defmacro bit-shift-right-zero-fill [x n]
+(core/defmacro bit-shift-right-zero-fill [x n]
    `(scm* {::x ~x ::n ~n} ~'(arithmetic-shift (bitwise-and ::x 4294967295) (* -1 ::n))))
 
 ;; internal
-(defmacro mask [hash shift]
+(core/defmacro mask [hash shift]
   `(scm* {::r (bit-shift-right-zero-fill ~hash ~shift)} ~'(bitwise-and ::r 31)))
 
 
-(defmacro bitpos [hash shift]
+(core/defmacro bitpos [hash shift]
   `(bit-shift-left 1 (mask ~hash ~shift)))
 
 ;; internal
-(defmacro caching-hash [coll hash-fn hash-key]
+(core/defmacro caching-hash [coll hash-fn hash-key]
   `(let [h# ~hash-key]
      (if-not (nil? h#)
        h#
@@ -1130,7 +1025,7 @@
          (set! ~hash-key h#)
          h#))))
 
-#_(defmacro get
+#_(core/defmacro get
   ([coll k]
      `(-lookup ~coll ~k nil))
   ([coll k not-found]
@@ -1138,21 +1033,21 @@
 
 ;;; internal -- reducers-related macros
 
-(defn- do-curried
+(core/defn- do-curried
   [name doc meta args body]
   (core/let [cargs (vec (butlast args))]
     `(defn ~name ~doc ~meta
-       (~cargs (fn [x#] (~name ~@cargs x#)))
+       (~cargs (core/fn [x#] (~name ~@cargs x#)))
        (~args ~@body))))
 
-(defmacro ^:private defcurried
+(core/defmacro ^:private defcurried
   "Builds another arity of the fn that returns a fn awaiting the last
   param"
   [name doc meta args & body]
   (do-curried name doc meta args body))
 
-(defn- do-rfn [f1 k fkv]
-  `(fn
+(core/defn- do-rfn [f1 k fkv]
+  `(core/fn
      ([] (~f1))
      ~(clojure.walk/postwalk
        #(if (sequential? %)
@@ -1162,14 +1057,14 @@
        fkv)
      ~fkv))
 
-(defmacro ^:private rfn
+(core/defmacro ^:private rfn
   "Builds 3-arity reducing fn given names of wrapped fn and key, and k/v impl."
   [[f1 k] fkv]
   (do-rfn f1 k fkv))
 
 ;;; end of reducers macros
 
-(defn protocol-prefix [psym]
+(core/defn protocol-prefix [psym]
   (core/str (apply str (->> (core/str psym)
                             (map #(get {\. \$} % %))
                             (map #(get {\/ \$} % %))))
@@ -1185,7 +1080,7 @@
       'boolean "boolean"
       'default "_"})
 
-(defmacro reify [& impls]
+(core/defmacro reify [& impls]
   (core/let [t      (gensym "t")
         meta-sym (gensym "meta")
         this-sym (gensym "_")
@@ -1204,23 +1099,23 @@
            ~@impls))
        (new ~t ~@locals nil))))
 
-#_(defmacro this-as
+#_(core/defmacro this-as
   "Defines a scope where JavaScript's implicit \"this\" is bound to the name provided."
   [name & body]
   `(let [~name (~'js* "this")]
      ~@body))
 
-#_(defn to-property [sym]
+#_(core/defn to-property [sym]
   (symbol (core/str "-" sym)))
 
-(defn gather-polysigs
+(core/defn gather-polysigs
   "[[x y][x y z]] -> [x y & rst]"
   [sigs]
   (core/let [smallest-sig (first (sort-by count sigs))]
     (vec (concat smallest-sig
             (if (clojure.core/> (count sigs) 1) ['& 'rst] [])))))
 
-(defn- parse-impls [specs]
+(core/defn- parse-impls [specs]
   (core/loop [ret {} s specs]
     (if (core/seq s)
       (recur (assoc ret (first s) (take-while seq? (next s)))
@@ -1228,7 +1123,7 @@
       ret)))
 
 ;It seems this clobbers multi-variadic protocol methods?
-(defn- emit-hinted-impl [c [p fs]]
+(core/defn- emit-hinted-impl [c [p fs]]
   (core/let [hint (core/fn [specs]
                (core/let [specs (if (vector? (first specs)) 
                              (list specs) 
@@ -1245,12 +1140,12 @@
      #_(zipmap (map #(-> % first name keyword) fs)
                (map #(cons 'fn (hint (drop 1 %))) fs))]))
 
-(defn- emit-extend-type [c specs]
+(core/defn- emit-extend-type [c specs]
   (core/let [impls (parse-impls specs)]
     (apply list 'extend c
                         (mapcat (partial emit-hinted-impl c) impls))))
 
-(defmacro extend-type 
+(core/defmacro extend-type 
   "A macro that expands into an extend call. Useful when you are
   supplying the definitions explicitly inline, extend-type
   automatically creates the maps required by extend.  Propagates the
@@ -1275,7 +1170,7 @@
   [t & specs]
   (emit-extend-type t specs))
 
-#_(defmacro extend-type [tsym & impls]
+#_(core/defmacro extend-type [tsym & impls]
   (core/let [resolve #(core/let [ret (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) %))]
                    (assert ret (core/str "Can't resolve: " %))
                    ret)
@@ -1301,35 +1196,35 @@
         skip-flag (set (-> tsym meta :skip-protocol-flag))]
     (if (base-type tsym)
       (core/let [t (base-type tsym)
-                        assign-impls (fn [[p sigs]]
+                        assign-impls (core/fn [[p sigs]]
                            (warn-if-not-protocol p)
                            (core/let [psym (resolve p)
                                  pfn-prefix (subs (core/str psym) 0 (clojure.core/inc (.indexOf (core/str psym) "/")))]
                              (cons `(aset ~psym ~t true)
-                                   (map (fn [[f & meths :as form]]
+                                   (map (core/fn [[f & meths :as form]]
                                           `(aset ~(symbol (core/str pfn-prefix f)) ~t ~(with-meta `(fn ~@meths) (meta form))))
                                         sigs))))]
         `(do ~@(mapcat assign-impls impl-map)))
       (core/let [t (resolve tsym)
-            prototype-prefix (fn [sym]
+            prototype-prefix (core/fn [sym]
                                `(.. ~tsym -prototype ~(to-property sym)))
-            assign-impls (fn [[p sigs]]
+            assign-impls (core/fn [[p sigs]]
                            (warn-if-not-protocol p)
                            (core/let [psym (resolve p)
                                  pprefix (protocol-prefix psym)]
                              (if (= p 'Object)
-                               (core/let [adapt-params (fn [[sig & body]]
+                               (core/let [adapt-params (core/fn [[sig & body]]
                                                     (core/let [[tname & args] sig]
                                                       (list (vec args) (list* 'this-as (vary-meta tname assoc :tag t) body))))]
-                                 (map (fn [[f & meths :as form]]
+                                 (map (core/fn [[f & meths :as form]]
                                         `(set! ~(prototype-prefix f)
                                                ~(with-meta `(fn ~@(map adapt-params meths)) (meta form))))
                                       sigs))
                                (concat (when-not (skip-flag psym)
                                          [`(set! ~(prototype-prefix pprefix) true)])
-                                       (mapcat (fn [[f & meths :as form]]
+                                       (mapcat (core/fn [[f & meths :as form]]
                                                  (if (= psym 'cljscm.core/IFn)
-                                                   (core/let [adapt-params (fn [[[targ & args :as sig] & body]]
+                                                   (core/let [adapt-params (core/fn [[[targ & args :as sig] & body]]
                                                                         (core/let [this-sym (with-meta 'self__ {:tag t})]
                                                                           `(~(vec (cons this-sym args))
                                                                             (this-as ~this-sym
@@ -1346,19 +1241,19 @@
                                                                            (.concat (array ~this-sym) (aclone ~argsym))))
                                                                 (meta form)))])
                                                    (core/let [pf (core/str pprefix f)
-                                                         adapt-params (fn [[[targ & args :as sig] & body]]
+                                                         adapt-params (core/fn [[[targ & args :as sig] & body]]
                                                                         (cons (vec (cons (vary-meta targ assoc :tag t) args))
                                                                               body))]
                                                      (if (vector? (first meths))
                                                        [`(set! ~(prototype-prefix (core/str pf "$arity$" (count (first meths)))) ~(with-meta `(fn ~@(adapt-params meths)) (meta form)))]
-                                                       (map (fn [[sig & body :as meth]]
+                                                       (map (core/fn [[sig & body :as meth]]
                                                               `(set! ~(prototype-prefix (core/str pf "$arity$" (count sig)))
                                                                      ~(with-meta `(fn ~(adapt-params meth)) (meta form))))
                                                             meths)))))
                                                sigs)))))]
         `(do ~@(mapcat assign-impls impl-map))))))
 
-(defn- prepare-protocol-masks [env t impls]
+(core/defn- prepare-protocol-masks [env t impls]
   (core/let [resolve #(core/let [ret (:name (cljscm.analyzer/resolve-var (dissoc env :locals) %))]
                    (assert ret (core/str "Can't resolve: " %))
                    ret)
@@ -1384,10 +1279,10 @@
                  fpp-partitions
                  (range fast-path-protocol-partitions-count))]))))
 
-(defn dt->et
+(core/defn dt->et
   ([t specs fields] (dt->et t specs fields false))
   ([t specs fields inline]
-     (letfn [(inline-arity? [sig] (not (vector? (second sig))))]
+     (core/letfn [(inline-arity? [sig] (not (vector? (second sig))))]
        (core/loop [ret [] s specs]
          (if (core/seq s)
            (recur (-> ret
@@ -1406,13 +1301,13 @@
                   (drop-while seq? (next s)))
            ret)))))
 
-(defn collect-protocols [impls env]
+(core/defn collect-protocols [impls env]
   (->> impls
       (filter symbol?)
       (map #(:name (cljscm.analyzer/resolve-var (dissoc env :locals) %)))
       (into #{})))
 
-(defmacro deftype [t fields & impls]
+(core/defmacro deftype [t fields & impls]
   (core/let [r (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) t))
         [fpps pmasks] (prepare-protocol-masks &env t impls)
         protocols (collect-protocols impls &env)
@@ -1434,7 +1329,7 @@
 ;         (set! (.-cljs$lang$ctorPrWriter ~t) (core/fn [this# writer# opts#] (-write writer# ~(core/str r))))
          ~t))))
 
-(defn- emit-defrecord
+(core/defn- emit-defrecord
   "Do not use this directly - use defrecord"
   [env tagname rname fields impls]
   (core/let [hinted-fields fields
@@ -1499,7 +1394,7 @@
                   
                   'IPrintWithWriter
                   `(~'-pr-writer [gthis writer# opts#]
-                                 (let [pr-pair# (fn [keyval#] (pr-sequential-writer writer# pr-writer "" " " "" opts# keyval#))]
+                                 (let [pr-pair# (core/fn [keyval#] (pr-sequential-writer writer# pr-writer "" " " "" opts# keyval#))]
                                    (pr-sequential-writer
                                     writer# pr-pair# (core/str "#" ~(name rname) "{") ", " "}" opts#
                                     (concat [~@(map #(list `vector (keyword %) (accessorize gthis %)) base-fields)]
@@ -1527,14 +1422,14 @@
          (~'scm* {::tagname ~tagname} (~'table-set! ~'cljscm.core/protocol-impls ::tagname ~'(make-table)))
          (extend-type ~tagname ~@(dt->et tagname impls fields true))))))
 
-(defn- build-positional-factory
+(core/defn- build-positional-factory
   [rsym rname fields]
   (core/let [fn-name (symbol (core/str '-> rsym))]
     `(defn ~fn-name
        [~@fields]
        (new ~rname ~@fields))))
 
-(defn- build-map-factory
+(core/defn- build-map-factory
   [rsym rname fields]
   (core/let [fn-name (symbol (core/str 'map-> rsym))
 	ms (gensym)
@@ -1544,17 +1439,17 @@
        [~ms]
        (new ~rname ~@getters nil (dissoc ~ms ~@ks)))))
 
-(defmacro defrecord [rsym fields & impls]
+(core/defmacro defrecord [rsym fields & impls]
   (core/let [r (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) rsym))]
     `(do
        ~(emit-defrecord &env rsym r fields impls)
-       (set! (.-cljs$lang$ctorPrSeq ~r) (fn [this#] (list ~(core/str r))))
-       (set! (.-cljs$lang$ctorPrWriter ~r) (fn [this# writer#] (-write writer# ~(core/str r))))
+       (set! (.-cljs$lang$ctorPrSeq ~r) (core/fn [this#] (list ~(core/str r))))
+       (set! (.-cljs$lang$ctorPrWriter ~r) (core/fn [this# writer#] (-write writer# ~(core/str r))))
        ~(build-positional-factory rsym r fields)
        ~(build-map-factory rsym r fields)
        ~r)))
 
-(defn gather-defns
+(core/defn gather-defns
   "([x] ..) ([x y] ..) -> ([x & rest] case-on-arg-count...)"
   [methods]
   (if (= 1 (count methods))
@@ -1564,7 +1459,7 @@
          (case (clojure.core/count ~(last sig)
                                    ~(core/- (count sig) 2)) (rest (first methods)))))))
 
-(defmacro defprotocol [psym & doc+methods]
+(core/defmacro defprotocol [psym & doc+methods]
   (core/let [p (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) psym))
              psym (vary-meta psym assoc :protocol-symbol true)
              ns-name (-> &env :ns :name)
@@ -1582,11 +1477,11 @@
                                   (throw (missing-protocol
                                           ~(core/str psym "." fname) ~(first sig))))
                                  ~@sig)))))
-             #_method #_(fn [[fname & sigs]]
+             #_method #_(core/fn [[fname & sigs]]
                           (core/let [sigs (take-while vector? sigs)
                                      slot (symbol (core/str prefix (name fname)))
                                      fname (vary-meta fname assoc :protocol p)]
-                            `(defn ~fname ~@(map (fn [sig]
+                            `(defn ~fname ~@(map (core/fn [sig]
                                                    (expand-sig fname
                                                                (symbol (core/str slot "$arity$" (count sig)))
                                                                sig))
@@ -1595,7 +1490,7 @@
              known-implementing-type-set (into #{} known-implementing-types) ;(:name (cljscm.analyzer/resolve-var (dissoc &env :locals) fname))
              check-impl (core/fn [sym] (not (clojure.core/get known-implementing-type-set sym)))
              mk-prim
-             , (fn [o prim-call call-form fn-vtable-name]
+             , (core/fn [o prim-call call-form fn-vtable-name]
                  `(~'case (cljscm.core/scm-type-idx (scm* {} ~o))
                     ~@(when (check-impl 'cljscm.core/Number) `[0 ~(prim-call :Number)]) ;Fixnum
                     ~@(when (check-impl 'cljscm.core/Pair) `[3 ~(prim-call :Pair)])
@@ -1620,7 +1515,7 @@
              sat-o 'o
              fast-satisfies `(cond ~@(mapcat (core/fn [t] [(scm-instance?* t `(scm* {} ~sat-o)) true])
                                              known-implementing-types)
-                                   true ~(mk-prim sat-o (fn [_] false) (fn [_] false) nil)); FIXME Need table lookup last-resort if unknown, here we just false if not hinted.
+                                   true ~(mk-prim sat-o (core/fn [_] false) (core/fn [_] false) nil)); FIXME Need table lookup last-resort if unknown, here we just false if not hinted.
              method
              , (core/fn
                  [[fname & sigs]]
@@ -1663,16 +1558,16 @@
                                                  [`(identical? ~ty ~test-sym),
                                                   (if variadic?
                                                     (concat [`apply sp-fn `(scm* {} ~o)] ;capture locals that will be introduced in scheme.
-                                                            (map (fn [s] `(scm* {} ~s)) (remove #{'&} rst)))
+                                                            (map (core/fn [s] `(scm* {} ~s)) (remove #{'&} rst)))
                                                     (concat [sp-fn `(scm* {} ~o)]
-                                                            (map (fn [s] `(scm* {} ~s)) (remove #{'&} rst))))])
+                                                            (map (core/fn [s] `(scm* {} ~s)) (remove #{'&} rst))))])
                                                prim-types specialized-fns)))
                             fast-dispatch `(cond ~@(mapcat (core/fn [t] [(scm-instance?* t `(scm* {} ~o)) (call-form (symbol (str fname "---" (-> (str t) (string/replace "." "_") (string/replace "/" "$")))))])
                                                            known-implementing-types)
                                                  true ~prim-dispatches)]
 ;                   (println "DISPATCH: "fname"->"resolved-name":"known-implementing-types)
                    `(do
-;                      ~@(map (fn [sf] `(defn ~sf [& args] (throw (cljscm.core/Error. (str "Protocol/Type pair: " (quote ~sf) " not defined."))))) prim-fnames)
+;                      ~@(map (core/fn [sf] `(defn ~sf [& args] (throw (cljscm.core/Error. (str "Protocol/Type pair: " (quote ~sf) " not defined."))))) prim-fnames)
                       (def ~fn-vtable-name ~'(scm* {} (make-table)))
                       ~(list 'scm*
                              {fn-name-sym fname
@@ -1690,7 +1585,7 @@
        ;(set! ~'*unchecked-if* false)
        )))
 
-(defmacro satisfies?
+(core/defmacro satisfies?
   "Returns true if x satisfies the protocol"
   [psym x]
   (core/let [p (:name (cljscm.analyzer/resolve-var (dissoc &env :locals) psym))
@@ -1701,38 +1596,38 @@
              ~'(table-ref (table-ref cljscm.core/protocol-impls :tx)
                           :p :f)))))
 
-(defmacro scm-table-ref [table key]
+(core/defmacro scm-table-ref [table key]
   `(scm* {:table ~table :key ~key} ~(list 'table-ref :table :key)))
 
-(defmacro scm-unsafe-vector-ref [vector idx]
+(core/defmacro scm-unsafe-vector-ref [vector idx]
   `(scm* {:vector ~vector :idx ~idx} ~(list (symbol "##vector-ref") :vector :idx)))
 
-(defmacro scm-unsafe-vector-set! [vector idx val]
+(core/defmacro scm-unsafe-vector-set! [vector idx val]
   `(scm* {:vector ~vector :idx ~idx :val ~val} ~(list (symbol "##vector-set!") :vector :idx :val)))
 
-(defmacro scm-type-idx [x]
+(core/defmacro scm-type-idx [x]
   `(scm* {:x ~x} ~(list (symbol "##type") :x ) ))
 
-(defmacro scm-subtype-idx [x]
+(core/defmacro scm-subtype-idx [x]
   `(scm* {:x ~x} ~(list (symbol "##subtype") :x ) ))
 
-(defmacro scm-object->class [x]
+(core/defmacro scm-object->class [x]
   `(scm* {:x ~x} ~(list 'object->class :x ) ))
 
-(defmacro lazy-seq [& body]
+(core/defmacro lazy-seq [& body]
   `(new cljscm.core/LazySeq nil false (core/fn [] ~@body) nil))
 
-(defmacro seq [coll]
+(core/defmacro seq [coll]
   `(-seq ~coll))
 
-(defmacro delay [& body]
+(core/defmacro delay [& body]
   "Takes a body of expressions and yields a Delay object that will
   invoke the body only the first time it is forced (with force or deref/@), and
   will cache the result and return it on all subsequent force
   calls."
   `(new cljscm.core/Delay (atom {:done false, :value nil}) (fn [] ~@body)))
 
-(defmacro binding
+(core/defmacro binding
   "binding => var-symbol init-expr
 
   Creates new bindings for the (already-existing) vars, with the
@@ -1752,7 +1647,7 @@
       (~'scm* ~(apply hash-map (interleave tempnames vals)) ~(map #(list %1 %2) qualnames tempnames))
       ~@body)))
 
-(defmacro condp
+(core/defmacro condp
   "Takes a binary predicate, an expression, and a set of clauses.
   Each clause can take the form of either:
 
@@ -1794,11 +1689,11 @@
            ~gexpr ~expr]
        ~(emit gpred gexpr clauses))))
 
-#_(defmacro case [e & clauses]
+#_(core/defmacro case [e & clauses]
   (core/let [default (if (odd? (count clauses))
                   (last clauses)
                   `(throw (js/Error. (core/str "No matching clause: " ~e))))
-        assoc-test (fn assoc-test [m test expr]
+        assoc-test (core/fn assoc-test [m test expr]
                          (if (contains? m test)
                            (throw (clojure.core/IllegalArgumentException.
                                    (core/str "Duplicate case test constant '"
@@ -1807,9 +1702,9 @@
                                                (core/str " on line " (:line &env) " "
                                                          cljscm.analyzer/*cljs-file*)))))
                            (assoc m test expr)))
-        pairs (reduce (fn [m [test expr]]
+        pairs (reduce (core/fn [m [test expr]]
                         (cond
-                         (core/seq? test) (reduce (fn [m test]
+                         (core/seq? test) (reduce (core/fn [m test]
                                                (core/let [test (if (symbol? test)
                                                             (list 'quote test)
                                                             test)]
@@ -1821,10 +1716,10 @@
         esym (gensym)]
    `(let [~esym ~e]
       (cond
-        ~@(mapcat (fn [[m c]] `((cljscm.core/= ~m ~esym) ~c)) pairs)
+        ~@(mapcat (core/fn [[m c]] `((cljscm.core/= ~m ~esym) ~c)) pairs)
         :else ~default))))
 
-(defmacro try
+(core/defmacro try
   "(try expr* catch-clause* finally-clause?)
 
    Special Form
@@ -1857,7 +1752,7 @@
         ~@body
         ~@fin))))
 
-(defmacro assert
+(core/defmacro assert
   "Evaluates expr and throws an exception if it does not evaluate to
   logical true."
   ([x]
@@ -1871,7 +1766,7 @@
           (throw (cljscm.core/Error.
                   (cljscm.core/str "Assert failed: " ~message "\n" (cljscm.core/pr-str '~x))))))))
 
-(defmacro for
+(core/defmacro for
   "List comprehension. Takes a vector of one or more
    binding-form/collection-expr pairs, each followed by zero or more
    modifiers, and yields a lazy sequence of evaluations of expr.
@@ -1920,7 +1815,7 @@
     `(let [iter# ~(emit-bind (to-groups seq-exprs))]
        (iter# ~(second seq-exprs)))))
 
-(defmacro doseq
+(core/defmacro doseq
   "Repeatedly executes body (presumably for side-effects) with
   bindings and filtering as provided by \"for\".  Does not retain
   the head of the sequence. Returns nil."
@@ -1956,11 +1851,11 @@
                                         ~@(when needrec [recform]))))]))))]
     (nth (step nil (core/seq seq-exprs)) 1)))
 
-(defmacro alength [a]
+(core/defmacro alength [a]
   `(scm* {:a ~a}
          ~'(vector-length :a)))
 
-(defn aclone
+(core/defn aclone
   "Returns a javascript array, cloned from the passed in array"
   ([a]
      `(scm* {:a ~a} ~'(vector-copy :a)))
@@ -1971,7 +1866,7 @@
               ~'(subvector-move! :a 0 :sz :r 0))
         r#)))
 
-(defmacro aclone-push
+(core/defmacro aclone-push
   "Clones the array into an array one element larger; with the value pushed."
   [a o]
    `(let [sz# (scm* {:a ~a} ~'(vector-length :a))
@@ -1982,7 +1877,7 @@
                (vector-set! :r :sz :o)))
       r#))
 
-(defmacro aclone-push2
+(core/defmacro aclone-push2
   "Clones the array into a new array of size (+ sz2);
    with the values pushed after sz."
   [a sz o1 o2]
@@ -1995,7 +1890,7 @@
                (vector-set! :r (+ :sz 1) :o2)))
       r#))
 
-(defmacro aclone-padded
+(core/defmacro aclone-padded
   "Clones array a into a new array of size sz, padded with nil."
   [a sz]
    `(let [asz# (scm* {:a ~a} ~'(vector-length :a))
@@ -2005,7 +1900,7 @@
                (subvector-move! :a 0 :asz :r 0)))
       r#))
 
-(defmacro slice
+(core/defmacro slice
   "does NOT re-create Javascripts negative index sematics, just end >= start slicing. Also, will complain on out-of-ranges; won't be clipped to viable length."
   [a start end]
   `(let [sz# (- ~end ~start)
@@ -2013,7 +1908,7 @@
      (scm* {:a ~a :start ~start :end ~end :r r#} ~'(subvector-move! :a :start :end :r 0))
      r#))
 
-(defmacro slice-pop
+(core/defmacro slice-pop
   "returns a copy without the last element"
   [a]
   `(let [sz# (dec (alength ~a))
@@ -2021,7 +1916,7 @@
      (scm* {:a ~a :r r#} ~'(subvector-move! :a 0 sz# :r 0))
      r#))
 
-(defmacro amap
+(core/defmacro amap
   "Maps an expression across an array a, using an index named idx, and
   return value named ret, initialized to a clone of a, then setting
   each element of ret to the evaluation of expr, returning the new
@@ -2036,7 +1931,7 @@
            (recur (inc ~idx)))
          ~ret))))
 
-(defmacro areduce
+(core/defmacro areduce
   "Reduces an expression across an array a, using an index named idx,
   and return value named ret, initialized to init, setting ret to the
   evaluation of expr at each step, returning ret."
@@ -2047,7 +1942,7 @@
          (recur (inc ~idx) ~expr)
          ~ret))))
 
-(defmacro dotimes
+(core/defmacro dotimes
   "bindings => name n
 
   Repeatedly executes body (presumably for side-effects) with name
@@ -2061,7 +1956,7 @@
            ~@body
            (recur (inc ~i)))))))
 
-(defn ^:private check-valid-options
+(core/defn ^:private check-valid-options
   "Throws an exception if the given option map contains keys not listed
   as valid, else returns nil."
   [options & valid-keys]
@@ -2071,7 +1966,7 @@
 	    (first valid-keys)
 	    (map #(core/str ", " %) (rest valid-keys))))))
 
-(defmacro defmulti
+(core/defmacro defmulti
   "Creates a new multimethod with the associated dispatch function.
   The docstring and attribute-map are optional.
 
@@ -2114,12 +2009,12 @@
            (cljscm.core/MultiFn. ~(name mm-name) ~dispatch-fn ~default hierarchy#
                                method-table# prefer-table# method-cache# cached-hierarchy#))))))
 
-(defmacro defmethod
+(core/defmacro defmethod
   "Creates and installs a new method of multimethod associated with dispatch-value. "
   [multifn dispatch-val & fn-tail]
   `(-add-method ~(with-meta multifn {:tag 'cljscm.core/MultiFn}) ~dispatch-val (core/fn ~@fn-tail)))
 
-(defmacro time
+(core/defmacro time
   "Evaluates expr and prints the time it took. Returns the value of expr."
   [expr]
   `(let [start# (.getTime (js/Date.))
@@ -2127,7 +2022,7 @@
      (prn (core/str "Elapsed time: " (- (.getTime (js/Date.)) start#) " msecs"))
      ret#))
 
-(defmacro simple-benchmark
+(core/defmacro simple-benchmark
   "Runs expr iterations times in the context of a let expression with
   the given bindings, then prints out the bindings and the expr
   followed by number of iterations and total time. The optional
@@ -2147,7 +2042,7 @@
 
 (def cs (into [] (map (comp symbol core/str char) (range 97 118))))
 
-(defn gen-apply-to-helper
+(core/defn gen-apply-to-helper
   ([] (gen-apply-to-helper 1))
   ([n]
      (core/let [prop (symbol (core/str "-cljs$lang$arity$" n))
@@ -2162,7 +2057,7 @@
               ~(gen-apply-to-helper (core/inc n))))
          `(throw (js/Error. "Only up to 20 arguments supported on functions"))))))
 
-(defmacro gen-apply-to []
+(core/defmacro gen-apply-to []
   `(do
      (set! ~'*unchecked-if* true)
      (defn ~'apply-to [~'f ~'argc ~'args]
@@ -2172,12 +2067,12 @@
            ~(gen-apply-to-helper))))
      (set! ~'*unchecked-if* false)))
 
-(defmacro with-out-str
+(core/defmacro with-out-str
   "Evaluates exprs in a context in which *print-fn* is bound to .append
   on a fresh StringBuffer.  Returns the string created by any nested
   printing calls."
   [& body]
   `(let [sb# (goog.string/StringBuffer.)]
-     (binding [cljscm.core/*print-fn* (fn [x#] (.append sb# x#))]
+     (binding [cljscm.core/*print-fn* (core/fn [x#] (.append sb# x#))]
        ~@body)
      (cljscm.core/str sb#))) 
