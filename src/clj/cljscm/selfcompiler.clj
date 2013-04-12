@@ -624,8 +624,7 @@
 (defn compile-file* [src dest]
   (with-core-cljs
     (with-open [out ^java.io.Writer (io/make-writer dest {})]
-      (binding [*out* out
-                ana/*cljs-ns* 'cljscm.user
+      (binding [ana/*cljs-ns* 'cljscm.user
                 ana/*cljs-file* (.getPath ^java.io.File src)
                 *data-readers* tags/*cljs-data-readers*
                 *position* (atom [0 0])
@@ -637,8 +636,9 @@
           (if (seq forms)
             (let [env (ana/empty-env)
                   ast (ana/analyze env (first forms))]
-              (do (prn (emit ast))
-                  #_(pp/pprint (emit ast))
+              (do (binding [*out* out]
+                    (prn (emit ast))
+                    #_ (pp/pprint (emit ast)))
                   (if (= (:op ast) :ns)
                     (recur (rest forms) (:name ast) (merge (:uses ast) (:requires ast)))
                     (recur (rest forms) ns-name deps))))
