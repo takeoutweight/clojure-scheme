@@ -1090,14 +1090,16 @@
           (if-let [nstr (and (namespace sym)
                              (str (resolve-ns-alias env (symbol (namespace sym)))))]
             (when-let [ns (cond
-                           (= "clojure.core" nstr) (find-ns 'cljscm.core)
-                           (some #{\.} (seq nstr)) (find-ns (symbol nstr))
-                           :else
-                           (-> env :ns :requires-macros (get (symbol nstr))))]
+                            (= "clojure.core" nstr) (find-ns 'cljscm.core)
+                            (some #{\.} (seq nstr)) (find-ns (symbol nstr))
+                            :else
+                            (-> env :ns :requires-macros (get (symbol nstr))))]
               (find-interned-var ns (symbol (name sym))))
             (if-let [nsym (-> env :ns :uses-macros sym)]
               (find-interned-var (find-ns nsym) sym)
-              (find-interned-var (find-ns 'cljscm.core) sym))))]
+              (or
+               (find-interned-var (find-ns *cljs-ns*) sym)
+               (find-interned-var (find-ns 'cljscm.core) sym)))))]
     (when (and mvar (is-macro mvar))
       @mvar)))
 
