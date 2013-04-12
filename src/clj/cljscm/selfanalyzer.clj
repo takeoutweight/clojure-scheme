@@ -725,16 +725,21 @@
 (defn munge-path [ss]
   (clojure.lang.Compiler/munge (str ss)))
 
-(defn ns->relpath [s]
+(defn ns->relpath-cljscm [s]
   (str (apply str (map #(get {\. \/} % %) (seq (munge-path s)))) ".cljscm"))
+
+(defn ns->relpath-clj [s]
+  (str (apply str (map #(get {\. \/} % %) (seq (munge-path s)))) ".clj"))
 
 (declare analyze-file)
 
 (defn analyze-deps [deps]
   (doseq [dep deps]
     (when-not (contains? @namespaces dep)
-      (let [relpath (ns->relpath dep)]
-        (analyze-file relpath)))))
+      (let [relpath (ns->relpath-cljscm dep)]
+        (if (condc/platform-case :jvm (io/resource relpath) :gambit true)
+          (analyze-file relpath)
+          (analyze-file (ns->relpath-clj dep)))))))
 
 (defn error-msg [spec msg] (str msg "; offending spec: " (pr-str spec)))
 
