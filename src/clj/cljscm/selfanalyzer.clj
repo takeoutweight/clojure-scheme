@@ -127,12 +127,17 @@
     `(try
        ~@body
        ~(condc/platform-case
-         :jvm `(catch Throwable ~err
-                 (if (analysis-error? ~err)
-                   (throw ~err)
-                   ~(if (= condc/*current-platform* :jvm)
-                      `(throw (error ~env (.getMessage ~err) ~err))
-                      `(throw (error ~env (str ~err) ~err)))))
+         :jvm (case condc/*target-platform* ;macro definition vs macro expansion stages will differ on cross-compilation.
+                :jvm `(catch Throwable ~err
+                        (if (analysis-error? ~err)
+                          (throw ~err)
+                          ~(if (= condc/*current-platform* :jvm)
+                             `(throw (error ~env (.getMessage ~err) ~err))
+                             `(throw (error ~env (str ~err) ~err)))))
+                :gambit `(catch cljscm.core/ExceptionInfo ~err
+                           (if (analysis-error? ~err)
+                             (throw ~err)
+                             ~`(throw (error ~env (str ~err) ~err)))))
          :gambit `(catch cljscm.core/ExceptionInfo ~err
                     (if (analysis-error? ~err)
                       (throw ~err)
