@@ -847,7 +847,6 @@
   (core/let [name (if (symbol? (first sigs)) (first sigs) nil)
              sigs (if name (next sigs) sigs)
              sigs (if (vector? (first sigs)) (list sigs) sigs)
-             _ (when (core/> (count sigs) 1) (throw (Exception. "multi-arity not erased.")))
              psig (fn* [sig]
                        (core/let [[params & body] sig
                                   conds (when (and (next body) (map? (first body))) 
