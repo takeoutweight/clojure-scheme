@@ -581,21 +581,27 @@
 																	o))))))
 	 (else o)))
 
-;(##include "~~lib/gambit#.scm")
-;(##include "~~lib/_gambit#.scm")
-;(include "corescratch.scm")
-;(define oldt (##current-readtable))
-;(##current-readtable (bard-make-readtable))
-;(include "~/src/c-clojure/src/cljscm/cljscm/core.scm")
-;(include "~/src/c-clojure/src/clj/cljscm/selfanalyzer.scm")
-;(include "in.clj")
-;(##current-readtable oldt)
-;(parameterize ((##current-readtable (bard-make-readtable))) (include "~/src/c-clojure/src/clj/cljscm/selfanalyzer.scm"))
-;(parameterize ((##current-readtable (bard-make-readtable))) (include "in.clj"))
-;(let ((p (open-input-file (list path: "in.clj" readtable: (bard-make-readtable))))) (read-all p))
-;(let ((p (open-input-file (list path: "in.clj")))) (read-all p))
-;(let ((p (open-input-file (list path: "~/src/c-clojure/src/clj/cljscm/selfanalyzer.scm" readtable: (bard-make-readtable))))) (read-all p))
-;(bard-read-all-from-string "(a & b)")
+#|
+(begin
+(##include "~~lib/gambit#.scm")
+(##include "~~lib/_gambit#.scm")
+(include "corescratch.scm")
+(define oldt (##current-readtable))
+(##current-readtable (bard-make-readtable))
+)
+(include "~/src/c-clojure/src/cljscm/cljscm/core.scm")
+(define-macro (cljscm.selfanalyzer/defmacro . rst) "defmacro")
+(include "~/src/c-clojure/src/clj/cljscm/selfanalyzer.scm")
+(include "~/src/c-clojure/src/cljscm/cljscm/core_macros.scm")
+(include "in.clj")
+(##current-readtable oldt)
+(parameterize ((##current-readtable (bard-make-readtable))) (include "~/src/c-clojure/src/clj/cljscm/selfanalyzer.scm"))
+(parameterize ((##current-readtable (bard-make-readtable))) (include "in.clj"))
+(let ((p (open-input-file (list path: "in.clj" readtable: (bard-make-readtable))))) (read-all p))
+(let ((p (open-input-file (list path: "in.clj")))) (read-all p))
+(let ((p (open-input-file (list path: "~/src/c-clojure/src/clj/cljscm/selfanalyzer.scm" readtable: (bard-make-readtable))))) (read-all p))
+(bard-read-all-from-string "(a & b)")
+|#
 
 
 #|
