@@ -54,7 +54,7 @@
   ([s] (munge s js-reserved))
   ([s reserved]
      (if (map? s)
-       (if (reserved (:name s)) (str (:name s) "$") (:name s))
+       (if (reserved (:name s)) (symbol (str (:name s) "$")) (:name s))
       ; Unshadowing
       #_(let [{:keys [name field] :as info} s
             depth (loop [d 0, {:keys [shadow]} info]
