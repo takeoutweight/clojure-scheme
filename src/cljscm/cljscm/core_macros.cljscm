@@ -552,7 +552,7 @@
 
 (defmacro js* [& forms])
 (defmacro scm-str* [& forms])
-(defmacro scm* [& forms] (cons 'scm* forms))
+(defmacro scm* [& forms] (case condc/*target-platform* :gambit (cons 'scm* forms)))
 
 (defmacro scm-boolean*
   "easy way to get unchecked scheme tests. Metadata is stored on the scm* symbol."
