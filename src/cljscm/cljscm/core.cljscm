@@ -1431,7 +1431,11 @@ reduces them without incurring seq initialization"
    (identical? String (type x)) (scm* [x y] (string<? x y))
    (and (identical? (type x) (type y))
         (satisfies? IComparable x)) (-compare x y)
-   :else (throw (Error. "compare on non-nil objects of different types"))))
+        :else (throw (Error. "compare on non-nil objects of different types"))))
+
+(defn comparator
+  [f]
+  (fn [x y] (if (f x y) -1 +1)))
 
 (defn ^:private compare-indexed
   "Compare indexed collection."
