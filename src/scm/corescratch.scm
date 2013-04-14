@@ -589,9 +589,11 @@
 (define oldt (##current-readtable))
 (##current-readtable (bard-make-readtable))
 )
+(begin
 (include "~/src/c-clojure/src/cljscm/cljscm/core.scm")
 (define-macro (cljscm.selfanalyzer/defmacro . rst) "defmacro")
 (include "~/src/c-clojure/src/clj/cljscm/selfanalyzer.scm")
+)
 (include "~/src/c-clojure/src/cljscm/cljscm/core_macros.scm")
 (include "in.clj")
 (##current-readtable oldt)
