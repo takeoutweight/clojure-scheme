@@ -1523,7 +1523,7 @@
                             fn-vtable-name (symbol (str fname "---vtable"))
                             prim-types [:Number :Pair :Boolean :Nil :Null
                                         :Char :Array :Symbol :Keyword :Procedure :String]
-                            prim-fnames (map #(symbol (str fname "---cljs_core$" (name %))) prim-types)
+                            prim-fnames (map #(symbol (str fname "---cljscm_core$" (name %))) prim-types)
                             #_prim-checks #_{'cljscm.core/Number 'scm-number?
                                              'cljscm.core/Pair 'pair?
                                              'cljscm.core/Boolean 'boolean?
