@@ -1845,7 +1845,7 @@
   `(scm* {:a ~a}
          ~'(vector-length :a)))
 
-(core/defn aclone
+(defmacro aclone
   "Returns a javascript array, cloned from the passed in array"
   ([a]
      `(scm* {:a ~a} ~'(vector-copy :a)))

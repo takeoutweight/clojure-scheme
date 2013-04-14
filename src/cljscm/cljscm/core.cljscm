@@ -105,7 +105,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; arrays ;;;;;;;;;;;;;;;;
 
-(defn aclone
+#_(defn aclone
   "Returns a javascript array, cloned from the passed in array"
   [a]
   (scm* [a] (vector-copy a)))
