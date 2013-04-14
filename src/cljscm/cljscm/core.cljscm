@@ -43,7 +43,7 @@
   cljscm.core/IMapEntry [cljscm.core/RedNode cljscm.core/PersistentVector cljscm.core/BlackNode],
   cljscm.core/IReversible [cljscm.core/IndexedSeq cljscm.core/PersistentVector cljscm.core/PersistentTreeSet cljscm.core/PersistentTreeMap],
   cljscm.core/ASeq [cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/ChunkedCons cljscm.core/Cons],
-  cljscm.core/IPrintWithWriter [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Atom cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Error cljscm.core/Range cljscm.core/Number cljscm.core/Char cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/Keyword cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/String cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/Procedure cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/UUID cljscm.core/PersistentTreeMapSeq cljscm.core/Symbol cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Array cljscm.core/Boolean cljscm.core/PersistentHashSet],
+  cljscm.core/IPrintWithWriter [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Atom cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Error cljscm.core/Range cljscm.core/Number cljscm.core/Char cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/Keyword cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/String cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/Procedure cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/UUID cljscm.core/PersistentTreeMapSeq cljscm.core/Symbol cljscm.core/Symbol+ cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Array cljscm.core/Boolean cljscm.core/PersistentHashSet],
   cljscm.core/ISequential [cljscm.core/PersistentQueue cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/RSeq cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/PersistentTreeMapSeq cljscm.core/Null cljscm.core/Array],
   cljscm.core/IDeref [cljscm.core/Atom cljscm.core/Reduced cljscm.core/Delay],
   cljscm.core/IComparable [cljscm.core/PersistentVector],
@@ -717,12 +717,36 @@
   (-invoke [k [coll not-found]]
     (-lookup coll k not-found)))
 
+(deftype Symbol+ [s meta]
+  IEquiv
+  (-equiv [x o] (if (instance? Symbol+ o)
+                  (-equiv s (.-s ^Symbol+ o))
+                  (-equiv s o)))
+
+  IHash
+  (-hash [o] (scm-equal?-hash s))
+
+  IWithMeta
+  (-with-meta [o meta] (Symbol+. s meta))
+
+  IFn
+  (-invoke [k [coll not-found]]
+    (-lookup coll s not-found)))
+
 (extend-type Symbol
   IEquiv
-  (-equiv [x o] (identical? x o))
+  (-equiv [x o] (if (instance? Symbol+ o)
+                  (identical? x (.-s ^Symbol+ o))
+                  (identical? x o)))
 
   IHash
   (-hash [o] (scm-equal?-hash o))
+
+  IWithMeta
+  (-with-meta [s meta] (Symbol+. s meta))
+
+  IMeta
+  (-meta [o] meta)
 
   IFn
   (-invoke [k [coll not-found]]
@@ -1368,7 +1392,8 @@ reduces them without incurring seq initialization"
   (instance? Keyword x))
 
 (defn ^boolean symbol? [x]
-  (instance? Symbol x))
+  (or (instance? Symbol x)
+      (instance? Symbol+ x)))
 
 (defn ^boolean number? [n]
   (instance? Number n))
@@ -6836,6 +6861,9 @@ reduces them without incurring seq initialization"
 
   Symbol
   (-pr-writer [o wr opts] (-write wr (scm* [o] (symbol->string o))))
+
+  Symbol+
+  (-pr-writer [o wr opts] (-write wr (scm* {::s (.-s ^Symbol+ o)} (symbol->string ::s))))
 
   Keyword
   (-pr-writer [k wr opts] (-write wr (str ":" (scm* [k] (keyword->string k)))))
