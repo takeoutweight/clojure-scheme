@@ -149,6 +149,10 @@
   ([type aseq]
      (apply array aseq)))
 
+(defn char
+  [n]
+  (scm* [n] (integer->char n)))
+
 (defn char?
   "Returns true if x is a char, false otherwise."
   [x] (scm-boolean* [x] (char? x)))
