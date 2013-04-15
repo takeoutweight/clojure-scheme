@@ -397,13 +397,13 @@
 												(cond (else (macro-readenv-wrap re (c/register-arg 1))))))))				
 				(begin
 					(macro-read-next-char-or-eof re)
-					(let* ((s (##read-datum-or-eof re))
+					(let* ((s (##build-delimited-number/keyword/symbol re c #t)) ;(##read-datum-or-label-or-none re)
 								 (st (cond ((c/symbol? s) (c/symbol->string s))
 													 ((number? s) (number->string s))
 													 (else "")))
 								 (sym (string->symbol (string-append "%" st))))
 						(macro-readenv-filepos-set! re start-pos)
-						(macro-readenv-wrap re sym))))))
+						(macro-readenv-wrap re s))))))
 
 (define (c/read-dot re next start-pos)
 	(##read-dot re next))
