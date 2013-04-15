@@ -36,22 +36,25 @@
 
 (def ^:dynamic *cljs-ns* 'cljscm.user)
 
+; Just assumes symbols are quoted now, won't eval in gambit.
 (core/defmacro alias [alias lib]
   (condc/platform-case
    :jvm (do
           (println "; in JVM")
-          (swap! ana/namespaces #(assoc-in % [(.getName *ns*) :requires alias] lib))
+          (try (core/alias (second alias) (second lib)) ;real aliases are needed for reader to properly expand.
+               (catch java.lang.IllegalStateException e nil))  ;realiasing is an exception; fix in analyzer's ns evaluation.
+          (swap! ana/namespaces #(assoc-in % [(.getName *ns*) :requires (second alias)] (second lib)))
           ;(swap! ana/namespaces #(assoc-in % [(.getName *ns*) :requires-macros (find-ns alias)] lib))
           (println "; added " (get-in @ana/namespaces [(.getName *ns*) :requires])))
    :gambit (do
              (println "; in gambit")
-             (swap! ana/namespaces #(assoc-in % [*ns* :requires alias] lib))
+             (swap! ana/namespaces #(assoc-in % [*ns* :requires (second alias)] (second lib)))
              (println "; firing the gambit-runtime-safe macro code.")))
-  (str "aliased " alias " to " lib))
+  (str "aliased " (second alias) " to " (second lib)))
 
 (condc/platform-case
- :jvm (cljscm.core/alias core clojure.core)
- :gambit (cljscm.core/alias core cljscm.core))
+ :jvm (cljscm.core/alias 'core 'clojure.core)
+ :gambit (cljscm.core/alias 'core 'cljscm.core))
 
 (def
 
