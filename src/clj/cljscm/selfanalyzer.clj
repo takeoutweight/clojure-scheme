@@ -25,7 +25,7 @@
 ;; to resolve keywords like ::foo - the namespace
 ;; must be determined during analysis - the reader
 ;; did not know
-(def ^:dynamic *reader-ns-name* (gensym))
+(def ^:dynamic *reader-ns-name* (gensym "reader"))
 (def ^:dynamic *reader-ns* (condc/platform-case :jvm (create-ns *reader-ns-name*)))
 
 (def namespaces (atom '{cljscm.core {:name cljscm.core}
@@ -838,6 +838,8 @@
     (when (seq @deps)
       (analyze-deps @deps))
     (set! *cljs-ns* name)
+    (set! *reader-ns* (create-ns name))
+    (set! *ns* *reader-ns*)
     (load-core)
     (doseq [nsym (concat (vals requires-macros) (vals uses-macros))]
       (clojure.core/require nsym))
@@ -1208,6 +1210,7 @@
    (let [res (if (re-find #"^file://" f) (java.net.URL. f) (io/resource f))] ;res (or res (java.net.URL. (str "file:/Users/nathansorenson/src/c-clojure/src/cljs/" f)))
      (assert res (str "Can't find " f " in classpath"))
      (binding [*cljs-ns* 'cljscm.user
+               *reader-ns* (create-ns *cljs-ns*)
                *cljs-file* (.getPath ^java.net.URL res)
                *ns* *reader-ns*
                condc/*target-platform* :gambit]

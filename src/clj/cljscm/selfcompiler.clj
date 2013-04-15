@@ -625,6 +625,7 @@
   (with-core-cljs
     (with-open [out ^java.io.Writer (io/make-writer dest {})]
       (binding [ana/*cljs-ns* 'cljscm.user
+                ana/*reader-ns* (create-ns ana/*cljs-ns*)
                 ana/*cljs-file* (.getPath ^java.io.File src)
                 *data-readers* tags/*cljs-data-readers*
                 *position* (atom [0 0])
