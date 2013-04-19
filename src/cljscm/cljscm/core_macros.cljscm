@@ -116,6 +116,15 @@
  :jvm (. (var defmacro) (setMacro))
  :gambit (swap! ana/namespaces assoc-in [ana/*cljs-ns* :defs `defmacro :macro] true))
 
+(defmacro defonce [name expr]
+  (condc/platform-case
+   :jvm (case condc/*target-platform*
+          :jvm `(let [v# (def ~name)]
+                  (when-not (.hasRoot v#)
+                    (def ~name ~expr)))
+          :gambit `(def ~name ~expr)); TODO
+   :gambit `(def ~name ~expr)))
+
 (defmacro ->
   "Threads the expr through the forms. Inserts x as the
   second item in the first form, making a list of it if it is not a
