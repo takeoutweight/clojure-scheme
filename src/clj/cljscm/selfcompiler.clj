@@ -8,14 +8,22 @@
 
 (ns cljscm.selfcompiler
   (:refer-clojure :exclude [munge macroexpand-1])
-  (:require [clojure.java.io :as io]
-            [clojure.string :as string]
-            [clojure.walk :as walk]
-            [clojure.pprint :as pp]
-            [cljscm.conditional :as condc]
-            [cljscm.tagged-literals :as tags] 
-            [cljscm.selfanalyzer :as ana])
-  (:import java.lang.StringBuilder))
+  (:require [cljscm.conditional :as condc]))
+
+(condc/platform-case
+ :jvm (do
+        (require '[clojure.java.io :as io]
+                 '[clojure.string :as string]
+                 '[clojure.walk :as walk]
+                 '[clojure.pprint :as pp]
+                 '[cljscm.conditional :as condc]
+                 '[cljscm.tagged-literals :as tags] 
+                 '[cljscm.selfanalyzer :as ana])
+        (import (clojure.lang Symbol
+                              Cons
+                              PersistentHashSet)))
+ :gambit :TODO)
+
 (set! *warn-on-reflection* true)
                                         ;Game plan : use emits, not print.
                                         ;unwrap nested emits.
@@ -40,10 +48,13 @@
 
 (declare emits emitln)
 
+(defmacro plat-c [jvm gambit]
+  `(condc/platform-case :jvm ~jvm :gambit ~gambit))
+
 (defn strict-str
   "recursively realizes any potentially lazy nested structure"
   ([] "")
-  ([x] (str (walk/postwalk (fn [n] (cond (= clojure.lang.LazySeq (type n)) (apply list n)
+  ([x] (str (walk/postwalk (fn [n] (cond (= (plat-c clojure.lang.LazySeq LazySeq) (type n)) (apply list n)
                                          (identical? x ()) "()" ;o/w clojure.lang.PersistentList$EmptyList@1
                                          :else n)) x)))
   ([x & ys] (str (strict-str x) (apply strict-str ys))))
@@ -85,28 +96,6 @@
 (defn- space-sep [xs]
   (interpose " " xs))
 
-(defn- escape-char [^Character c]
-  (let [cp (.hashCode c)]
-    (case cp
-      ; Handle printable escapes before ASCII
-      34 "\\\""
-      92 "\\\\"
-      ; Handle non-printable escapes
-      8 "\\b"
-      12 "\\f"
-      10 "\\n"
-      13 "\\r"
-      9 "\\t"
-      (if (< 31 cp 127)
-        c ; Print simple ASCII characters
-        (format "\\u%04X" cp)))))
-
-(defn- escape-string [^CharSequence s]
-  (let [sb (StringBuilder. (count s))]
-    (doseq [c s]
-      (.append sb (escape-char c)))
-    (.toString sb)))
-
 (defn- wrap-in-double-quotes [x]
   (str \" x \"))
 
@@ -121,7 +110,7 @@
     (swap! *emitted-provides* conj sym)
     (emitln "goog.provide('" (munge sym) "');")))
 
-(defmulti emit-constant class)
+(defmulti emit-constant type)
 
 (defn- emit-meta-constant [src outform]
   (if (meta src)
@@ -129,28 +118,52 @@
     outform))
 
 (defmethod emit-constant :default [x] x)
-(defmethod emit-constant clojure.lang.Symbol [x] (emit-meta-constant x `(quote ~x)))
-(defmethod emit-constant java.util.regex.Pattern [x] :TODO-REGEX)
+(defmethod emit-constant Symbol [x] (emit-meta-constant x `(quote ~x)))
+(condc/platform-case
+ :gambit
+ (defmethod emit-constant Symbol+ [x] (emit-meta-constant x `(quote ~x))))
+(condc/platform-case
+ :jvm (defmethod emit-constant java.util.regex.Pattern [x] :TODO-REGEX))
 
+(condc/platform-case
+ :jvm (defmethod emit-constant clojure.lang.PersistentList$EmptyList [x]
+        `(~'list))
+ :gambit  (do (defmethod emit-constant EmptyList [x]
+                `(~'list))
+              (defmethod emit-constant Null [x]
+                `(~'list))))
 
-(defmethod emit-constant clojure.lang.PersistentList$EmptyList [x]
-  `(~'list))
+(condc/platform-case
+ :jvm (defmethod emit-constant clojure.lang.PersistentList [x]
+        (emit-meta-constant x `(cljscm.core/list ~@(map emit-constant x)))))
 
-(defmethod emit-constant clojure.lang.PersistentList [x]
+(defmethod emit-constant Cons [x]
   (emit-meta-constant x `(cljscm.core/list ~@(map emit-constant x))))
 
-(defmethod emit-constant clojure.lang.Cons [x]
-  (emit-meta-constant x `(cljscm.core/list ~@(map emit-constant x))))
+(condc/platform-case
+ :jvm (defmethod emit-constant clojure.lang.IPersistentVector [x]
+        (emit-meta-constant x
+                            `(cljscm.core/vec ~(cons 'list (map emit-constant x)))))
+ :gambit (defmethod emit-constant PersistentVector [x]
+           (emit-meta-constant x
+                               `(cljscm.core/vec ~(cons 'list (map emit-constant x))))))
 
-(defmethod emit-constant clojure.lang.IPersistentVector [x]
-  (emit-meta-constant x
-    `(cljscm.core/vec ~(cons 'list (map emit-constant x)))))
+(condc/platform-case
+ :jvm (defmethod emit-constant clojure.lang.IPersistentMap [x]
+        (emit-meta-constant x
+                            `(cljscm.core/hash-map ~@(map emit-constant (apply concat x)))))
+ :gambit (do
+           (defmethod emit-constant PersistentArrayMap [x]
+             (emit-meta-constant x
+                                 `(cljscm.core/hash-map ~@(map emit-constant (apply concat x)))))
+           (defmethod emit-constant PersistentHashMap [x]
+             (emit-meta-constant x
+                                 `(cljscm.core/hash-map ~@(map emit-constant (apply concat x)))))
+           (defmethod emit-constant PersistentTreeMap [x]
+             (emit-meta-constant x
+                                 `(cljscm.core/hash-map ~@(map emit-constant (apply concat x)))))))
 
-(defmethod emit-constant clojure.lang.IPersistentMap [x]
-  (emit-meta-constant x
-    `(cljscm.core/hash-map ~@(map emit-constant (apply concat x)))))
-
-(defmethod emit-constant clojure.lang.PersistentHashSet [x]
+(defmethod emit-constant PersistentHashSet [x]
   (emit-meta-constant x
     `(cljscm.core/set ~(cons 'list (map emit-constant x)))))
               
@@ -408,7 +421,7 @@
   [{:keys [bindings expr env] :as ast}]
   (emit-let ast :letfn))
 
-(defn protocol-prefix [psym]
+#_(defn protocol-prefix [psym]
   (symbol (str (-> (str psym) (.replace \. \$) (.replace \/ \$)) "$")))
 
 (defmethod emit :invoke ; TODO -- this is ignoring all new protocol stuff.
@@ -594,14 +607,28 @@
     (assert (= 1 (count subbed-form)) "only one form in scm*")
     (first subbed-form)))
 
-(defn forms-seq
-  "Seq of forms in a Clojure or ClojureScript file."
-  ([f]
-     (forms-seq f (clojure.lang.LineNumberingPushbackReader. (io/reader f))))
-  ([f ^java.io.PushbackReader rdr]
-     (if-let [form (binding [*ns* ana/*reader-ns*] (read rdr nil nil))]
-       (lazy-seq (cons form (forms-seq f rdr)))
-       (.close rdr))))
+(def readtable :TODO)
+(condc/platform-case
+ :jvm (defn forms-seq
+        "Seq of forms in a Clojure or ClojureScript file."
+        ([f]
+           (forms-seq f (clojure.lang.LineNumberingPushbackReader. (io/reader f))))
+        ([f ^java.io.PushbackReader rdr]
+           (if-let [form (binding [*ns* ana/*reader-ns*] (read rdr nil nil))]
+             (lazy-seq (cons form (forms-seq f rdr)))
+             (.close rdr))))
+ :gambit (defn forms-seq
+           "Seq of forms in a Clojure or ClojureScript file."
+           ([f] (forms-seq f (cljscm.core/scm* [f readtable]
+                                               (open-input-file (list :path f :readtable readtable)))))
+           ([f port]
+              (let [r ((scm* {} read) port)]
+                (if (eof-object? r)
+                  (do ((scm* {} close-port) port)
+                      nil)
+                  (lazy-seq
+                    (cons r
+                          (forms-seq f port))))))))
 
 (defn rename-to-scm
   "Change the file extension from .cljscm to .js. Takes a File or a
@@ -609,10 +636,12 @@
   [file-str]
   (clojure.string/replace file-str #"\.clj.*$" ".scm"))
 
-(defn mkdirs
-  "Create all parent directories for the passed file."
-  [^java.io.File f]
-  (.mkdirs (.getParentFile (.getCanonicalFile f))))
+(condc/platform-case
+ :jvm (defn mkdirs
+        "Create all parent directories for the passed file."
+        [^java.io.File f]
+        (.mkdirs (.getParentFile (.getCanonicalFile f))))
+ :gambit (defn mkdirs [f] :TODO))
 
 (defmacro with-core-cljs
   "Ensure that core.cljscm has been loaded."
@@ -621,42 +650,48 @@
          (ana/analyze-file "cljscm/core.cljscm"))
        ~@body))
 
-(defn compile-file* [src dest]
-  (with-core-cljs
-    (with-open [out ^java.io.Writer (io/make-writer dest {})]
-      (binding [ana/*cljs-ns* 'cljscm.user
-                ana/*reader-ns* (create-ns ana/*cljs-ns*)
-                ana/*cljs-file* (.getPath ^java.io.File src)
-                *data-readers* tags/*cljs-data-readers*
-                *position* (atom [0 0])
-                *emitted-provides* (atom #{})
-                condc/*target-platform* :gambit]
-        (loop [forms (forms-seq src)
-               ns-name nil
-               deps nil]
-          (if (seq forms)
-            (let [env (ana/empty-env)
-                  ast (ana/analyze env (first forms))]
-              (do (binding [*out* out]
-                    (prn (emit ast))
-                    #_ (pp/pprint (emit ast)))
-                  (if (= (:op ast) :ns)
-                    (recur (rest forms) (:name ast) (merge (:uses ast) (:requires ast)))
-                    (recur (rest forms) ns-name deps))))
-            {:ns (or ns-name 'cljscm.user)
-             :provides [ns-name]
-             :requires (if (= ns-name 'cljscm.core) (set (vals deps)) (conj (set (vals deps)) 'cljscm.core))
-             :file dest}))))))
+(condc/platform-case
+ :jvm (defn compile-file* [src dest]
+        (with-core-cljs
+          (with-open [out ^java.io.Writer (io/make-writer dest {})]
+            (binding [ana/*cljs-ns* 'cljscm.user
+                      ana/*reader-ns* (create-ns ana/*cljs-ns*)
+                      ana/*cljs-file* (.getPath ^java.io.File src)
+                      *data-readers* tags/*cljs-data-readers*
+                      *position* (atom [0 0])
+                      *emitted-provides* (atom #{})
+                      condc/*target-platform* :gambit]
+              (loop [forms (forms-seq src)
+                     ns-name nil
+                     deps nil]
+                (if (seq forms)
+                  (let [env (ana/empty-env)
+                        ast (ana/analyze env (first forms))]
+                    (do (binding [*out* out]
+                          (prn (emit ast))
+                          #_ (pp/pprint (emit ast)))
+                        (if (= (:op ast) :ns)
+                          (recur (rest forms) (:name ast) (merge (:uses ast) (:requires ast)))
+                          (recur (rest forms) ns-name deps))))
+                  {:ns (or ns-name 'cljscm.user)
+                   :provides [ns-name]
+                   :requires (if (= ns-name 'cljscm.core) (set (vals deps)) (conj (set (vals deps)) 'cljscm.core))
+                   :file dest}))))))
+ :gambit (defn compile-file* [src dest]
+           :TODO))
 
-(defn requires-compilation?
-  "Return true if the src file requires compilation."
-  [^java.io.File src ^java.io.File dest]
-  (or (not (.exists dest))
-      (> (.lastModified src) (.lastModified dest))))
+(condc/platform-case
+ :jvm (defn requires-compilation?
+        "Return true if the src file requires compilation."
+        [^java.io.File src ^java.io.File dest]
+        (or (not (.exists dest))
+            (> (.lastModified src) (.lastModified dest))))
+ :gambit :TODO)
 
 (defn parse-ns [src dest]
   (with-core-cljs
-    (binding [ana/*cljs-ns* 'cljscm.user]
+    (binding [ana/*cljs-ns* 'cljscm.user
+              ana/*reader-ns* (create-ns ana/*cljs-ns*)]
       (loop [forms (forms-seq src)]
         (if (seq forms)
           (let [env (ana/empty-env)
@@ -672,8 +707,9 @@
                  :file dest})
               (recur (rest forms)))))))))
 
-(defn compile-file
-  "Compiles src to a file of the same name, but with a .js extension,
+(condc/platform-case
+ :jvm (defn compile-file
+        "Compiles src to a file of the same name, but with a .js extension,
    in the src file's directory.
 
    With dest argument, write file to provided location. If the dest
@@ -685,18 +721,19 @@
 
    Returns a map containing {:ns .. :provides .. :requires .. :file ..}.
    If the file was not compiled returns only {:file ...}"
-  ([src]
-     (let [dest (rename-to-scm src)]
-       (compile-file src dest)))
-  ([src dest]
-     (let [src-file (io/file src)
-           dest-file (io/file dest)]
-       (if (.exists src-file)
-         (if (requires-compilation? src-file dest-file)
-           (do (mkdirs dest-file)
-               (compile-file* src-file dest-file))
-           (parse-ns src-file dest-file))
-         (throw (java.io.FileNotFoundException. (str "The file " src " does not exist.")))))))
+        ([src]
+           (let [dest (rename-to-scm src)]
+             (compile-file src dest)))
+        ([src dest]
+           (let [src-file (io/file src)
+                 dest-file (io/file dest)]
+             (if (.exists src-file)
+               (if (requires-compilation? src-file dest-file)
+                 (do (mkdirs dest-file)
+                     (compile-file* src-file dest-file))
+                 (parse-ns src-file dest-file))
+               (throw (java.io.FileNotFoundException. (str "The file " src " does not exist.")))))))
+ :gambit :TODO)
 
 (comment
   ;; flex compile-file
@@ -720,44 +757,50 @@
   ([parts sep]
      (apply strict-str (interpose sep parts))))
 
-(defn to-target-file
-  "Given the source root directory, the output target directory and
+(condc/platform-case
+ :jvm (defn to-target-file
+        "Given the source root directory, the output target directory and
   file under the source root, produce the target file."
-  [^java.io.File dir ^String target ^java.io.File file]
-  (let [dir-path (path-seq (.getAbsolutePath dir))
-        file-path (path-seq (.getAbsolutePath file))
-        relative-path (drop (count dir-path) file-path)
-        parents (butlast relative-path)
-        parent-file (java.io.File. ^String (to-path (cons target parents)))]
-    (java.io.File. parent-file ^String (rename-to-scm (last relative-path)))))
+        [^java.io.File dir ^String target ^java.io.File file]
+        (let [dir-path (path-seq (.getAbsolutePath dir))
+              file-path (path-seq (.getAbsolutePath file))
+              relative-path (drop (count dir-path) file-path)
+              parents (butlast relative-path)
+              parent-file (java.io.File. ^String (to-path (cons target parents)))]
+          (java.io.File. parent-file ^String (rename-to-scm (last relative-path)))))
+ :gambit :TODO)
 
-(defn cljs-files-in
-  "Return a sequence of all .cljscm files in the given directory."
-  [dir]
-  (filter #(let [name (.getName ^java.io.File %)]
-             (and (.endsWith name ".cljscm")
-                  (not= \. (first name))
-                  (not (contains? cljs-reserved-file-names name))))
-          (file-seq dir)))
+(condc/platform-case
+ :jvm (defn cljs-files-in
+        "Return a sequence of all .cljscm files in the given directory."
+        [dir]
+        (filter #(let [name (.getName ^java.io.File %)]
+                   (and (.endsWith name ".cljscm")
+                        (not= \. (first name))
+                        (not (contains? cljs-reserved-file-names name))))
+                (file-seq dir)))
+ :gambit :TODO)
 
-(defn compile-root
-  "Looks recursively in src-dir for .cljs files and compiles them to
+(condc/platform-case
+ :jvm (defn compile-root
+        "Looks recursively in src-dir for .cljs files and compiles them to
    .js files. If target-dir is provided, output will go into this
    directory mirroring the source directory structure. Returns a list
    of maps containing information about each file which was compiled
    in dependency order."
-  ([src-dir]
-     (compile-root src-dir "out"))
-  ([src-dir target-dir]
-     (let [src-dir-file (io/file src-dir)]
-       (loop [cljs-files (cljs-files-in src-dir-file)
-              output-files []]
-         (if (seq cljs-files)
-           (let [cljs-file (first cljs-files)
-                 output-file ^java.io.File (to-target-file src-dir-file target-dir cljs-file)
-                 ns-info (compile-file cljs-file output-file)]
-             (recur (rest cljs-files) (conj output-files (assoc ns-info :file-name (.getPath output-file)))))
-           output-files)))))
+        ([src-dir]
+           (compile-root src-dir "out"))
+        ([src-dir target-dir]
+           (let [src-dir-file (io/file src-dir)]
+             (loop [cljs-files (cljs-files-in src-dir-file)
+                    output-files []]
+               (if (seq cljs-files)
+                 (let [cljs-file (first cljs-files)
+                       output-file ^java.io.File (to-target-file src-dir-file target-dir cljs-file)
+                       ns-info (compile-file cljs-file output-file)]
+                   (recur (rest cljs-files) (conj output-files (assoc ns-info :file-name (.getPath output-file)))))
+                 output-files)))))
+ :gambit :TODO)
 
 (comment
   ;; compile-root
