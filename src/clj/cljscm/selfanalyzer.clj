@@ -1240,6 +1240,7 @@
              env (empty-env)]
          (loop [r ((scm* {} read) port)]
            (let [env (assoc env :ns (get-namespace *cljs-ns*))]
-             (when-not (cljscm.core/scm* [r] (eof-object? r))
-               (analyze env r)
-               (recur ((scm* {} read) port))))))))))
+             (if (eof-object? r)
+               ((scm* {} close-port) port)
+               (do (analyze env r)
+                   (recur ((scm* {} read) port)))))))))))
