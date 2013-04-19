@@ -726,6 +726,9 @@
   IHash
   (-hash [o] (scm-equal?-hash s))
 
+  IMeta
+  (-meta [o] meta)
+
   IWithMeta
   (-with-meta [o meta] (Symbol+. s meta))
 
@@ -742,11 +745,11 @@
   IHash
   (-hash [o] (scm-equal?-hash o))
 
+  IMeta
+  (-meta [o] nil)
+    
   IWithMeta
   (-with-meta [s meta] (Symbol+. s meta))
-
-  IMeta
-  (-meta [o] meta)
 
   IFn
   (-invoke [k [coll not-found]]
