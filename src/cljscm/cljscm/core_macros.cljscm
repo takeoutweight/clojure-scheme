@@ -2077,4 +2077,7 @@
   `(let [sb# (goog.string/StringBuffer.)]
      (binding [cljscm.core/*print-fn* (core/fn [x#] (.append sb# x#))]
        ~@body)
-     (cljscm.core/str sb#))) 
+     (cljscm.core/str sb#)))
+
+(defmacro eof-object? [o]
+  `(scm-boolean* {::o ~o} ~'(eof-object? ::o)))
