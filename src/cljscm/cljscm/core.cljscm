@@ -61,7 +61,7 @@
   cljscm.core/ILookup [cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/Subvec cljscm.core/TransientArrayMap cljscm.core/TransientVector cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/String cljscm.core/Table cljscm.core/PersistentTreeSet cljscm.core/TransientHashSet cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/TransientHashMap cljscm.core/PersistentTreeMap cljscm.core/Array cljscm.core/PersistentHashSet],
   cljscm.core/ISeq [cljscm.core/LazySeq cljscm.core/Cons cljscm.core/Range cljscm.core/PersistentQueue cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/ChunkedCons cljscm.core/ArrayNodeSeq cljscm.core/RSeq cljscm.core/NodeSeq cljscm.core/PersistentTreeMapSeq cljscm.core/Null]})
 
-(def *unchecked-if* false)
+;(def *unchecked-if* false)
 
 (def
   ^{:doc "Each runtime environment provides a diffenent way to print output.
@@ -2468,7 +2468,7 @@ reduces them without incurring seq initialization"
 ;; see core.clj
 #_(gen-apply-to)
 
-(set! *unchecked-if* true)
+;(set! *unchecked-if* true)
 (defn apply
   "Applies fn f to the argument list formed by prepending intervening arguments to args.
   First cut.  Not lazy.  Needs to use emitted toApply."
@@ -2521,7 +2521,7 @@ reduces them without incurring seq initialization"
             (apply-to f bc arglist)
             (.cljs$lang$applyTo f arglist)))
          (.apply f f (to-array arglist))))))
-(set! *unchecked-if* false)
+;(set! *unchecked-if* false)
 
 (defn vary-meta
  "Returns an object of the same type and value as obj, with
