@@ -257,13 +257,12 @@
     (##readtable-char-class-set! rt #\^ #t c/read-meta)
     (##readtable-char-class-set! rt #\\ #t read-char)
     (##readtable-char-class-set! rt #\. #f bard-read-number/keyword/symbol)
-;    (##readtable-char-class-set! rt #\& #t ##read-dot)
     (##readtable-char-class-set! rt #\[ #t c/read-vector)
     (##readtable-char-class-set! rt #\{ #t c/read-map)
     (##readtable-char-class-set! rt #\% #f c/read-arg)
 
 		(##readtable-char-sharp-handler-set! rt #\( c/read-fn)
-		(##readtable-char-sharp-handler-set! rt #\( c/read-fn)
+		(##readtable-char-sharp-handler-set! rt #\{ c/read-set)
 		(##readtable-char-sharp-handler-set! rt #\& c/read-dot)
 
     rt))
@@ -338,8 +337,8 @@
 			(macro-readenv-wrap re (c/into-table #f lst)))))
 
 (define (c/read-set re c start-pos)
+	(macro-read-next-char-or-eof re)					 ;; skip { after #
   (let ((start-pos (##readenv-current-filepos re)))
-    (macro-read-next-char-or-eof re) ;; skip opening {
     (macro-readenv-filepos-set! re start-pos) ;; set pos to start of datum
     (let* ((lst (##build-list re #t start-pos #\})))
 			(macro-readenv-wrap re (c/into-table-set #f lst)))))
@@ -593,8 +592,8 @@
 (include "~/src/c-clojure/src/cljscm/cljscm/core.scm")
 (define-macro (cljscm.selfanalyzer/defmacro . rst) "defmacro")
 (include "~/src/c-clojure/src/clj/cljscm/selfanalyzer.scm")
-)
 (include "~/src/c-clojure/src/cljscm/cljscm/core_macros.scm")
+)
 (include "~/src/c-clojure/src/clj/cljscm/selfcompiler.scm")
 (include "in.clj")
 (##current-readtable oldt)
