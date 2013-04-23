@@ -39,6 +39,8 @@
 (def ^:dynamic *position* nil)
 (def ^:dynamic *emitted-provides* nil)
 (def ^:dynamic *lexical-renames* {})
+(def ^:dynamic *lexical-renames* {})
+(def ^:dynamic *emit-for-prn?* false)
 (def cljs-reserved-file-names #{"deps.cljs"})
 
 (defn dispatch-munge [s]
@@ -119,9 +121,39 @@
 
 (defmethod emit-constant :default [x] x)
 (defmethod emit-constant Symbol [x] (emit-meta-constant x `(quote ~x)))
+
 (condc/platform-case
  :gambit
  (defmethod emit-constant Symbol+ [x] (emit-meta-constant x `(quote ~x))))
+
+(condc/platform-case
+ :jvm (defmethod emit-constant java.lang.Boolean [x]
+        (if *emit-for-prn?*
+          (symbol (if x "#t" "#f"))
+          x)))
+
+(condc/platform-case
+ :jvm (defmethod emit-constant java.lang.Character [x]
+        (if *emit-for-prn?*
+          (symbol (str "#" (pr-str x)))
+          x)))
+
+(condc/platform-case
+ :jvm (defmethod emit-constant clojure.lang.Keyword [x]
+        (if *emit-for-prn?*
+          (symbol (str (->> x
+                            (str)
+                            (drop 1)
+                            (apply str)) ":"))
+          x)))
+
+
+(condc/platform-case
+ :jvm (defmethod emit-constant nil [x]
+        (if *emit-for-prn?*
+          (symbol "#!void")
+          x)))
+
 (condc/platform-case
  :jvm (defmethod emit-constant java.util.regex.Pattern [x] :TODO-REGEX))
 
@@ -240,7 +272,7 @@
         else (emit else)]
     (if checked
       (let [t (gensym "test")]
-        `(let* ((~t ~test)) (if (~'and ~t (~'not (~'eq? nil ~t)))
+        `(let* ((~t ~test)) (if (~'and ~t (~'not (~'eq? ~(emit {:op :constant :form nil}) ~t)))
                               ~then
                               ~else)))
        (list 'if test then else))))
@@ -305,7 +337,7 @@
                      (if (and variadic single-arity)
                        [`(let* ((~(munge (last params))
                                  (if (~'null? ~(munge (last params)))
-                                   nil
+                                   ~(emit {:op :constant :form nil})
                                    ~(munge (last params)))))
                                ~@eexpr)]
                        eexpr))]
@@ -340,7 +372,7 @@
    (apply
     concat
     (for [[protocol meth-map] impls]
-      (cons `(~'table-set! (~'table-ref cljscm.core/protocol-impls ~(:name etype)) ~(:name protocol) true)
+      (cons `(~'table-set! (~'table-ref cljscm.core/protocol-impls ~(:name etype)) ~(:name protocol) ~(emit {:op :constant :form true}))
             (apply
              concat
              (for [[meth-name meth-impl] meth-map]
@@ -650,25 +682,25 @@
          (ana/analyze-file "cljscm/core.cljscm"))
        ~@body))
 
-(defmulti pp-scm type)
+#_(      (defmulti pp-scm type) ;No longer needed with emit's *emit-for-prn*
 
-(defmethod pp-scm clojure.lang.Keyword [o]
-  (.write ^java.io.Writer *out*
-          (str (->> o
-                   (str)
-                   (drop 1)
-                   (apply str)) ":")))
+         (defmethod pp-scm clojure.lang.Keyword [o]
+           (.write ^java.io.Writer *out*
+                   (str (->> o
+                             (str)
+                             (drop 1)
+                             (apply str)) ":")))
 
-(defmethod pp-scm java.lang.Boolean [o]
-  (.write ^java.io.Writer *out* (if o "#t" "#f")))
+         (defmethod pp-scm java.lang.Boolean [o]
+           (.write ^java.io.Writer *out* (if o "#t" "#f")))
 
-(defmethod pp-scm java.lang.Character [o]
-  (.write ^java.io.Writer *out* (str "#" (pr-str o))))
+         (defmethod pp-scm java.lang.Character [o]
+           (.write ^java.io.Writer *out* (str "#" (pr-str o))))
 
-(defmethod pp-scm nil [o]
-  (.write ^java.io.Writer *out* "#!void"))
+         (defmethod pp-scm nil [o]
+           (.write ^java.io.Writer *out* "#!void"))
 
-(defmethod pp-scm :default [o] (pp/simple-dispatch o))
+         (defmethod pp-scm :default [o] (pp/simple-dispatch o)))
 
 (condc/platform-case
  :jvm (defn compile-file* [src dest]
@@ -687,11 +719,13 @@
                 (if (seq forms)
                   (let [env (ana/empty-env)
                         ast (ana/analyze env (first forms))]
-                    (do (binding [*out* out]
-                          ;(prn (emit ast))
-                          (pp/with-pprint-dispatch
-                              pp-scm
-                              (pp/pprint (emit ast))))
+                    (do (binding [*out* out
+                                  *emit-for-prn?* true]
+                          (prn (emit ast))
+                          #_(pp/with-pprint-dispatch
+                                pp-scm
+                              (pp/pprint (emit ast)))
+                          #_(pp/pprint (emit ast)))
                         (if (= (:op ast) :ns)
                           (recur (rest forms) (:name ast) (merge (:uses ast) (:requires ast)))
                           (recur (rest forms) ns-name deps))))
