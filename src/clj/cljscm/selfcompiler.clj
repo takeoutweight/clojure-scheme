@@ -277,7 +277,7 @@
     (if variadic
       (if (> max-fixed-arity 0)
         (map munge (concat (take max-fixed-arity params)
-                           [(symbol "#&") (last params)]))
+                           ['. (last params)]))
         (munge (first params)))
       (map munge params))))
 
@@ -294,7 +294,7 @@
                  params)]
     (if variadic
       (map munge (concat (take max-fixed-arity params)
-                         [(symbol "#&") (last params)]))
+                         ['. (last params)]))
       (map munge params))))
 
 ;single-arity means we haven't done a "safe" arity dispatch.
@@ -650,6 +650,26 @@
          (ana/analyze-file "cljscm/core.cljscm"))
        ~@body))
 
+(defmulti pp-scm type)
+
+(defmethod pp-scm clojure.lang.Keyword [o]
+  (.write ^java.io.Writer *out*
+          (str (->> o
+                   (str)
+                   (drop 1)
+                   (apply str)) ":")))
+
+(defmethod pp-scm java.lang.Boolean [o]
+  (.write ^java.io.Writer *out* (if o "#t" "#f")))
+
+(defmethod pp-scm java.lang.Character [o]
+  (.write ^java.io.Writer *out* (str "#" (pr-str o))))
+
+(defmethod pp-scm nil [o]
+  (.write ^java.io.Writer *out* "#!void"))
+
+(defmethod pp-scm :default [o] (pp/simple-dispatch o))
+
 (condc/platform-case
  :jvm (defn compile-file* [src dest]
         (with-core-cljs
@@ -668,8 +688,10 @@
                   (let [env (ana/empty-env)
                         ast (ana/analyze env (first forms))]
                     (do (binding [*out* out]
-                          (prn (emit ast))
-                          #_ (pp/pprint (emit ast)))
+                          ;(prn (emit ast))
+                          (pp/with-pprint-dispatch
+                              pp-scm
+                              (pp/pprint (emit ast))))
                         (if (= (:op ast) :ns)
                           (recur (rest forms) (:name ast) (merge (:uses ast) (:requires ast)))
                           (recur (rest forms) ns-name deps))))
