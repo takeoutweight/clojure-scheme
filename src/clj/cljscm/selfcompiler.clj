@@ -34,7 +34,7 @@
 (def js-reserved
   #{'begin 'letrec 'lambda 'vector 'make-vector 'vector-ref 'vector-set! 'length
     'make-array 'define 'table-set! 'table-ref 'make-table 'reverse
-    'append-strings 'eq? 'raise})
+    'append-strings 'eq? 'raise '.})
 
 (def ^:dynamic *position* nil)
 (def ^:dynamic *emitted-provides* nil)
@@ -62,6 +62,9 @@
   ([x & ys] (str (strict-str x) (apply strict-str ys))))
 
 (defonce ns-first-segments (atom '#{"cljs" "clojure"}))
+
+(defn munge-constant [c]
+  (if (js-reserved c) (symbol (str c "$")) c))
 
 (defn munge
   ([s] (munge s js-reserved))
@@ -120,11 +123,11 @@
     outform))
 
 (defmethod emit-constant :default [x] x)
-(defmethod emit-constant Symbol [x] (emit-meta-constant x `(quote ~x)))
+(defmethod emit-constant Symbol [x] (emit-meta-constant x `(quote ~(munge-constant x))))
 
 (condc/platform-case
  :gambit
- (defmethod emit-constant Symbol+ [x] (emit-meta-constant x `(quote ~x))))
+ (defmethod emit-constant Symbol+ [x] (emit-meta-constant x `(quote ~(munge-constant x)))))
 
 (condc/platform-case
  :jvm (defmethod emit-constant java.lang.Boolean [x]
