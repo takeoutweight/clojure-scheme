@@ -6635,7 +6635,13 @@ reduces them without incurring seq initialization"
   (-flush [_] (set! sb (scm* {:sb sb} (list (append-strings (reverse :sb))))))
 
   IStringable
-  (-toString [o] (-flush o) (scm* {:sb sb} (car :sb))))
+  (-toString [o] (-flush o) (scm* {:sb sb} (car :sb)))
+
+  ICounted
+  (-count (reduce + (map count sb))))
+
+(defn string-buffer-writer
+  [] (StringBufferWriter (scm* {} (list))))
 
 #_(defn- ^:deprecated pr-seq
   "Do not use this.  It is kept for backwards compatibility with the
@@ -6700,8 +6706,7 @@ reduces them without incurring seq initialization"
     (pr-writer obj writer opts)))
 
 (defn- pr-sb-with-opts [objs opts]
-  (let [sb (scm* {} (list))
-        writer (StringBufferWriter. sb)]
+  (let [writer (make-string-buffer-writer)]
     (pr-seq-writer objs writer opts)
     (-flush writer)
     (-toString writer)))
