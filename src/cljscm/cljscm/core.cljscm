@@ -6643,7 +6643,7 @@ reduces them without incurring seq initialization"
   (-count [_] (reduce + (map count sb))))
 
 (defn string-buffer-writer
-  [] (StringBufferWriter (scm* {} (list))))
+  [] (StringBufferWriter. (scm* {} (list))))
 
 #_(defn- ^:deprecated pr-seq
   "Do not use this.  It is kept for backwards compatibility with the
@@ -6708,7 +6708,7 @@ reduces them without incurring seq initialization"
     (pr-writer obj writer opts)))
 
 (defn- pr-sb-with-opts [objs opts]
-  (let [writer (make-string-buffer-writer)]
+  (let [writer (string-buffer-writer)]
     (pr-seq-writer objs writer opts)
     (-flush writer)
     (-toString writer)))
