@@ -23,7 +23,8 @@ nil if the end of stream has been reached")
              (if (empty? @buffer-atom)
                (let [idx @index-atom]
                  (swap! index-atom inc)
-                 (aget s idx))
+                 (when (< idx ((scm* {} string-length) s))
+                   ((scm* {} string-ref) s idx)))
                (let [buf @buffer-atom]
                  (swap! buffer-atom rest)
                  (first buf))))
@@ -33,8 +34,10 @@ nil if the end of stream has been reached")
   "Creates a StringPushbackReader from a given string"
   (StringPushbackReader. s (atom 0) (atom nil)))
 
+;FIXME: analyze not resolving protocols.
+(defn -toString [x] (cljscm.core/-toString x))
 (defn write [sb o]
-  (-write sb (str o))
+  (cljscm.core/-write sb (str o))
   sb)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -44,7 +47,7 @@ nil if the end of stream has been reached")
 (defn- ^boolean whitespace?
   "Checks whether a given character is whitespace"
   [ch]
-  (#{\, \space \tab \n \r} ch))
+  (contains? #{\, \space \tab \newline \return} ch))
 
 (defn- ^boolean numeric?
   "Checks whether a given character is numeric"
@@ -78,9 +81,9 @@ nil if the end of stream has been reached")
   (throw (Error. (apply str msg))))
 
 (defn ^boolean macro-terminating? [ch]
-  (and (not (identical? ch "#"))
+  (and (not (identical? ch \#))
        (not (identical? ch \'))
-       (not (identical? ch ":"))
+       (not (identical? ch \:))
        (macros ch)))
 
 (defn read-token
@@ -222,7 +225,7 @@ nil if the end of stream has been reached")
   (let [ch (read-char rdr)
         dm (dispatch-macros ch)]
     (if dm
-      (dm rdr _)
+      (dm rdr nil)
       (if-let [obj (maybe-read-tagged-type rdr ch)]
         obj
         (reader-error rdr "No dispatch macro for " ch)))))
@@ -233,17 +236,17 @@ nil if the end of stream has been reached")
 
 (defn read-list
   [rdr _]
-  (apply list (read-delimited-list ")" rdr true)))
+  (apply list (read-delimited-list \) rdr true)))
 
 (def read-comment skip-line)
 
 (defn read-vector
   [rdr _]
-  (read-delimited-list "]" rdr true))
+  (read-delimited-list \] rdr true))
 
 (defn read-map
   [rdr _]
-  (let [l (read-delimited-list "}" rdr true)]
+  (let [l (read-delimited-list \} rdr true)]
     (when (odd? (count l))
       (reader-error rdr "Map literal must contain an even number of forms"))
     (apply hash-map l)))
@@ -267,16 +270,16 @@ nil if the end of stream has been reached")
          ch (read-char reader)]
     (cond
      (nil? ch) (reader-error reader "EOF while reading")
-     (identical? "\\" ch) (recur (do (write buffer (escape-char buffer reader)) buffer)
+     (identical? \\ ch) (recur (do (write buffer (escape-char buffer reader)) buffer)
                         (read-char reader))
      (identical? \" ch) (-toString buffer)
      :default (recur (do (write buffer ch) buffer) (read-char reader)))))
 
 (defn special-symbols [t not-found]
   (cond
-   (identical? t "nil") nil
-   (identical? t "true") true
-   (identical? t "false") false
+   (= t "nil") nil
+   (= t "true") true
+   (= t "false") false
    :else not-found))
 
 (defn read-symbol
@@ -334,7 +337,7 @@ nil if the end of stream has been reached")
 
 (defn read-set
   [rdr _]
-  (set (read-delimited-list "}" rdr true)))
+  (set (read-delimited-list \} rdr true)))
 
 #_( TODO (defn read-regex
                 [rdr ch]
@@ -369,11 +372,11 @@ nil if the end of stream has been reached")
 ;; omitted by design: var reader, eval reader
 (defn dispatch-macros [s]
   (cond
-   (identical? s "{") read-set
-   (identical? s "<") (throwing-reader "Unreadable form")
-;   (identical? s "\"") read-regex TODO
-   (identical? s"!") read-comment
-   (identical? s "_") read-discard
+   (identical? s \{) read-set
+   (identical? s \<) (throwing-reader "Unreadable form")
+;   (identical? s \") read-regex TODO
+   (identical? s\!) read-comment
+   (identical? s \_) read-discard
    :else nil))
 
 (defn read
