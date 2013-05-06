@@ -593,6 +593,7 @@
 (define-macro (cljscm.selfanalyzer/defmacro . rst) "defmacro")
 (include "~/src/c-clojure/src/clj/cljscm/selfanalyzer.scm")
 (include "~/src/c-clojure/src/cljscm/cljscm/core_macros.scm")
+(include "~/src/c-clojure/src/cljscm/cljscm/reader.scm")
 )
 (include "~/src/c-clojure/src/clj/cljscm/selfcompiler.scm")
 (include "in.clj")
