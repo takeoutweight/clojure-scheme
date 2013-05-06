@@ -236,7 +236,7 @@
 (defmethod emit :vector [{:keys [items]}]
   (if (empty? items)
     'cljscm.core/PersistentVector-EMPTY
-    `(cljscm.core/PersistentVector-fromArray ~(cons 'vector (map emit items)) true)))
+    `(cljscm.core/PersistentVector-fromArray ~(cons 'vector (map emit items)) ~(emit-constant true))))
 (defmethod emit :set [{:keys [items]}]
   (if (empty? items)
     'cljscm.core/PersistentHashSet-EMPTY
