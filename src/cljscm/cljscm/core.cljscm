@@ -6640,7 +6640,7 @@ reduces them without incurring seq initialization"
   (-toString [o] (-flush o) (scm* {:sb sb} (car :sb)))
 
   ICounted
-  (-count (reduce + (map count sb))))
+  (-count [_] (reduce + (map count sb))))
 
 (defn string-buffer-writer
   [] (StringBufferWriter (scm* {} (list))))
