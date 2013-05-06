@@ -1697,7 +1697,9 @@ reduces them without incurring seq initialization"
 (defn int
   "Coerce to int by stripping decimal places."
   [x]
-  (fix x))
+  (if (char? x)
+    (scm* [x] (char->integer x))
+    (fix x)))
 
 (defn long
   "Coerce to long by stripping decimal places. Identical to `int'."
