@@ -2474,7 +2474,7 @@ reduces them without incurring seq initialization"
 (defn apply
   "Applies fn f to the argument list formed by prepending intervening arguments to args.
   First cut.  Not lazy.  Needs to use emitted toApply."
-  ([f args] (let [arglist (-pair args)] (scm* [f arglist] (polymorphic-apply-with-procedure-check f arglist))))
+  ([f args] (let [arglist (pair args)] (scm* [f arglist] (polymorphic-apply-with-procedure-check f arglist))))
   ([f x & args] (let [r (concat [x] (butlast args) (last args))]
                   (apply f r))))
 
