@@ -291,7 +291,7 @@
   [{:keys [name init dynamic env doc export]}]
   (let [i (when init [(emit init)])]
     (if dynamic
-      (list 'define name (concat ['make-parameter] (or i [nil])))
+      (list 'define name (concat ['make-parameter] (or i [(emit {:op :constant :form nil})])))
       (concat ['define name] i))))
 
 (defn schemify-method-arglist
