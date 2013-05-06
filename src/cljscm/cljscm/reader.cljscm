@@ -102,8 +102,6 @@ nil if the end of stream has been reached")
         reader
         (recur)))))
 
-(def symbol-pattern (re-pattern "[:]?([^0-9/].*/)?([^0-9/][^/]*)"))
-
 #_( TODO (defn- re-find*
   [re s]
   (let [matches (.exec re s)]
