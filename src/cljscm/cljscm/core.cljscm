@@ -7478,7 +7478,7 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
   (let [dispatch-val (apply dispatch-fn args)
         target-fn (-get-method mf dispatch-val)]
     (when-not target-fn
-      (throw (Error. (str "No method in multimethod '" name "' for dispatch value: " dispatch-val))))
+      (throw (Error. (str "No method in multimethod '" (.-name mf) "' for dispatch value: " dispatch-val))))
     (apply target-fn args)))
 
 (deftype MultiFn [name dispatch-fn default-dispatch-val hierarchy
