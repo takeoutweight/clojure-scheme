@@ -44,9 +44,11 @@
 (def cljs-reserved-file-names #{"deps.cljs"})
 
 (defn dispatch-munge [s]
-  (-> s
-      (clojure.string/replace "." "_")
-      (clojure.string/replace "/" "$")))
+  (->> s
+       (str)
+       (replace {\. \_})
+       (replace {\/ \$})
+       (apply str)))
 
 (declare emits emitln)
 
@@ -477,10 +479,6 @@
                       (= (infer-tag (first (:args expr))) 'boolean))
         ns (:ns info)
         js? (= ns 'js)
-        goog? (when ns
-                (or (= ns 'goog)
-                    (when-let [ns-str (str ns)]
-                      (= (get (string/split ns-str #"\.") 0 nil) "goog"))))
         keyword? (and (= (-> f :op) :constant)
                       (keyword? (-> f :form)))
         [f variadic-invoke]
@@ -561,7 +559,7 @@
 
 (defmethod emit :ns
   [{:keys [name requires uses requires-macros env]}]
-  (swap! ns-first-segments conj (first (string/split (str name) #"\.")))
+  (swap! ns-first-segments conj (apply str (first (partition-by #{\.} (str name)))))
   (concat ['begin (list 'declare
                         (list 'standard-bindings)
                         (list 'extended-bindings)
