@@ -8,7 +8,8 @@
 
 (ns cljscm.selfcompiler
   (:refer-clojure :exclude [munge macroexpand-1])
-  (:require [cljscm.conditional :as condc]))
+  (:require [cljscm.conditional :as condc]
+            [cljscm.selfanalyzer :as ana]))
 
 (condc/platform-case
  :jvm (do
@@ -17,8 +18,7 @@
                  '[clojure.walk :as walk]
                  '[clojure.pprint :as pp]
                  '[cljscm.conditional :as condc]
-                 '[cljscm.tagged-literals :as tags] 
-                 '[cljscm.selfanalyzer :as ana])
+                 '[cljscm.tagged-literals :as tags])
         (import (clojure.lang Symbol
                               Cons
                               PersistentHashSet)))
