@@ -43,7 +43,7 @@
   cljscm.core/IMapEntry [cljscm.core/RedNode cljscm.core/PersistentVector cljscm.core/BlackNode],
   cljscm.core/IReversible [cljscm.core/IndexedSeq cljscm.core/PersistentVector cljscm.core/PersistentTreeSet cljscm.core/PersistentTreeMap],
   cljscm.core/ASeq [cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/ChunkedCons cljscm.core/Cons],
-  cljscm.core/IPrintWithWriter [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Atom cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Error cljscm.core/Range cljscm.core/Number cljscm.core/Char cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/Keyword cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/String cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/Procedure cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/UUID cljscm.core/PersistentTreeMapSeq cljscm.core/Symbol cljscm.core/Symbol+ cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Array cljscm.core/Boolean cljscm.core/PersistentHashSet],
+  cljscm.core/IPrintWithWriter [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Atom cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Error cljscm.core/Range cljscm.core/Number cljscm.core/Char cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/Keyword cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/String cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/Procedure cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/UUID cljscm.core/PersistentTreeMapSeq cljscm.core/Symbol cljscm.core/Symbol+ cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Array cljscm.core/Boolean cljscm.core/PersistentHashSet cljscm.core/Class],
   cljscm.core/ISequential [cljscm.core/PersistentQueue cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/RSeq cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/PersistentTreeMapSeq cljscm.core/Null cljscm.core/Array],
   cljscm.core/IDeref [cljscm.core/Atom cljscm.core/Reduced cljscm.core/Delay],
   cljscm.core/IComparable [cljscm.core/PersistentVector],
@@ -55,8 +55,8 @@
   cljscm.core/IMap [cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/Table cljscm.core/PersistentHashMap cljscm.core/PersistentTreeMap],
   cljscm.core/ITransientCollection [cljscm.core/TransientArrayMap cljscm.core/TransientVector cljscm.core/TransientHashSet cljscm.core/TransientHashMap],
   cljscm.core/IStack [cljscm.core/PersistentQueue cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Pair cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/BlackNode cljscm.core/Cons],
-  cljscm.core/IWithMeta [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/PersistentTreeMapSeq cljscm.core/PersistentTreeMap cljscm.core/Array cljscm.core/PersistentHashSet],
-  cljscm.core/IPrintable [cljscm.core/Nil cljscm.core/Class cljscm.core/Procedure cljscm.core/UUID cljscm.core/Null],
+  cljscm.core/IWithMeta [cljscm.core/Symbol cljscm.core/Symbol+ cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/PersistentTreeMapSeq cljscm.core/PersistentTreeMap cljscm.core/Array cljscm.core/PersistentHashSet],
+  cljscm.core/IPrintable [cljscm.core/Nil cljscm.core/Procedure cljscm.core/UUID cljscm.core/Null],
   cljscm.core/IChunkedNext [cljscm.core/ChunkedSeq cljscm.core/ChunkedCons],
   cljscm.core/ILookup [cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/Subvec cljscm.core/TransientArrayMap cljscm.core/TransientVector cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/String cljscm.core/Table cljscm.core/PersistentTreeSet cljscm.core/TransientHashSet cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/TransientHashMap cljscm.core/PersistentTreeMap cljscm.core/Array cljscm.core/PersistentHashSet],
   cljscm.core/ISeq [cljscm.core/LazySeq cljscm.core/Cons cljscm.core/Range cljscm.core/PersistentQueue cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/ChunkedCons cljscm.core/ArrayNodeSeq cljscm.core/RSeq cljscm.core/NodeSeq cljscm.core/PersistentTreeMapSeq cljscm.core/Null]})
@@ -500,7 +500,7 @@
 (scm* {} (table-set! cljscm.core/protocol-impls cljscm.core/Table (make-table)))
 (scm* {} (define (make-cljscm.core/Table) (make-table)))
 
-(def Class (type (type (scm* {} (make-table)))))
+(def Class (type cljscm.core/Number))
 (scm* {} (table-set! cljscm.core/protocol-impls cljscm.core/Class (make-table)))
 ;(scm* {} (define (cljscm.core/Class? x) (equal? (cljscm.core/type x) )))
 (defn Class? [x] (identical? (type x) Class))
@@ -524,8 +524,8 @@
   ICollection
   (-conj [_ o] (list o))
 
-  ^:deprecation-nowarn IPrintable
-  (-pr-seq [o] (list "nil"))
+;  ^:deprecation-nowarn IPrintable
+;  (-pr-seq [o] (list "nil"))
 
   IIndexed
   (-nth
@@ -782,8 +782,8 @@
   IHash
   (-hash [o] (scm-equal?-hash o))
 
-  IPrintable
-  (-pr-seq [a opts]
+  #_IPrintable
+  #_(-pr-seq [a opts]
     ["#<Class " (str (scm-unsafe-vector-ref a 2)) ">"]))
 
 (declare with-meta)
@@ -6821,6 +6821,9 @@ reduces them without incurring seq initialization"
        \"))
 
 (extend-protocol IPrintWithWriter
+  Class
+  (-pr-writer [o wr opts] (-write wr (str "#<Class " (scm-unsafe-vector-ref o 2) ">")))
+  
   Number
   (-pr-writer [n wr opts] (-write wr (scm* [n] (number->string n))))
 
