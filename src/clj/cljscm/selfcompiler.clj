@@ -66,7 +66,7 @@
 (defonce ns-first-segments (atom '#{"cljs" "clojure"}))
 
 (defn munge-constant [c]
-  (if (js-reserved c) (symbol (str c "$")) c))
+  (if (#{'.} c) (symbol (str c "$")) c)) ;dots are illegal syntax.
 
 (defn munge
   ([s] (munge s js-reserved))
