@@ -18,7 +18,7 @@
   cljscm.core/ICollection [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/PersistentTreeMapSeq cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Array cljscm.core/PersistentHashSet],
   cljscm.core/IVector [cljscm.core/Subvec cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/BlackNode cljscm.core/Array],
   cljscm.core/INode [cljscm.core/BitmapIndexedNode cljscm.core/HashCollisionNode cljscm.core/ArrayNode],
-  cljscm.core/IPairable [cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/Vector cljscm.core/LazySeq cljscm.core/Cons cljscm.core/Null cljscm.core/Array],
+  cljscm.core/IPairable [cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/Vector cljscm.core/Cons cljscm.core/Null cljscm.core/Array],
   cljscm.core/Fn [cljscm.core/Procedure],
   cljscm.core/IHash [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Atom cljscm.core/Nil cljscm.core/EmptyList cljscm.core/MultiFn cljscm.core/Subvec cljscm.core/Range cljscm.core/Number cljscm.core/Char cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/Keyword cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/String cljscm.core/Table cljscm.core/RSeq cljscm.core/Class cljscm.core/PersistentTreeSet cljscm.core/Procedure cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/UUID cljscm.core/PersistentTreeMapSeq cljscm.core/Symbol cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Boolean cljscm.core/PersistentHashSet],
   cljscm.core/IIndexed [cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/TransientVector cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/String cljscm.core/ArrayChunk cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/Cons cljscm.core/Null cljscm.core/Array],
@@ -356,7 +356,24 @@
 (defn pair [coll]
   (if (satisfies? IPairable coll)
     (-pair coll)
-    ((scm* {} cons) (first coll) (pair (rest coll)))))
+    (if (seq coll)
+      ((scm* {} cons) (first coll) (pair (rest coll)))
+      ())))
+
+(defn pair-recursive [coll]
+  (if (seq coll)
+    (let [[fst & rst] coll]
+      ((scm* {} cons)
+       (if (coll? fst) (pair-recursive fst) fst)
+       (pair-recursive rst)))
+    ()))
+
+#_(defn pair-recursive [coll]
+  (if (seq coll)
+    ((scm* {} cons)
+     (if (coll? (first coll)) (pair-recursive (first coll)) (first coll))
+     (pair-recursive (rest coll)))
+    ()))
 
 (defn record-ref [obj field]
   (if (and (identical? 1 (scm-type-idx obj))
@@ -1840,7 +1857,7 @@ reduces them without incurring seq initialization"
          (-toString x)
          (pr-str x)))
   ([x & ys]
-     (scm* {:strs (-pair (map str (cons x ys)))}
+     (scm* {:strs (pair (map str (cons x ys)))}
            (append-strings :strs))))
 
 (defn subs
@@ -2148,9 +2165,6 @@ reduces them without incurring seq initialization"
 
   IMeta
   (-meta [coll] meta)
-
-  IPairable
-  (-pair [coll] (pair (-seq coll)))
 
   ICounted
   (-count [coll] (count (-pair coll)))
