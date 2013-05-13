@@ -7286,6 +7286,25 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
        (assoc ret k (conj (get ret k []) x))))
    {} coll))
 
+;; UUID
+
+(deftype UUID [uuid]
+  IEquiv
+  (-equiv [_ other]
+    (and (instance? UUID other) (identical? uuid (.-uuid other))))
+
+  ^:deprecation-nowarn IPrintable
+  (-pr-seq [_ _]
+    (list (str "#uuid \"" uuid "\"")))
+
+  IPrintWithWriter
+  (-pr-writer [_ writer _]
+    (-write writer (str "#uuid \"" uuid "\"")))
+
+  IHash
+  (-hash [this]
+    (goog.string/hashCode (pr-str this))))
+
 (defn make-hierarchy
   "Creates a hierarchy object for use with derive, isa? etc."
   [] {:parents {} :descendants {} :ancestors {}})
@@ -7567,25 +7586,6 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
 (defn prefers
   "Given a multimethod, returns a map of preferred value -> set of other values"
   [multifn] (-prefers multifn))
-
-;; UUID
-
-(deftype UUID [uuid]
-  IEquiv
-  (-equiv [_ other]
-    (and (instance? UUID other) (identical? uuid (.-uuid other))))
-
-  ^:deprecation-nowarn IPrintable
-  (-pr-seq [_ _]
-    (list (str "#uuid \"" uuid "\"")))
-
-  IPrintWithWriter
-  (-pr-writer [_ writer _]
-    (-write writer (str "#uuid \"" uuid "\"")))
-
-  IHash
-  (-hash [this]
-    (goog.string/hashCode (pr-str this))))
 
 ;;; ExceptionInfo
 
