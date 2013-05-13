@@ -2093,13 +2093,6 @@ reduces them without incurring seq initialization"
           (get (aget args 0) s (aget args 1)))))
 
 (extend-type String
-  IFn
-  (-invoke
-    ([this coll]
-       (get coll this))
-    ([this coll not-found]
-       (get coll this not-found)))
-
   IHash
   (-hash [o] (scm-equal?-hash o))
 
@@ -3404,9 +3397,7 @@ reduces them without incurring seq initialization"
           (aget step-init 1)))))
 
   IFn
-  (-invoke [coll k]
-    (-lookup coll k))
-  (-invoke [coll k not-found]
+  (-invoke [coll [k not-found]]
     (-lookup coll k not-found))
 
   IEditableCollection
@@ -3790,10 +3781,7 @@ reduces them without incurring seq initialization"
   (-lookup [coll k not-found] (-nth coll k not-found))
 
   IFn
-  (-invoke [coll k]
-    (-lookup coll k))
-
-  (-invoke [coll k not-found]
+  (-invoke [coll [k not-found]]
     (-lookup coll k not-found)))
 
 ;;; PersistentQueue ;;;
@@ -4033,9 +4021,7 @@ reduces them without incurring seq initialization"
       coll)) ; key not found, return coll unchanged
 
   IFn
-  (-invoke [coll k]
-    (-lookup coll k))
-  (-invoke [coll k not-found]
+  (-invoke [coll [k not-found]]
     (-lookup coll k not-found))
 
   IEditableCollection
@@ -4142,9 +4128,7 @@ reduces them without incurring seq initialization"
           (HashMap. meta (dec count) new-hashobj nil)))))
 
   IFn
-  (-invoke [coll k]
-    (-lookup coll k))
-  (-invoke [coll k not-found]
+  (-invoke [coll [k not-found]]
     (-lookup coll k not-found)))
 
 #_(set! cljscm.core.HashMap/EMPTY (HashMap. nil 0 (js-obj) 0))
@@ -4396,10 +4380,7 @@ reduces them without incurring seq initialization"
           init))))
 
   IFn
-  (-invoke [coll k]
-    (-lookup coll k))
-
-  (-invoke [coll k not-found]
+  (-invoke [coll [k not-found]]
     (-lookup coll k not-found))
 
   IEditableCollection
@@ -5182,8 +5163,8 @@ reduces them without incurring seq initialization"
         :else                    init)))
 
   IFn
-  (-invoke [coll args]
-    (apply -lookup coll args))
+  (-invoke [coll [k not-found]]
+    (-lookup coll k not-found))
 
   IEditableCollection
   (-as-transient [coll]
@@ -5544,10 +5525,7 @@ reduces them without incurring seq initialization"
     (ci-reduce node f start))
 
   IFn
-  (-invoke [node k]
-    (-lookup node k))
-
-  (-invoke [node k not-found]
+  (-invoke [node [k not-found]]
     (-lookup node k not-found)))
 
 (deftype RedNode [key val left right ^:mutable __hash]
@@ -5686,10 +5664,7 @@ reduces them without incurring seq initialization"
     (ci-reduce node f start))
 
   IFn
-  (-invoke [node k]
-    (-lookup node k))
-
-  (-invoke [node k not-found]
+  (-invoke [node [k not-found]]
     (-lookup node k not-found)))
 
 (defn- tree-map-add [comp tree k v found]
@@ -5841,10 +5816,7 @@ reduces them without incurring seq initialization"
       init))
 
   IFn
-  (-invoke [coll k]
-    (-lookup coll k))
-
-  (-invoke [coll k not-found]
+  (-invoke [coll [k not-found]]
     (-lookup coll k not-found))
 
   ISeqable
@@ -6074,9 +6046,7 @@ reduces them without incurring seq initialization"
     (PersistentHashSet. meta (dissoc hash-map v) nil))
 
   IFn
-  (-invoke [coll args]
-    (apply -lookup coll args))
-  #_(-invoke [coll k not-found]
+  (-invoke [coll [k not-found]]
     (-lookup coll k not-found))
 
   IEditableCollection
@@ -6118,12 +6088,7 @@ reduces them without incurring seq initialization"
       v))
 
   IFn
-  (-invoke [tcoll k]
-    (if (identical? (-lookup transient-map k lookup-sentinel) lookup-sentinel)
-      nil
-      k))
-
-  (-invoke [tcoll k not-found]
+  (-invoke [tcoll [k not-found]]
     (if (identical? (-lookup transient-map k lookup-sentinel) lookup-sentinel)
       not-found
       k)))
