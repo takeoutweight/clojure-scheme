@@ -524,6 +524,9 @@
 
 (defn scm-equal?-hash [o]
   (scm-boolean* [o] (equal?-hash o)))
+
+(defn identity-hash [o]
+  (scm* [o] (object->serial-number o)))
 ;;;;;;;;;;;;;;;;;;; protocols on primitives ;;;;;;;;
 (declare hash-map list equiv-sequential)
 

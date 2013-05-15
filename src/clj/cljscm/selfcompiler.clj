@@ -432,7 +432,9 @@
   [{:keys [bindings expr env recur-name]} kind]
   (binding [*lexical-renames* (into *lexical-renames*
                                     (when (= :statement (:context env))
-                                      (map #(vector (System/identityHashCode %)
+                                      (map #(vector (condc/platform-case
+                                                     :jvm (System/identityHashCode %)
+                                                     :gambit (identity-hash %))
                                                     (gensym (str (:name %) "-")))
                                            bindings)))]
     (let [bs (for [{:keys [name init]} bindings] (list name (emit init)))]
