@@ -313,8 +313,16 @@
                  params)]
     (if variadic
       (if (> max-fixed-arity 0)
-        (map munge (concat (take max-fixed-arity params)
-                           ['. (last params)]))
+        (condc/platform-case
+         :jvm (map munge (concat (take max-fixed-arity params)
+                                 ['. (last params)]))
+         :gambit (scm* {::front (->> params
+                                     (take (dec max-fixed-arity))
+                                     (map munge)
+                                     (cljscm.core/pair))
+                        ::2nd-last (munge (nth params (dec max-fixed-arity)))
+                        ::last (munge (last params))}
+                       (append ::front (cons ::2nd-last ::last))))
         (munge (first params)))
       (map munge params))))
 

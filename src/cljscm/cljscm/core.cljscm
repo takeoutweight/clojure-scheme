@@ -361,12 +361,19 @@
       ())))
 
 (defn pair-recursive [coll]
-  (if (seq coll)
-    (let [[fst & rst] coll]
-      ((scm* {} cons)
-       (if (coll? fst) (pair-recursive fst) fst)
-       (pair-recursive rst)))
-    ()))
+  (cond
+;have to worry about improper lists.
+    (scm* [coll] (and (pair? coll) (not (list? coll))))
+    , (let [fst (scm* [coll] (car coll))
+            snd (scm* [coll] (cdr coll))]
+        ((scm* {} cons)
+         (if (coll? fst) (pair-recursive fst) fst)
+         (if (coll? snd) (pair-recursive snd) snd)))
+    (seq coll) (let [[fst & rst] coll]
+                 ((scm* {} cons)
+                  (if (coll? fst) (pair-recursive fst) fst)
+                  (pair-recursive rst)))
+    :else ()))
 
 #_(defn pair-recursive [coll]
   (if (seq coll)
