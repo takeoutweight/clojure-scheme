@@ -287,8 +287,8 @@ nil if the end of stream has been reached")
   (let [token (read-token reader initch)]
     (if (some #{\/} token)
       (let [[namespace _ name] (partition-by #{\/} token)]
-        (symbol (str namespace)
-                (str name)))
+        (symbol (apply str namespace)
+                (apply str name)))
       (special-symbols token (symbol token)))))
 
 (defn read-keyword
