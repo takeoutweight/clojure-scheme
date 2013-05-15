@@ -25,7 +25,7 @@
   cljscm.core/IWriter [cljscm.core/StringBufferWriter],
   cljscm.core/IChunkedSeq [cljscm.core/ChunkedSeq cljscm.core/ChunkedCons],
   cljscm.core/IEmptyableCollection [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/ArrayNodeSeq cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/Cons cljscm.core/PersistentTreeMapSeq cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/PersistentHashSet],
-  cljscm.core/ICounted [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/ChunkBuffer cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/TransientArrayMap cljscm.core/TransientVector cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/String cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/TransientHashSet cljscm.core/ArrayChunk cljscm.core/LazySeq cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/Cons cljscm.core/TransientHashMap cljscm.core/PersistentTreeMapSeq cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Array cljscm.core/PersistentHashSet],
+  cljscm.core/ICounted [cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/ChunkBuffer cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Range cljscm.core/Pair cljscm.core/IndexedSeq cljscm.core/TransientArrayMap cljscm.core/TransientVector cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/String cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/TransientHashSet cljscm.core/ArrayChunk cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/Cons cljscm.core/TransientHashMap cljscm.core/PersistentTreeMapSeq cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Array cljscm.core/PersistentHashSet],
   cljscm.core/IKVReduce [cljscm.core/PersistentArrayMap cljscm.core/BitmapIndexedNode cljscm.core/HashCollisionNode cljscm.core/RedNode cljscm.core/PersistentVector cljscm.core/ArrayNode cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/PersistentTreeMap],
   cljscm.core/ITransientVector [cljscm.core/TransientVector],
   cljscm.core/ISorted [cljscm.core/PersistentTreeSet cljscm.core/PersistentTreeMap],
@@ -2168,9 +2168,6 @@ reduces them without incurring seq initialization"
 
   IMeta
   (-meta [coll] meta)
-
-  ICounted
-  (-count [coll] (count (-pair coll)))
 
   ISeq
   (-first [coll] (first (lazy-seq-value coll)))
