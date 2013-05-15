@@ -5,7 +5,7 @@
 ;   By using this software in any fashion, you are agreeing to be bound by
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software.
-(in-ns 'cljscm.core)
+(ns cljscm.core)
 (require '[cljscm.conditional :as condc])
 
 (condc/platform-case
@@ -37,11 +37,11 @@
 (def ^:dynamic *cljs-ns* 'cljscm.user)
 
 ; Just assumes symbols are quoted now, won't eval in gambit.
-(core/defmacro alias [alias lib]
+(clojure.core/defmacro alias [alias lib]
   (condc/platform-case
    :jvm (do
           (println "; in JVM")
-          (try (core/alias (second alias) (second lib)) ;real aliases are needed for reader to properly expand.
+          (try (clojure.core/alias (second alias) (second lib)) ;real aliases are needed for reader to properly expand.
                (catch java.lang.IllegalStateException e nil))  ;realiasing is an exception; fix in analyzer's ns evaluation.
           (swap! ana/namespaces #(assoc-in % [(.getName *ns*) :requires (second alias)] (second lib)))
           ;(swap! ana/namespaces #(assoc-in % [(.getName *ns*) :requires-macros (find-ns alias)] lib))
@@ -148,7 +148,7 @@
               (list form x)))
   ([x form & more] `(->> (->> ~x ~form) ~@more)))
 
-#_(defmacro ..
+(defmacro ..
   "form => fieldName-symbol or (instanceMethodName-symbol args*)
 
   Expands into a member access (.) of the first member on the first
@@ -338,6 +338,14 @@
   (emit-extend-protocol p specs))
 
 (condc/platform-case :jvm (def reduce1 #'core/reduce1))
+
+(defmacro ^{:private true} assert-args [fnname & pairs]
+  `(do (when-not ~(first pairs)
+         (throw (IllegalArgumentException.
+                  ~(core/str fnname " requires " (second pairs)))))
+     ~(core/let [more (nnext pairs)]
+        (when more
+          (list* `assert-args fnname more)))))
 
 (defmacro for
   "List comprehension. Takes a vector of one or more
@@ -588,14 +596,6 @@
         `(~new-params
           (let ~lets
             ~@body))))))
-
-(defmacro ^{:private true} assert-args [fnname & pairs]
-  `(do (when-not ~(first pairs)
-         (throw (IllegalArgumentException.
-                  ~(core/str fnname " requires " (second pairs)))))
-     ~(core/let [more (nnext pairs)]
-        (when more
-          (list* `assert-args fnname more)))))
 
 (core/defn destructure [bindings]
   (core/let [bents (partition 2 bindings)
