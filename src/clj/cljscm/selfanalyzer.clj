@@ -186,8 +186,8 @@
                      :ns full-ns}))
 
            (some #{\.} (seq s))
-           (let [[prefix suffix] (split-with (complement #{\.}) (seq s))
-                 [prefix suffix] [(symbol (apply str prefix)) (apply str (drop 1 suffix))]
+           (let [[prefix _ suffix] (partition-by   #{\.} s)
+                 [prefix suffix] [(symbol (apply str prefix)) (apply str suffix)]
                  lb (-> env :locals prefix)]
              (if lb
                {:name (symbol (str (:name lb) suffix))}
