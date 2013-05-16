@@ -9,5 +9,6 @@ closure
 .repl
 *.swp
 *.zip
+*.o*
 clojurescript_release_*
 closure-release-*
