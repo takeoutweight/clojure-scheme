@@ -6241,40 +6241,17 @@ reduces them without incurring seq initialization"
       (recur (conj ret (first s)) (next s))
       (seq ret))))
 
-;TODO: strip out namesapce
 (defn name
-  "Returns the name String of a string, symbol or keyword."
-  [x]
-  (let [split-slash (scm* {::slashchar (scm* [] "#\\/")}
-                          (lambda (str) (let* ((lst (string->list str))
-                                               (split (memq ::slashchar (reverse lst))))
-                                              (if split
-                                                (let* ((last-slash-idx (length split)))
-                                                      (list->string (list-tail lst last-slash-idx)))
-                                                str))))]
-    (cond
-      (string? x) x
-      (keyword? x) (split-slash (str x))
-      (symbol? x) (split-slash (str x))
-      :else (throw (Error. (str "Doesn't support name: " x))))))
+  "Returns the namespace String of a symbol or keyword, or nil if not present."
+  [s]
+  (let [[ns _ nm] (partition-by #{\/} (str s))]
+    (if nm (apply str nm) (apply str ns))))
 
 (defn namespace
   "Returns the namespace String of a symbol or keyword, or nil if not present."
-  [x]
-  (let [keep-to-slash (scm* {::slashchar (scm* {} "#\\/")}
-                         (lambda (str)
-                                 (let* ((lst (string->list str))
-                                        (split (memq ::slashchar (reverse lst))))
-                                       (if split
-                                         (let* ((last-slash-idx (- (length lst) (length split) -1)))
-                                               (list->string (reverse (list-tail (reverse lst) last-slash-idx)))
-                                               )
-                                         (void)))))]
-    (cond
-      (string? x) x
-      (keyword? x) (keep-to-slash (str x))
-      (symbol? x) (keep-to-slash (str x))
-      :else (throw (Error. (str "Doesn't support namespace: " x))))))
+  [s]
+  (let [[ns _ nm] (partition-by #{\/} (str s))]
+              (when nm (apply str ns))))
 
 (defn zipmap
   "Returns a map with the keys mapped to the corresponding vals."
