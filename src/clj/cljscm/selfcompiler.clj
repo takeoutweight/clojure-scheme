@@ -689,7 +689,7 @@
 (defmacro with-core-cljs
   "Ensure that core.cljscm has been loaded."
   [& body]
-  `(do (when-not (:defs (get @ana/namespaces 'cljscm.core))
+  `(do (when-not (:defs (get @(ana/get-namespaces) 'cljscm.core))
          (ana/analyze-file "cljscm/core.cljscm"))
        ~@body))
 
@@ -950,7 +950,7 @@
 
 (analyze envx '(ns fred (:require [your.ns :as yn]) (:require-macros [clojure.core :as core])))
 (defmacro js [form]
-  `(emit (ana/analyze {:ns (@ana/namespaces 'cljscm.user) :context :statement :locals {}} '~form)))
+  `(emit (ana/analyze {:ns (@(ana/get-namespaces) 'cljscm.user) :context :statement :locals {}} '~form)))
 
 (defn jscapture [form]
   "just grabs the js, doesn't print it"

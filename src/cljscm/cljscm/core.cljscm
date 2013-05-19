@@ -7627,3 +7627,9 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
   (when (instance? ExceptionInfo ex)
     (.-cause ex)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; namespaces ;;;;;;;;;;;;
+
+;runtime analog to cljscm.selfanalyzer/namespaces
+(def namespaces (atom '{cljscm.core {:name cljscm.core}
+                        cljscm.user {:name cljscm.user}}))
+

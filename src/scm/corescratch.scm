@@ -590,7 +590,7 @@
 )
 (begin
 (include "~/src/c-clojure/src/cljscm/cljscm/core.scm")
-(define-macro (cljscm.selfanalyzer/defmacro . rst) "defmacro")
+(define-macro (cljscm.core/defmacro . rst) "defmacro")
 (include "~/src/c-clojure/src/clj/cljscm/selfanalyzer.scm")
 (include "~/src/c-clojure/src/cljscm/cljscm/core_macros.scm")
 (include "~/src/c-clojure/src/cljscm/cljscm/reader.scm")

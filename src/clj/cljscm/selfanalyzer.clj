@@ -28,22 +28,29 @@
 (def ^:dynamic *reader-ns-name* (gensym "reader"))
 (def ^:dynamic *reader-ns* (condc/platform-case :jvm (create-ns *reader-ns-name*)))
 
-(def namespaces (atom '{cljscm.core {:name cljscm.core}
-                        cljscm.user {:name cljscm.user}})) ;defonce TODO
+;in AOT, namespaces lives in selfanalyzer. For runtime repl it needs to be core.
+(condc/platform-case
+ :jvm (def namespaces (atom '{cljscm.core {:name cljscm.core}
+                              cljscm.user {:name cljscm.user}}))) ;defonce TODO
+
+(defn get-namespaces []
+  (condc/platform-case
+   :jvm namespaces
+   :gambit cljscm.core/namespaces))
 
 ;TODO not sure what I need from the actual Namespace class
 (condc/platform-case :gambit (defn find-ns [sym] sym))
 
 (defn reset-namespaces! []
-  (reset! namespaces
+  (reset! (get-namespaces)
     '{cljscm.core {:name cljscm.core}
       cljscm.user {:name cljscm.user}}))
 
 (defn get-namespace [key]
-  (@namespaces key))
+  (@(get-namespaces) key))
 
 (defn set-namespace [key val]
-  (swap! namespaces assoc key val))
+  (swap! (get-namespaces) assoc key val))
 
 (def ^:dynamic *cljs-ns* 'cljscm.user)
 (def ^:dynamic *cljs-file* nil)
@@ -93,7 +100,7 @@
        ~@body)))
 
 (defn empty-env []
-  {:ns (@namespaces *cljs-ns*) :context :statement :locals {}})
+  {:ns (@(get-namespaces) *cljs-ns*) :context :statement :locals {}})
 
 #_(defmacro-scm ^:private debug-prn
   [& args]
@@ -147,7 +154,7 @@
   (when *cljs-warn-on-undeclared*
     (let [crnt-ns (-> env :ns :name)]
       (when (= prefix crnt-ns)
-        (when-not (-> @namespaces crnt-ns :defs suffix)
+        (when-not (-> @(get-namespaces) crnt-ns :defs suffix)
           (warning env
             (str "WARNING: Use of undeclared Var " prefix "/" suffix)))))))
 
@@ -155,11 +162,22 @@
   (let [sym (symbol name)]
     (get (:requires (:ns env)) sym sym)))
 
+(condc/platform-case
+ :gambit (defn symbol-defined? [s]
+        ((scm* {} with-exception-catcher)
+         (fn [exc] (if ((scm* {} unbound-global-exception?) exc)
+                     false
+                     ((scm* {} raise) exc)))
+         (fn [] ((scm* {} eval) s) true))))
+
 (defn core-name?
   "Is sym visible from core in the current compilation namespace?"
   [env sym]
-  (and (get (:defs (@namespaces 'cljscm.core)) sym)
-       (not (contains? (set (-> env :ns :excludes)) sym))))
+  (condc/platform-case
+   :jvm (and (get (:defs (@(get-namespaces) 'cljscm.core)) sym)
+             (not (contains? (set (-> env :ns :excludes)) sym)))
+   :gambit (and (symbol-defined? (symbol "cljscm.core" (str sym)))
+                (not (contains? (set (-> env :ns :excludes)) sym)))))
 
 (defn resolve-var
   "Resolve a var. Accepts a side-effecting confirm fn for producing
@@ -181,7 +199,7 @@
                  full-ns (resolve-ns-alias env ns)]
              (when confirm
                (confirm env full-ns (symbol (name sym))))
-             (merge (get-in @namespaces [full-ns :defs (symbol (name sym))])
+             (merge (get-in @(get-namespaces) [full-ns :defs (symbol (name sym))])
                     {:name (symbol (str full-ns) (str (name sym)))
                      :ns full-ns}))
 
@@ -194,19 +212,19 @@
                (do
                  (when confirm
                    (confirm env prefix (symbol suffix)))
-                 (merge (get-in @namespaces [prefix :defs (symbol suffix)])
+                 (merge (get-in @(get-namespaces) [prefix :defs (symbol suffix)])
                         {:name (if (= "" prefix) (symbol suffix) (symbol (str prefix) suffix))
                          :ns prefix}))))
 
-           (get-in @namespaces [(-> env :ns :name) :uses sym])
-           (let [full-ns (get-in @namespaces [(-> env :ns :name) :uses sym])]
+           (get-in @(get-namespaces) [(-> env :ns :name) :uses sym])
+           (let [full-ns (get-in @(get-namespaces) [(-> env :ns :name) :uses sym])]
              (merge
-              (get-in @namespaces [full-ns :defs sym])
+              (get-in @(get-namespaces) [full-ns :defs sym])
               {:name (symbol (str full-ns) (str sym))
                :ns (-> env :ns :name)}))
 
-           (get-in @namespaces [(-> env :ns :name) :imports sym])
-           (recur env (get-in @namespaces [(-> env :ns :name) :imports sym]) confirm)
+           (get-in @(get-namespaces) [(-> env :ns :name) :imports sym])
+           (recur env (get-in @(get-namespaces) [(-> env :ns :name) :imports sym]) confirm)
 
            :else
            (let [full-ns (if (core-name? env sym)
@@ -214,7 +232,7 @@
                            (-> env :ns :name))]
              (when confirm
                (confirm env full-ns sym))
-             (merge (get-in @namespaces [full-ns :defs sym])
+             (merge (get-in @(get-namespaces) [full-ns :defs sym])
                     {:name (symbol (str full-ns) (str sym))
                      :ns full-ns})))))))
 
@@ -223,7 +241,7 @@
 
 (defn confirm-bindings [env names]
   (doseq [name names]
-    (let [env (merge env {:ns (@namespaces *cljs-ns*)})
+    (let [env (merge env {:ns (@(get-namespaces) *cljs-ns*)})
           ev (resolve-existing-var env name)]
       (when (and *cljs-warn-on-dynamic*
                  ev (not (-> ev :dynamic)))
@@ -338,13 +356,13 @@
     (assert (not (namespace sym)) "Can't def ns-qualified name")
     (let [env (if (or (and (not= ns-name 'cljscm.core)
                            (core-name? env sym))
-                      (get-in @namespaces [ns-name :uses sym]))
+                      (get-in @(get-namespaces) [ns-name :uses sym]))
                 (let [ev (resolve-existing-var (dissoc env :locals) sym)]
                   (when *cljs-warn-on-redef*
                     (warning env
                       (str "WARNING: " sym " already refers to: " (symbol (str (:ns ev)) (str sym))
                            " being replaced by: " (symbol (str ns-name) (str sym)))))
-                  (swap! namespaces update-in [ns-name :excludes] (fn [c o] (conj (or c #{}) o)) sym)
+                  (swap! (get-namespaces) update-in [ns-name :excludes] (fn [c o] (conj (or c #{}) o)) sym)
                   (update-in env [:ns :excludes] (fn [c o] (conj (or c #{}) o)) sym))
                 env)
           name (:name (resolve-var (dissoc env :locals) sym))
@@ -356,14 +374,14 @@
           export-as (when-let [export-val (-> sym meta :export)]
                       (if (= true export-val) name export-val))
           doc (or (:doc args) (-> sym meta :doc))]
-      (when-let [v (get-in @namespaces [ns-name :defs sym])]
+      (when-let [v (get-in @(get-namespaces) [ns-name :defs sym])]
         (when (and *cljs-warn-on-fn-var*
                    (not (-> sym meta :declared))
                    (and (:fn-var v) (not fn-var?)))
           (warning env
             (str "WARNING: " (symbol (str ns-name) (str sym))
                  " no longer fn, references are stale"))))
-      (swap! namespaces assoc-in [ns-name :defs sym]
+      (swap! (get-namespaces) assoc-in [ns-name :defs sym]
                  (merge 
                    {:name name}
                    sym-meta
@@ -735,7 +753,7 @@
 
 (defn analyze-deps [deps]
   (doseq [dep deps]
-    (when-not (contains? @namespaces dep)
+    (when-not (contains? @(get-namespaces) dep)
       (let [relpath (ns->relpath-cljscm dep)]
         (if (condc/platform-case :jvm (io/resource relpath) :gambit true)
           (analyze-file relpath)
@@ -744,14 +762,14 @@
 (defn error-msg [spec msg] (str msg "; offending spec: " (pr-str spec)))
 
 (defn get-deps [ns-name]
-  (or (get-in @namespaces [ns-name :deps])
+  (or (get-in @(get-namespaces) [ns-name :deps])
       (let [a (atom #{})]
-        (swap! namespaces #(assoc-in % [ns-name :deps] a))
+        (swap! (get-namespaces) #(assoc-in % [ns-name :deps] a))
         a)))
 (defn get-aliases [ns-name]
-  (or (get-in @namespaces [ns-name :aliases])
+  (or (get-in @(get-namespaces) [ns-name :aliases])
       (let [a (atom {:fns #{} :macros #{}})]
-        (swap! namespaces #(assoc-in % [ns-name :aliases] a))
+        (swap! (get-namespaces) #(assoc-in % [ns-name :aliases] a))
         a)))
 
 (defn parse-require-spec [macros? ns-name spec]
@@ -843,7 +861,7 @@
     (load-core)
     (doseq [nsym (concat (vals requires-macros) (vals uses-macros))]
       (clojure.core/require nsym))
-    (swap! namespaces #(-> %
+    (swap! (get-namespaces) #(-> %
                            (assoc-in [name :name] name)
                            (assoc-in [name :doc] docstring)
                            (assoc-in [name :excludes] excludes)
@@ -862,7 +880,7 @@
   [_ env [_ tsym fields & opts] _]
   (let [t (munge (:name (resolve-var (dissoc env :locals) tsym)))
         no-constructor ((set opts) :no-constructor)]
-    (swap! namespaces update-in [(-> env :ns :name) :defs tsym]
+    (swap! (get-namespaces) update-in [(-> env :ns :name) :defs tsym]
            (fn [m]
              (let [m (assoc (or m {}) :name t)]
                (if-let [line (:line env)]
@@ -876,7 +894,7 @@
 (defmethod parse 'deftype*
   [_ env [_ tsym fields pmasks :as form] _]
   (let [t (:name (resolve-var (dissoc env :locals) tsym))]
-    (swap! namespaces update-in [(-> env :ns :name) :defs tsym]
+    (swap! (get-namespaces) update-in [(-> env :ns :name) :defs tsym]
            (fn [m]
              (let [m (assoc (or m {})
                        :name t
@@ -892,7 +910,7 @@
 (defmethod parse 'defrecord*
   [_ env [_ tsym fields pmasks :as form] _]
   (let [t (:name (resolve-var (dissoc env :locals) tsym))]
-    (swap! namespaces update-in [(-> env :ns :name) :defs tsym]
+    (swap! (get-namespaces) update-in [(-> env :ns :name) :defs tsym]
            (fn [m]
              (let [m (assoc (or m {}) :name t :type true)]
                (merge m
@@ -911,7 +929,7 @@
                                          (analyze (assoc env :context :return) meth-impl (name meth-key))])
                                       meth-map)]))
                             prot-impl-pairs)]
-    (swap! namespaces update-in [:proto-implementers] ;for fast-path dispatch compilation. proto-methname-symbol => set-of-types lookup.
+    (swap! (get-namespaces) update-in [:proto-implementers] ;for fast-path dispatch compilation. proto-methname-symbol => set-of-types lookup.
            (fn [mp] (reduce (fn [m proname]
                               (update-in m [proname]
                                          (comp set conj) (:name e-type-rslvd)))
@@ -1036,7 +1054,7 @@
                                   (parse-require-spec true *cljs-ns* spec))]
                   (do
                     (println "; adding " preq)
-                    (swap! namespaces #(update-in % [*cljs-ns* :requires] merge (:require preq) (:require-macros preq)))))) specs))
+                    (swap! (get-namespaces) #(update-in % [*cljs-ns* :requires] merge (:require preq) (:require-macros preq)))))) specs))
   {:op :constant :env env :form (str "require " specs)})
 
 (defn parse-invoke
@@ -1074,7 +1092,7 @@
   (when ns
     (condc/platform-case
      :jvm (.findInternedVar ^clojure.lang.Namespace ns sym)
-     :gambit (get-in @namespaces [ns :defs sym]))))
+     :gambit (get-in @(get-namespaces) [ns :defs sym]))))
 
 (defn is-macro [mvar]
   (condc/platform-case
@@ -1086,9 +1104,9 @@
         (when-not (or (-> env :locals sym)        ;locals hide macros
                       (and false ;TODO: excludes excludes by symbol, regardless of import namespace, including erasing your current *ns* deffed symbols.
                            (or (-> env :ns :excludes sym)
-                               (get-in @namespaces [(-> env :ns :name) :excludes sym]))
+                               (get-in @(get-namespaces) [(-> env :ns :name) :excludes sym]))
                            (not (or (-> env :ns :uses-macros sym)
-                                    (get-in @namespaces [(-> env :ns :name) :uses-macros sym])))))
+                                    (get-in @(get-namespaces) [(-> env :ns :name) :uses-macros sym])))))
           (if-let [nstr (and (namespace sym)
                              (str (resolve-ns-alias env (symbol (namespace sym)))))]
             (when-let [ns (cond

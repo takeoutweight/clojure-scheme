@@ -36,6 +36,11 @@
 
 (def ^:dynamic *cljs-ns* 'cljscm.user)
 
+(defn get-namespaces []
+  (condc/platform-case
+   :jvm ana/namespaces
+   :gambit cljscm.core/namespaces))
+
 ; Just assumes symbols are quoted now, won't eval in gambit.
 (clojure.core/defmacro alias [alias lib]
   (condc/platform-case
@@ -43,12 +48,12 @@
           (println "; in JVM")
           (try (clojure.core/alias (second alias) (second lib)) ;real aliases are needed for reader to properly expand.
                (catch java.lang.IllegalStateException e nil))  ;realiasing is an exception; fix in analyzer's ns evaluation.
-          (swap! ana/namespaces #(assoc-in % [(.getName *ns*) :requires (second alias)] (second lib)))
+          (swap! (get-namespaces) #(assoc-in % [(.getName *ns*) :requires (second alias)] (second lib)))
           ;(swap! ana/namespaces #(assoc-in % [(.getName *ns*) :requires-macros (find-ns alias)] lib))
-          (println "; added " (get-in @ana/namespaces [(.getName *ns*) :requires])))
+          (println "; added " (get-in @(get-namespaces) [(.getName *ns*) :requires])))
    :gambit (do
              (println "; in gambit")
-             (swap! ana/namespaces #(assoc-in % [*ns* :requires (second alias)] (second lib)))
+             (swap! (get-namespaces) #(assoc-in % [*ns* :requires (second alias)] (second lib)))
              (println "; firing the gambit-runtime-safe macro code.")))
   (str "aliased " (second alias) " to " (second lib)))
 
@@ -105,16 +110,16 @@
                                      (list '. (list 'var name) '(setMacro))
                                      (list 'var name)]
                                :gambit [(cons `defn decl)
-                                        `(swap! ana/namespaces assoc-in [ana/*cljs-ns* :defs (quote ~name) :macro] true)
+                                        `(swap! (get-namespaces) assoc-in [ana/*cljs-ns* :defs (quote ~name) :macro] true)
                                         name])
                         :gambit [(cons `defn decl)
-                                 `(swap! ana/namespaces assoc-in [ana/*cljs-ns* :defs (quote ~name) :macro] true)
+                                 `(swap! (get-namespaces) assoc-in [~ana/*cljs-ns* :defs (quote ~name) :macro] true)
                                  name])
                        ))))
 
 (condc/platform-case
  :jvm (. (var defmacro) (setMacro))
- :gambit (swap! ana/namespaces assoc-in [ana/*cljs-ns* :defs `defmacro :macro] true))
+ :gambit (swap! (get-namespaces) assoc-in [ana/*cljs-ns* :defs `defmacro :macro] true))
 
 (defmacro defonce [name expr]
   (condc/platform-case
@@ -2074,10 +2079,10 @@
   on a fresh StringBuffer.  Returns the string created by any nested
   printing calls."
   [& body]
-  `(let [sb# (goog.string/StringBuffer.)]
-     (binding [cljscm.core/*print-fn* (core/fn [x#] (.append sb# x#))]
+  `(let [sb# (string-buffer-writer)]
+     (binding [cljscm.core/*print-fn* (core/fn [x#] (-write sb# x#))]
        ~@body)
-     (cljscm.core/str sb#)))
+     (-toString sb#)))
 
 (defmacro eof-object? [o]
   `(scm-boolean* {::o ~o} ~'(eof-object? ::o)))
