@@ -110,16 +110,16 @@
                                      (list '. (list 'var name) '(setMacro))
                                      (list 'var name)]
                                :gambit [(cons `defn decl)
-                                        `(swap! (get-namespaces) assoc-in [ana/*cljs-ns* :defs (quote ~name) :macro] true)
+                                        `(swap! (get-namespaces) assoc-in [(quote ~ana/*cljs-ns*) :defs (quote ~name) :macro] true)
                                         name])
                         :gambit [(cons `defn decl)
-                                 `(swap! (get-namespaces) assoc-in [~ana/*cljs-ns* :defs (quote ~name) :macro] true)
+                                 `(swap! (get-namespaces) assoc-in [(quote ~ana/*cljs-ns*) :defs (quote ~name) :macro] true)
                                  name])
                        ))))
 
 (condc/platform-case
  :jvm (. (var defmacro) (setMacro))
- :gambit (swap! (get-namespaces) assoc-in [ana/*cljs-ns* :defs `defmacro :macro] true))
+ :gambit (swap! (get-namespaces) assoc-in [ana/*cljs-ns* :defs 'defmacro :macro] true))
 
 (defmacro defonce [name expr]
   (condc/platform-case

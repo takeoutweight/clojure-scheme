@@ -1092,12 +1092,16 @@
   (when ns
     (condc/platform-case
      :jvm (.findInternedVar ^clojure.lang.Namespace ns sym)
-     :gambit (get-in @(get-namespaces) [ns :defs sym]))))
+     :gambit (and (get-in @(get-namespaces) [ns :defs sym])
+                  (symbol (str ns) (str sym))))))
 
 (defn is-macro [mvar]
   (condc/platform-case
    :jvm (.isMacro ^clojure.lang.Var mvar)
-   :gambit (throw "TODO")))
+   :gambit (get-in @(get-namespaces) [(symbol (namespace mvar))
+                                      :defs
+                                      (symbol (name mvar))
+                                      :macro])))
 
 (defn get-expander [sym env]
   (let [mvar
@@ -1121,7 +1125,9 @@
                (find-interned-var (find-ns *cljs-ns*) sym)
                (find-interned-var (find-ns 'cljscm.core) sym)))))]
     (when (and mvar (is-macro mvar))
-      @mvar)))
+      (condc/platform-case
+       :jvm @mvar
+       :gambit ((scm* {} eval) mvar)))))
 
 (defn macroexpand-1 [env form]
   (let [op (first form)]
@@ -1129,8 +1135,7 @@
       form
       (if-let [mac (and (symbol? op) (get-expander op env))]
         (binding [*ns* (create-ns *cljs-ns*)]
-          (apply (condc/platform-case :jvm mac
-                                      :gambit (eval mac)) form env (rest form)))
+          (apply mac form env (rest form)))
         (if (symbol? op)
           (let [opname (str op)]
             (cond
