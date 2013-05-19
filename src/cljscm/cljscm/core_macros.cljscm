@@ -221,7 +221,7 @@
   {:added "1.0"}
   [& names] `(do ~@(map #(list 'def (vary-meta % assoc :declared true)) names)))
 
-(declare seq emit-extend-protocol)
+(declare emit-extend-protocol)
 (condc/platform-case :jvm (def sigs #'core/sigs))
 (def 
 
@@ -726,9 +726,6 @@
 (core/defn bool-expr [e]
   (vary-meta e assoc :tag 'boolean))
 
-(defmacro nil? [x]
-  (bool-expr `(identical? ~x nil)))
-
 ;; internal - do not use.
 (defmacro coercive-not [x]
    (bool-expr `(scm-boolean* {:x ~x}
@@ -743,19 +740,6 @@
 (defmacro coercive-= [x y]
   (bool-expr `(scm* {:x ~x :y ~y}
                     ~'(equal? :x :y))))
-
-(defmacro true? [x]
-  (bool-expr `(identical? ~x true)))
-
-(defmacro false? [x]
-  (bool-expr `(identical? ~x false)))
-
-(defmacro undefined? [x]
-  `(nil? ~x))
-  
-(defmacro identical? [a b]
-  `(scm-boolean* {:a ~a :b ~b}
-         ~'(eq? :a :b)))
 
 (core/defn scm-number? [x] `(scm-boolean* {:x ~x} ~'(number? :x)))
 (core/defn scm-pair? [x] `(scm-boolean* {:x ~x} ~'(pair? :x)))
@@ -909,89 +893,10 @@
       (assoc (meta &form)
         :single-arity single-arity?))))
 
-(defmacro aget
-  ([a i]
-     `(scm* {::a ~a ::i ~i}
-            ~'(vector-ref ::a ::i)))
-  ([a i & idxs]
-     `(aget (aget ~a ~i) ~@idxs)))
-
-(defmacro aset [a i v]
-  `(let [ra# ~a]
-     (scm* {::ra ra# ::i ~i ::v ~v}
-           ~'(vector-set! ::ra ::i ::v))
-     ~v))
-
-(defmacro + [& more] `(~'(scm* [] +) ~@more))
-(defmacro - [& more] `(~'(scm* [] -) ~@more))
-(defmacro * [& more] `(~'(scm* [] *) ~@more))
-(defmacro / [& more] `(~'(scm* [] /) ~@more))
-
-(defmacro <  [& more] (bool-expr `(~'(scm* [] < ) ~@more)))
-(defmacro <= [& more] (bool-expr `(~'(scm* [] <=) ~@more)))
-(defmacro >  [& more] (bool-expr `(~'(scm* [] > ) ~@more)))
-(defmacro >= [& more] (bool-expr `(~'(scm* [] >=) ~@more)))
-(defmacro == [& more] (bool-expr `(~'(scm* [] = ) ~@more)))
-
-(defmacro dec [x]
-  `(- ~x 1))
-
-(defmacro inc [x]
-  `(+ ~x 1))
-
-(defmacro zero? [x]
-  `(== ~x 0))
-
-(defmacro pos? [x]
-  `(scm-boolean* {::x ~x} ~'(positive? ::x)))
-
-(defmacro neg? [x]
-  `(scm-boolean* {::x ~x} ~'(negative? ::x)))
-
-(defmacro max
-  ([& more] `(scm* ~more ~(cons 'max more))))
-
-(defmacro min
-  ([& more] `(scm* ~more ~(cons 'min more))))
-
-(defmacro mod [num div]
-  `(scm* {::num ~num ::div ~div} ~'(if (or (flonum? ::num) (flonum? ::div))
-                                   (- ::num (* :div (fltruncate (/ ::num ::div))))
-                                   (modulo ::num ::div))))
-
-(defmacro quot [num div]
-  `(scm* {::num ~num ::div ~div} ~'(if (or (flonum? ::num) (flonum? ::div))
-                                   (- ::num (* :div (fltruncate (/ ::num ::div))))
-                                   (quotient ::num ::div))))
-
-(defmacro rem [num div]
-  `(scm* {::num ~num ::div ~div} ~'(if (or (flonum? ::num) (flonum? ::div))
-                                   (- ::num (* ::div (fltruncate (/ ::num ::div))))
-                                   (remainder ::num ::div))))
-
-(defmacro bit-count [x]
-  `(scm* {::x ~x} ~'(bit-count ::x)))
-
-(defmacro bit-not [x]
-  `(scm* {::x ~x} ~'(bitwise-not ::x)))
-
-(defmacro bit-and
-  ([& more] `(scm* ~more ~(cons 'bitwise-and more))))
-
 ;; internal do not use
 (defmacro unsafe-bit-and
   ([x y] (bool-expr (list 'js* "(~{} & ~{})" x y)))
   ([x y & more] `(unsafe-bit-and (unsafe-bit-and ~x ~y) ~@more)))
-
-(defmacro bit-or
-  ([& more] `(scm* ~more ~(cons 'bitwise-ior more))))
-
-(defmacro bit-xor
-  ([& more] `(scm* ~more ~(cons 'bitwise-xor more))))
-
-(defmacro bit-and-not
-  [x y]
-  `(bit-and ~x (bit-not ~y)))
 
 #_(defmacro bit-clear [x n]
   (list 'js* "(~{} & ~(1 << ~{}))" x n))
@@ -1002,35 +907,9 @@
 #_(defmacro bit-test [x n]
   (list 'js* "((~{} & (1 << ~{})) != 0)" x n))
 
-;force 32 bit
-(defmacro bit-shift-left [x n]
-  `(scm* {::x ~x ::n ~n} ~'(bitwise-and (arithmetic-shift ::x ::n) 4294967295)))
-
-(defmacro bit-shift-right [x n]
-  `(scm* {::x ~x ::n ~n} ~'(arithmetic-shift ::x (* -1 ::n))))
 
 #_(defmacro bit-set [x n]
     (list 'js* "(~{} | (1 << ~{}))" x n))
-
-(defmacro bit-shift-right-zero-fill [x n]
-   `(scm* {::x ~x ::n ~n} ~'(arithmetic-shift (bitwise-and ::x 4294967295) (* -1 ::n))))
-
-;; internal
-(defmacro mask [hash shift]
-  `(scm* {::r (bit-shift-right-zero-fill ~hash ~shift)} ~'(bitwise-and ::r 31)))
-
-
-(defmacro bitpos [hash shift]
-  `(bit-shift-left 1 (mask ~hash ~shift)))
-
-;; internal
-(defmacro caching-hash [coll hash-fn hash-key]
-  `(let [h# ~hash-key]
-     (if-not (nil? h#)
-       h#
-       (let [h# (~hash-fn ~coll)]
-         (set! ~hash-key h#)
-         h#))))
 
 #_(defmacro get
   ([coll k]
@@ -1624,9 +1503,6 @@
 (defmacro lazy-seq [& body]
   `(new cljscm.core/LazySeq nil false (core/fn [] ~@body) nil))
 
-(defmacro seq [coll]
-  `(-seq ~coll))
-
 (defmacro delay [& body]
   "Takes a body of expressions and yields a Delay object that will
   invoke the body only the first time it is forced (with force or deref/@), and
@@ -1857,10 +1733,6 @@
                                         ~subform
                                         ~@(when needrec [recform]))))]))))]
     (nth (step nil (core/seq seq-exprs)) 1)))
-
-(defmacro alength [a]
-  `(scm* {:a ~a}
-         ~'(vector-length :a)))
 
 (defmacro aclone
   "Returns a javascript array, cloned from the passed in array"

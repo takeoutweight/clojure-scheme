@@ -86,12 +86,12 @@
 (defn ^boolean identical?
   "Tests if 2 arguments are the same object"
   [x y]
-  (cljscm.core/identical? x y))
+  ((scm* {} eq?) x y))
 
 (defn ^boolean nil?
   "Returns true if x is nil, false otherwise."
   [x]
-  (coercive-= x nil))
+  (identical? x nil))
 
 (defn ^boolean not
   "Returns true if x is logical false, false otherwise."
@@ -127,19 +127,20 @@
 (defn aget
   "Returns the value at the index."
   ([array i]
-     (cljscm.core/aget array i))
+     ((scm* {} vector-ref) array i))
   ([array i & idxs]
      (apply aget (aget array i) idxs)))
 
 (defn aset
   "Sets the value at the index."
   [array i val]
-  (cljscm.core/aset array i val))
+  ((scm* {} vector-set!) array i val)
+  val)
 
 (defn alength
   "Returns the length of the array. Works on arrays of all types."
   [array]
-  (cljscm.core/alength array))
+  ((scm* {} vector-length) array i))
 
 (declare reduce)
 
@@ -838,7 +839,7 @@
 ;;this is primitive because & emits call to array-seq
 (defn inc
   "Returns a number one greater than num."
-  [x] (cljscm.core/+ x 1))
+  [x] (+ x 1))
 
 (declare deref)
 
@@ -1391,14 +1392,14 @@ reduces them without incurring seq initialization"
 
 (defn ^boolean false?
   "Returns true if x is the value false, false otherwise."
-  [x] (cljscm.core/false? x))
+  [x] (identical? x false))
 
 (defn ^boolean true?
   "Returns true if x is the value true, false otherwise."
-  [x] (cljscm.core/true? x))
+  [x] (identical? x true))
 
 (defn ^boolean undefined? [x]
-  (cljscm.core/undefined? x))
+  (nil? x))
 
 (defn ^boolean seq?
   "Return true if s satisfies ISeq"
@@ -1741,17 +1742,26 @@ reduces them without incurring seq initialization"
 (defn mod
   "Modulus of num and div. Truncates toward negative infinity."
   [n d]
-  (cljscm.core/mod n d)) ;(+ (js-mod n d) d) d
+  (scm* {::num n ::div d}
+        (if (or (flonum? ::num) (flonum? ::div))
+          (- ::num (* :div (fltruncate (/ ::num ::div))))
+          (modulo ::num ::div)))) ;(+ (js-mod n d) d) d
 
 (defn quot
   "quot[ient] of dividing numerator by denominator."
   [n d]
-  (cljscm.core/quot n d))
+  (scm* {::num n ::div d}
+        (if (or (flonum? ::num) (flonum? ::div))
+          (- ::num (* :div (fltruncate (/ ::num ::div))))
+          (quotient ::num ::div))))
 
 (defn rem
   "remainder of dividing numerator by denominator."
   [n d]
-  (cljscm.core/rem n d))
+  (scm* {::num n ::div d}
+        (if (or (flonum? ::num) (flonum? ::div))
+          (- ::num (* ::div (fltruncate (/ ::num ::div))))
+          (remainder ::num ::div))))
 
 (defn rand
   "Returns a random floating point number between 0 (inclusive) and n (default 1) (exclusive)."
@@ -1764,23 +1774,24 @@ reduces them without incurring seq initialization"
 
 (defn bit-xor
   "Bitwise exclusive or"
-  [x y] (cljscm.core/bit-xor x y))
+  [x y] ((scm* {} bitwise-xor) x y))
 
 (defn bit-and
   "Bitwise and"
-  [x y] (cljscm.core/bit-and x y))
+  [x y] ((scm* {} bitwise-and) x y))
 
 (defn bit-or
   "Bitwise or"
-  [x y] (cljscm.core/bit-or x y))
+  [x y] ((scm* {} bitwise-ior) x y))
 
 (defn bit-not
   "Bitwise complement"
-  [x] (cljscm.core/bit-not x))
+  [x] ((scm* {} bitwise-not) x))
 
 (defn bit-and-not
   "Bitwise and"
-  [x y] (cljscm.core/bit-and-not x y))
+  [x y] (bit-and x (bit-not y)))
+
 (comment
 (defn bit-clear
   "Clear bit at index n"
@@ -1803,21 +1814,23 @@ reduces them without incurring seq initialization"
   (cljscm.core/bit-test x n)))
 
 (defn bit-shift-left
-  "Bitwise shift left"
-  [x n] (cljscm.core/bit-shift-left x n))
+  "Bitwise shift left, 32 bit"
+  [x n]
+  (bit-and ((scm* {} arithmetic-shift) x n) 4294967295))
 
 (defn bit-shift-right
   "Bitwise shift right"
-  [x n] (cljscm.core/bit-shift-right x n))
+  [x n]
+  ((scm* {} arithmetic-shift) x (* -1 n)))
 
 (defn bit-shift-right-zero-fill
   "Bitwise shift right with zero fill"
-  [x n] (cljscm.core/bit-shift-right-zero-fill x n))
+  [x n] ((scm* {} arithmetic-shift) (bit-and x 4294967295) (* -1 n)) )
 
 (defn bit-count
   "Counts the number of bits set in n"
   [v]
-  (cljscm.core/bit-count v)
+  ((scm* {} bit-count) v)
   #_(let [v (- v (bit-and (bit-shift-right v 1) 0x55555555))
         v (+ (bit-and v 0x33333333) (bit-and (bit-shift-right v 2) 0x33333333))]
     (bit-shift-right (* (bit-and (+ v (bit-shift-right v 4)) 0xF0F0F0F) 0x1010101) 24)))
@@ -1837,14 +1850,14 @@ reduces them without incurring seq initialization"
 
 (defn ^boolean pos?
   "Returns true if num is greater than zero, else false"
-  [n] (cljscm.core/pos? n))
+  [n] ((scm* {} positive?) x))
 
 (defn ^boolean zero? [n]
-  (cljscm.core/zero? n))
+  ((scm* {} ==) n 0))
 
 (defn ^boolean neg?
   "Returns true if num is less than zero, else false"
-  [x] (cljscm.core/neg? x))
+  [x] ((scm* {} negative?) x))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; protocols for host types ;;;;;;
 
