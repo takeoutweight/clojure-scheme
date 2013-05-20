@@ -220,7 +220,38 @@
   [& names] `(do ~@(map #(list 'def (vary-meta % assoc :declared true)) names)))
 
 (declare emit-extend-protocol)
-(condc/platform-case :jvm (def sigs #'core/sigs))
+
+(def ^{:private true :dynamic true}
+  assert-valid-fdecl (fn [fdecl]))
+
+(condc/platform-case
+ :jvm (def sigs #'core/sigs)
+ :gambit
+ (def
+   ^{:private true}
+   sigs
+   (fn [fdecl]
+     (assert-valid-fdecl fdecl)
+     (let [asig
+           (fn [fdecl]
+             (let [arglist (first fdecl)
+;elide implicit macro args
+                   arglist (if (= '&form (first arglist))
+                             (subvec arglist 2 (count arglist))
+                             arglist)
+                   body (next fdecl)]
+               (if (map? (first body))
+                 (if (next body)
+                   (with-meta arglist (conj (if (meta arglist) (meta arglist) {}) (first body)))
+                   arglist)
+                 arglist)))]
+       (if (seq? (first fdecl))
+         (loop [ret [] fdecls fdecl]
+           (if fdecls
+             (recur (conj ret (asig (first fdecls))) (next fdecls))
+             (seq ret)))
+         (list (asig fdecl)))))))
+
 (def 
 
  ^{:doc "Same as (def name (fn [params* ] exprs*)) or (def
@@ -232,9 +263,13 @@
    :added "1.0"}
  defn (core/fn defn [&form &env name & fdecl]
         ;; Note: Cannot delegate this check to def because of the call to (with-meta name ..)
-        (if (instance? clojure.lang.Symbol name)
+        (if (condc/platform-case
+             :jvm (instance? clojure.lang.Symbol name)
+             :gambit (symbol? name))
           nil
-          (throw (IllegalArgumentException. "First argument to defn must be a symbol")))
+          (throw (condc/platform-case
+                  :jvm (IllegalArgumentException. "First argument to defn must be a symbol")
+                  :gambit "First argument to defn must be a symbol")))
         (let [m (if (string? (first fdecl))
                   {:doc (first fdecl)}
                   {})
