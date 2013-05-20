@@ -117,7 +117,7 @@
 
 (condc/platform-case
  :jvm (. (var defmacro) (setMacro))
- :gambit (swap! (get-namespaces) assoc-in [ana/*cljs-ns* :defs 'defmacro :macro] true))
+ :gambit (swap! (get-namespaces) assoc-in ['cljscm.core :defs 'defmacro :macro] true))
 
 (defmacro defonce [name expr]
   (condc/platform-case
@@ -274,7 +274,8 @@
                 (cons `fn fdecl) ))))
 
 (condc/platform-case
- :jvm (. (var defn) (setMacro)))
+ :jvm (. (var defn) (setMacro))
+ :gambit (swap! (get-namespaces) assoc-in ['cljscm.core :defs 'defn :macro] true))
 
 (defmacro defn-
   "same as defn, yielding non-public def"
