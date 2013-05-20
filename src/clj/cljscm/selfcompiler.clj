@@ -650,7 +650,6 @@
     (assert (= 1 (count subbed-form)) "only one form in scm*")
     (first subbed-form)))
 
-(def readtable :TODO)
 (condc/platform-case
  :jvm (defn forms-seq
         "Seq of forms in a Clojure or ClojureScript file."
@@ -662,16 +661,7 @@
              (.close rdr))))
  :gambit (defn forms-seq
            "Seq of forms in a Clojure or ClojureScript file."
-           ([f] (forms-seq f (cljscm.core/scm* [f readtable]
-                                               (open-input-file (list :path f :readtable readtable)))))
-           ([f port]
-              (let [r ((scm* {} read) port)]
-                (if (eof-object? r)
-                  (do ((scm* {} close-port) port)
-                      nil)
-                  (lazy-seq
-                    (cons r
-                          (forms-seq f port))))))))
+           [f] (cljscm.reader/file-seq-reader f)))
 
 (defn rename-to-scm
   "Change the file extension from .cljscm to .js. Takes a File or a
@@ -753,7 +743,9 @@
         [^java.io.File src ^java.io.File dest]
         (or (not (.exists dest))
             (> (.lastModified src) (.lastModified dest))))
- :gambit :TODO)
+ :gambit (defn requires-compilation?
+           [src dest]
+           :TODO))
 
 (defn parse-ns [src dest]
   (with-core-cljs

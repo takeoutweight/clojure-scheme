@@ -34,6 +34,24 @@ nil if the end of stream has been reached")
   "Creates a StringPushbackReader from a given string"
   (StringPushbackReader. s (atom 0) (atom nil)))
 
+(deftype PortPushbackReader [port buffer-atom]
+  PushbackReader
+  (-read-char [reader]
+    (if (empty? @buffer-atom)
+      (let [ch ((scm* {} read-char) port)]
+        (when-not ((scm* {} eof-object?) ch) ch))
+      (let [buf @buffer-atom]
+        (swap! buffer-atom rest)
+        (first buf))))
+  (-unread [reader ch] (swap! buffer-atom #(cons ch %))))
+
+(defn port-push-back-reader [port]
+  "Creates a PortPushbackReader from a given scheme port"
+  (PortPushbackReader. port (atom nil)))
+
+(defn file-reader [filename]
+  (port-push-back-reader ((scm* {} open-input-file) filename)))
+
 ;FIXME: analyze not resolving protocols.
 (defn -toString [x] (cljscm.core/-toString x))
 (defn write [sb o]
@@ -403,6 +421,19 @@ nil if the end of stream has been reached")
   [s]
   (let [r (push-back-reader s)]
     (read r true nil false)))
+
+(defn file-seq-reader
+  "Seq of forms in a Clojure or ClojureScript file."
+  ([f] (file-seq-reader f (file-reader f)))
+  ([f reader]
+     (let [eof (list 'eof)
+           r (read reader false eof false)]
+       (if (identical? r eof)
+         (do ((scm* {} close-port) (.-port reader))
+             nil)
+         (lazy-seq
+           (cons r
+                 (file-seq-reader f reader)))))))
 
 
 ;; read instances

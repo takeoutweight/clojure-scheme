@@ -13,7 +13,8 @@
   (:require [cljscm.conditional :as condc]))
 
 (condc/platform-case
- :jvm (require '[clojure.java.io :as io]))
+ :jvm (require '[clojure.java.io :as io])
+ :gambit (require '[cljscm.reader :as reader]))
 
 (declare resolve-var)
 (declare resolve-existing-var)
@@ -1261,19 +1262,18 @@
  (defn analyze-file
    [f]
    (let [find-file (fn [filename classpath]
-                     (some #(cljscm.core/scm* {::f %} (file-exists? ::f))
-                           (map #(str % "/" filename) classpath)))
-         f (find-file-on-classpath-scm f ["."])]
+                     (->> classpath
+                          (map #(str % "/" filename))
+                          (filter #((cljscm.core/scm* {} file-exists?) %))
+                          (first)))
+         f (find-file f ["."])]
      (assert f (str "Can't find " f " in classpath"))
      (binding [*cljs-ns* 'cljscm.user
                *cljs-file* f
                condc/*target-platform* :gambit]
-       (let [port (cljscm.core/scm* [f readtable]
-                                    (open-input-file (list :path f :readtable readtable)))
+       (let [forms (reader/file-seq-reader f)
              env (empty-env)]
-         (loop [r ((scm* {} read) port)]
-           (let [env (assoc env :ns (get-namespace *cljs-ns*))]
-             (if (eof-object? r)
-               ((scm* {} close-port) port)
-               (do (analyze env r)
-                   (recur ((scm* {} read) port)))))))))))
+         (doall (map (fn [f]
+                       (let [env (assoc env :ns (get-namespace *cljs-ns*))]
+                         (analyze env f)))
+                     forms)))))))
