@@ -34,8 +34,6 @@
  :gambit (ns cljscm.core
            (:require [cljscm.selfanalyzer :as ana])))
 
-(def ^:dynamic *cljs-ns* 'cljscm.user)
-
 (defn get-namespaces []
   (condc/platform-case
    :jvm ana/namespaces
@@ -53,7 +51,7 @@
           (println "; added " (get-in @(get-namespaces) [(.getName *ns*) :requires])))
    :gambit (do
              (println "; in gambit")
-             (swap! (get-namespaces) #(assoc-in % [*ns* :requires (second alias)] (second lib)))
+             (swap! (get-namespaces) #(assoc-in % [ana/*cljs-ns* :requires (second alias)] (second lib)))
              (println "; firing the gambit-runtime-safe macro code.")))
   (str "aliased " (second alias) " to " (second lib)))
 
@@ -1291,8 +1289,8 @@
           tagname (vary-meta tagname assoc
                              :protocols protocols
                              :skip-protocol-flag fpps)
-          extended-constructor-name (symbol (str "make-" *cljs-ns* "/" tagname "-extended"))
-          poly-constructor-name (symbol (str "make-" *cljs-ns* "/" tagname))
+          extended-constructor-name (symbol (str "make-" ana/*cljs-ns* "/" tagname "-extended"))
+          poly-constructor-name (symbol (str "make-" ana/*cljs-ns* "/" tagname))
           poly-constructor `(fn
                               ([~@base-fields] (~extended-constructor-name ~@base-fields nil nil))
                               ([~@fields] (~extended-constructor-name ~@fields)))]

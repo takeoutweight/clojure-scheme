@@ -22,6 +22,10 @@
 (declare confirm-bindings)
 (declare ^:dynamic *cljs-file*)
 
+;; namespaces in gambit are just the symbol names.
+(condc/platform-case
+ :gambit (defn create-ns [x] x))
+
 ;; to resolve keywords like ::foo - the namespace
 ;; must be determined during analysis - the reader
 ;; did not know
@@ -66,14 +70,15 @@
 (def ^:dynamic *cljs-macros-is-classpath* true)
 (def  -cljs-macros-loaded (atom false))
 
-(defmacro no-warn [& body]
-  `(binding [*cljs-warn-on-undeclared* false
-             *cljs-warn-on-redef* false
-             *cljs-warn-on-dynamic* false
-             *cljs-warn-on-fn-var* false
-             *cljs-warn-fn-arity* false
-             *cljs-warn-fn-deprecated* false]
-     ~@body))
+(condc/platform-case
+ :jvm (defmacro no-warn [& body]
+        `(binding [*cljs-warn-on-undeclared* false
+                   *cljs-warn-on-redef* false
+                   *cljs-warn-on-dynamic* false
+                   *cljs-warn-on-fn-var* false
+                   *cljs-warn-fn-arity* false
+                   *cljs-warn-fn-deprecated* false]
+           ~@body)))
 
 (defn load-core []
   (when (not @-cljs-macros-loaded)
@@ -82,22 +87,24 @@
       (load *cljs-macros-path*)
       (load-file *cljs-macros-path*))))
 
-(defmacro with-core-macros
-  [path & body]
-  `(do
-     (when (not= *cljs-macros-path* ~path)
-       (reset! -cljs-macros-loaded false))
-     (binding [*cljs-macros-path* ~path]
-       ~@body)))
+(condc/platform-case
+ :jvm (defmacro with-core-macros
+        [path & body]
+        `(do
+           (when (not= *cljs-macros-path* ~path)
+             (reset! -cljs-macros-loaded false))
+           (binding [*cljs-macros-path* ~path]
+             ~@body))))
 
-(defmacro with-core-macros-file
-  [path & body]
-  `(do
-     (when (not= *cljs-macros-path* ~path)
-       (reset! -cljs-macros-loaded false))
-     (binding [*cljs-macros-path* ~path
-               *cljs-macros-is-classpath* false]
-       ~@body)))
+(condc/platform-case
+ :jvm (defmacro with-core-macros-file
+        [path & body]
+        `(do
+           (when (not= *cljs-macros-path* ~path)
+             (reset! -cljs-macros-loaded false))
+           (binding [*cljs-macros-path* ~path
+                     *cljs-macros-is-classpath* false]
+             ~@body))))
 
 (defn empty-env []
   {:ns (@(get-namespaces) *cljs-ns*) :context :statement :locals {}})
@@ -129,26 +136,27 @@
 (defn analysis-error? [ex]
   (= :cljs/analysis-error (:tag (ex-data ex))))
 
-(defmacro wrapping-errors [env & body]
-  (let [err (gensym "err")]
-    `(try
-       ~@body
-       ~(condc/platform-case
-         :jvm (case condc/*target-platform* ;macro definition vs macro expansion stages will differ on cross-compilation.
-                :jvm `(catch Throwable ~err
-                        (if (analysis-error? ~err)
-                          (throw ~err)
-                          ~(if (= condc/*current-platform* :jvm)
-                             `(throw (error ~env (.getMessage ~err) ~err))
-                             `(throw (error ~env (str ~err) ~err)))))
-                :gambit `(catch cljscm.core/ExceptionInfo ~err
-                           (if (analysis-error? ~err)
-                             (throw ~err)
-                             ~`(throw (error ~env (str ~err) ~err)))))
-         :gambit `(catch cljscm.core/ExceptionInfo ~err
-                    (if (analysis-error? ~err)
-                      (throw ~err)
-                      ~`(throw (error ~env (str ~err) ~err))))))))
+(condc/platform-case
+ :jvm (defmacro wrapping-errors [env & body]
+        (let [err (gensym "err")]
+          `(try
+             ~@body
+             ~(condc/platform-case
+               :jvm (case condc/*target-platform* ;macro definition vs macro expansion stages will differ on cross-compilation.
+                      :jvm `(catch Throwable ~err
+                              (if (analysis-error? ~err)
+                                (throw ~err)
+                                ~(if (= condc/*current-platform* :jvm)
+                                   `(throw (error ~env (.getMessage ~err) ~err))
+                                   `(throw (error ~env (str ~err) ~err)))))
+                      :gambit `(catch cljscm.core/ExceptionInfo ~err
+                                 (if (analysis-error? ~err)
+                                   (throw ~err)
+                                   ~`(throw (error ~env (str ~err) ~err)))))
+               :gambit `(catch cljscm.core/ExceptionInfo ~err
+                          (if (analysis-error? ~err)
+                            (throw ~err)
+                            ~`(throw (error ~env (str ~err) ~err)))))))))
 
 (defn confirm-var-exists [env prefix suffix]
   (when *cljs-warn-on-undeclared*
@@ -255,8 +263,9 @@
 (def ^:dynamic *recur-frames* nil)
 (def ^:dynamic *loop-lets* nil)
 
-(defmacro disallowing-recur [& body]
-  `(binding [*recur-frames* (cons nil *recur-frames*)] ~@body))
+(condc/platform-case
+ :jvm (defmacro disallowing-recur [& body]
+        `(binding [*recur-frames* (cons nil *recur-frames*)] ~@body)))
 
 (defn analyze-keyword
     [env sym]
@@ -857,7 +866,7 @@
       (analyze-deps @deps))
     (set! *cljs-ns* name)
     (set! *reader-ns* (create-ns name))
-    (set! *ns* *reader-ns*)
+    (condc/platform-case :jvm (set! *ns* *reader-ns*))
     (load-core)
     (doseq [nsym (concat (vals requires-macros) (vals uses-macros))]
       (clojure.core/require nsym))
@@ -1134,8 +1143,10 @@
     (if (specials op)
       form
       (if-let [mac (and (symbol? op) (get-expander op env))]
-        (binding [*ns* (create-ns *cljs-ns*)]
-          (apply mac form env (rest form)))
+        (condc/platform-case
+         :jvm (binding [*ns* (create-ns *cljs-ns*)]
+                (apply mac form env (rest form)))
+         :gambit (apply mac form env (rest form)))
         (if (symbol? op)
           (let [opname (str op)]
             (cond
@@ -1256,7 +1267,6 @@
      (assert f (str "Can't find " f " in classpath"))
      (binding [*cljs-ns* 'cljscm.user
                *cljs-file* f
-               *ns* *reader-ns*
                condc/*target-platform* :gambit]
        (let [port (cljscm.core/scm* [f readtable]
                                     (open-input-file (list :path f :readtable readtable)))
