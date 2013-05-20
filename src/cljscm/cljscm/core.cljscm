@@ -33,7 +33,7 @@
   cljscm.core/IWatchable [cljscm.core/Atom],
   cljscm.core/ITransientSet [cljscm.core/TransientHashSet],
   cljscm.core/IEditableCollection [cljscm.core/PersistentArrayMap cljscm.core/PersistentVector cljscm.core/PersistentHashMap cljscm.core/PersistentHashSet],
-  cljscm.core/IStringable [cljscm.core/String cljscm.core/StringBufferWriter],
+  cljscm.core/IStringable [cljscm.core/Char cljscm.core/String cljscm.core/StringBufferWriter],
   cljscm.core/IAssociative [cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/Subvec cljscm.core/RedNode cljscm.core/Vector cljscm.core/PersistentVector cljscm.core/Table cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/PersistentTreeMap cljscm.core/Array],
   cljscm.core/ISeqable [cljscm.core/Cons cljscm.core/LazySeq cljscm.core/Range cljscm.core/PersistentVector cljscm.core/PersistentQueue cljscm.core/PersistentArrayMap cljscm.core/Nil cljscm.core/EmptyList cljscm.core/Subvec cljscm.core/Pair cljscm.core/PersistentQueueSeq cljscm.core/IndexedSeq cljscm.core/ChunkedSeq cljscm.core/RedNode cljscm.core/ChunkedCons cljscm.core/Vector cljscm.core/ArrayNodeSeq cljscm.core/String cljscm.core/Table cljscm.core/RSeq cljscm.core/PersistentTreeSet cljscm.core/BlackNode cljscm.core/PersistentHashMap cljscm.core/NodeSeq cljscm.core/PersistentTreeMapSeq cljscm.core/PersistentTreeMap cljscm.core/Null cljscm.core/Array cljscm.core/PersistentHashSet],
   cljscm.core/ITransientMap [cljscm.core/TransientArrayMap cljscm.core/TransientHashMap],
@@ -788,7 +788,10 @@
   (-equiv [x o] (identical? x o))
 
   IHash
-  (-hash [o] (scm-equal?-hash o)))
+  (-hash [o] (scm-equal?-hash o))
+
+  IStringable
+  (-toString [o] ((scm* {} string) o)))
 
 (extend-type Procedure
   Fn
@@ -6816,7 +6819,9 @@ reduces them without incurring seq initialization"
   (-pr-writer [o wr _] (-write wr "()"))
 
   Char
-  (-pr-writer [s wr opts] (-write wr (scm* [s] (string s))))
+  (-pr-writer [s wr opts] (if (:readably opts)
+                            (-write wr (str "\\" (scm* [s] (string s))))
+                            (-write wr (scm* [s] (string s)))))
   
   Array
   (-pr-writer [a wr opts]
@@ -6828,7 +6833,9 @@ reduces them without incurring seq initialization"
       (pr-sequential-writer wr pr-pair "{" ", " "}" opts coll)))
 
   String
-  (-pr-writer [o wr opts] (-write wr o))
+  (-pr-writer [o wr opts] (if (:readably opts)
+                            (-write wr (str "\"" o "\""))
+                            (-write wr o)))
 
   ;; string
   ;; (-pr-writer [obj writer opts]
