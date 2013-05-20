@@ -704,38 +704,52 @@
          (defmethod pp-scm :default [o] (pp/simple-dispatch o)))
 
 (condc/platform-case
- :jvm (defn compile-file* [src dest]
-        (with-core-cljs
-          (with-open [out ^java.io.Writer (io/make-writer dest {})]
-            (binding [ana/*cljs-ns* 'cljscm.user
-                      ana/*reader-ns* (create-ns ana/*cljs-ns*)
-                      ana/*cljs-file* (.getPath ^java.io.File src)
-                      *data-readers* tags/*cljs-data-readers*
-                      *position* (atom [0 0])
-                      *emitted-provides* (atom #{})
-                      condc/*target-platform* :gambit]
-              (loop [forms (forms-seq src)
-                     ns-name nil
-                     deps nil]
-                (if (seq forms)
-                  (let [env (ana/empty-env)
-                        ast (ana/analyze env (first forms))]
-                    (do (binding [*out* out
-                                  *emit-for-prn?* true]
-                          (prn (emit ast))
-                          #_(pp/with-pprint-dispatch
-                                pp-scm
-                              (pp/pprint (emit ast)))
-                          #_(pp/pprint (emit ast)))
-                        (if (= (:op ast) :ns)
-                          (recur (rest forms) (:name ast) (merge (:uses ast) (:requires ast)))
-                          (recur (rest forms) ns-name deps))))
-                  {:ns (or ns-name 'cljscm.user)
-                   :provides [ns-name]
-                   :requires (if (= ns-name 'cljscm.core) (set (vals deps)) (conj (set (vals deps)) 'cljscm.core))
-                   :file dest}))))))
- :gambit (defn compile-file* [src dest]
-           :TODO))
+ :gambit (defn create-ns [x] x))
+
+(defn compile-file* [src dest]
+  (with-core-cljs
+    (letfn [(do-emit [out]
+              (binding [ana/*cljs-ns* 'cljscm.user
+                        ana/*reader-ns* (create-ns ana/*cljs-ns*)
+                        ana/*cljs-file* (condc/platform-case
+                                         :jvm (.getPath ^java.io.File src)
+                                         :gambit src)
+                        *position* (atom [0 0])
+                        *emitted-provides* (atom #{})
+                        condc/*target-platform* :gambit]
+                (loop [forms (forms-seq src)
+                       ns-name nil
+                       deps nil]
+                  (if (seq forms)
+                    (let [env (ana/empty-env)
+                          ast (ana/analyze env (first forms))]
+                      (do (binding [*emit-for-prn?* true]
+                            (condc/platform-case
+                             :jvm (binding [*out* out]
+                                    (prn (emit ast)))
+                             :gambit ((scm* {} with-output-to-file)
+                                      (pair [:path dest :append true])
+                                      (fn [] (prn (emit ast)))))
+                            #_(pp/with-pprint-dispatch
+                                  pp-scm
+                                (pp/pprint (emit ast)))
+                            #_(pp/pprint (emit ast)))
+                          (if (= (:op ast) :ns)
+                            (recur (rest forms) (:name ast) (merge (:uses ast) (:requires ast)))
+                            (recur (rest forms) ns-name deps))))
+                    {:ns (or ns-name 'cljscm.user)
+                     :provides [ns-name]
+                     :requires (if (= ns-name 'cljscm.core) (set (vals deps)) (conj (set (vals deps)) 'cljscm.core))
+                     :file dest}))))]
+      (condc/platform-case
+       :jvm (with-open [out ^java.io.Writer (io/make-writer dest {})]
+              (binding [*data-readers* tags/*cljs-data-readers*]
+                (do-emit out)))
+       :gambit (do
+                 ((scm* {} with-exception-catcher)
+                  (fn [e])
+                  (fn [] ((scm* {} delete-file) dest)))
+                 (do-emit nil))))))
 
 (condc/platform-case
  :jvm (defn requires-compilation?
