@@ -140,7 +140,7 @@
 (defn alength
   "Returns the length of the array. Works on arrays of all types."
   [array]
-  ((scm* {} vector-length) array i))
+  ((scm* {} vector-length) array))
 
 (declare reduce)
 
@@ -1853,10 +1853,10 @@ reduces them without incurring seq initialization"
 
 (defn ^boolean pos?
   "Returns true if num is greater than zero, else false"
-  [n] ((scm* {} positive?) x))
+  [n] ((scm* {} positive?) n))
 
 (defn ^boolean zero? [n]
-  ((scm* {} ==) n 0))
+  (identical? n 0))
 
 (defn ^boolean neg?
   "Returns true if num is less than zero, else false"
