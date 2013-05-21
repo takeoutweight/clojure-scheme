@@ -7653,3 +7653,46 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
 (def namespaces (atom '{cljscm.core {:name cljscm.core}
                         cljscm.user {:name cljscm.user}}))
 
+(defn get-namespaces [] cljscm.core/namespaces)
+
+(def ^:dynamic *ns* 'cljscm.user)
+
+(def
+  ^{:doc "vector of paths searched for lib loading" :dynamic true}
+  *classpath* ["src/cljscm" "src" "." "src/clj"])
+
+(defn find-file
+  ([filename] (find-file filename *classpath*))
+  ([filename classpath]
+     (->> classpath
+          (map #(str % "/" filename))
+          (filter #((cljscm.core/scm* {} file-exists?) %))
+          (first))))
+
+(defn alias*
+  [alias lib]
+  (swap! namespaces #(assoc-in % [*ns* :requires alias] lib))
+  alias)
+
+(defn load-scm
+  "loads a scheme file from classpath."
+  [filename]
+  (let [filename (find-file filename)]
+    (when filename
+      (do ((scm* {} eval) (pair ['include filename])) true))))
+
+(defn require
+  "TODO: load .cljscm and .o (right now just loads AOT compiled .scm)"
+  [spec]
+  (letfn [(load-once [ns reload?]
+            (when (or reload? (not (get @namespaces ns)))
+              (println "loading" ns)
+              (load-scm (apply str (concat (replace {\. \/} (str ns)) ".scm")))))]
+    (if (and (coll? spec))
+      (do (binding [*ns* (first spec)]
+            (load-once (first spec) (some #{:reload} spec)))
+          (when (= :as (second spec))
+            (alias* (nth spec 2) (first spec))))
+      (binding [*ns* spec] (load-once spec false)))))
+
+

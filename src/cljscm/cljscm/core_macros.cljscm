@@ -34,10 +34,8 @@
  :gambit (ns cljscm.core
            (:require [cljscm.selfanalyzer :as ana])))
 
-(defn get-namespaces []
-  (condc/platform-case
-   :jvm ana/namespaces
-   :gambit cljscm.core/namespaces))
+(condc/platform-case
+ :jvm (defn get-namespaces [] ana/namespaces))
 
 ; Just assumes symbols are quoted now, won't eval in gambit.
 (clojure.core/defmacro alias [alias lib]

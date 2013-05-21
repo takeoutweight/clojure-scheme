@@ -82,11 +82,13 @@
            ~@body)))
 
 (defn load-core []
-  (when (not @-cljs-macros-loaded)
-    (reset! -cljs-macros-loaded true)
-    (if *cljs-macros-is-classpath*
-      (load *cljs-macros-path*)
-      (load-file *cljs-macros-path*))))
+  (condc/platform-case
+   :jvm (when (not @-cljs-macros-loaded)
+          (reset! -cljs-macros-loaded true)
+          (if *cljs-macros-is-classpath*
+            (load *cljs-macros-path*)
+            (load-file *cljs-macros-path*)))
+   :gambit :TODO))
 
 (condc/platform-case
  :jvm (defmacro with-core-macros
@@ -108,7 +110,9 @@
              ~@body))))
 
 (defn empty-env []
-  {:ns (@(get-namespaces) *cljs-ns*) :context :statement :locals {}})
+  {:ns (@(get-namespaces) (condc/platform-case
+                           :jvm *cljs-ns*
+                           :gambit *ns*)) :context :statement :locals {}})
 
 #_(defmacro-scm ^:private debug-prn
   [& args]

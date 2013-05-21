@@ -24,7 +24,8 @@
                               PersistentHashSet)))
  :gambit :TODO)
 
-(set! *warn-on-reflection* true)
+(condc/platform-case
+ :jvm (set! *warn-on-reflection* true))
                                         ;Game plan : use emits, not print.
                                         ;unwrap nested emits.
                                         ; mapped emits - emits already nests into sequences.
@@ -575,9 +576,15 @@
                         (list 'extended-bindings)
                         (list 'block))]
           (when-not (= name 'cljscm.core)
-            [(list 'load "cljscm.core")])
-          (for [lib (into (vals requires) (distinct (vals uses)))]
-            (list 'load (munge lib)))))
+            [(emit (ana/analyze env `(swap! cljscm.core/namespaces
+                                            #(assoc-in % [(quote ~name) :name]
+                                                       (quote ~name)))))])
+          (for [[alias lib] requires ]
+            (if (not= alias lib)
+              (list 'cljscm.core/require (list 'quote (list (munge lib) :as (munge alias))))
+              (list 'cljscm.core/require (munge lib))))
+          (for [lib (distinct (vals uses))]
+            (list 'cljscm.core/require (munge lib)))))
 
 (defmethod emit :deftype*
   [{:keys [t fields no-constructor]}]
