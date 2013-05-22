@@ -7679,7 +7679,7 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
   [filename]
   (let [filename (find-file filename)]
     (when filename
-      (do ((scm* {} eval) (pair ['include filename])) true))))
+      ((scm* {} load) filename))))
 
 (defn require
   "TODO: load .cljscm and .o (right now just loads AOT compiled .scm)"
