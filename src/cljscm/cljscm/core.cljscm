@@ -849,6 +849,8 @@
 
 (deftype Error [msg])
 
+(deftype Exception [msg])
+
 (deftype Reduced [val]
   IDeref
   (-deref [o] val))
