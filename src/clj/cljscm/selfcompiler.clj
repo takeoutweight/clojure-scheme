@@ -632,7 +632,7 @@
     (if-let [tag (get-tag target)]
       (list (symbol (str (:name (ana/resolve-existing-var env tag)) "-" field)) (emit target))
       (list 'cljscm.core/record-ref (emit target) `(quote ~field)))
-    (throw (Exception. (str "no special dot-method access: " (:line env) " target:" (:op target)))))) ;TODO
+    (throw (Exception. (str "no special dot-method access line: " (:line env) " target: " (:op target)))))) ;TODO
 
 (defmethod emit :scm-str
   [{:keys [env code segs args]}]

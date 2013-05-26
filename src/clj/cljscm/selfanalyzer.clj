@@ -128,8 +128,10 @@
            (str " at line " (:line env) " " *cljs-file*))))
 
 (defn warning [env s]
-  (binding [*out* *err*]
-    (println (message env s))))
+  (condc/platform-case
+   :jvm (binding [*out* *err*]
+          (println (message env s)))
+   :gambit (println (message env s)))) ; TODO *err* in :gambit.
 
 (defn error
   ([env s] (error env s nil))
@@ -956,8 +958,7 @@
 
 (defn ^boolean property-symbol? [sym]
   (and (symbol? sym)
-       (= \- (first (name sym)))
-       (= \. (second (name sym)))))
+       (= \- (first (name sym)))))
 
 (defn- classify-dot-form
   [[target member args]]

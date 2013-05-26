@@ -1891,7 +1891,7 @@ reduces them without incurring seq initialization"
 (defn subs
   "Returns the substring of s beginning at start inclusive, and ending
   at end (defaults to length of string), exclusive."
-  ([s start] (scm* [s start] (substring s start)))
+  ([s start] (scm* [s start] (substring s start (string-length s))))
   ([s start end] (scm* [s start end] (substring s start end))))
 
 (declare map)

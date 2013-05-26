@@ -122,6 +122,8 @@ nil if the end of stream has been reached")
        (not (identical? ch \:))
        (macros ch)))
 
+(defn read-char* [reader _] (-read-char reader))
+
 (defn read-token
   [rdr initch]
   (loop [sb (write (string-buffer-writer) initch)
@@ -479,7 +481,7 @@ nil if the end of stream has been reached")
    (identical? c \]) read-unmatched-delimiter
    (identical? c \{) read-map
    (identical? c \}) read-unmatched-delimiter
-   (identical? c \\) read-char
+   (identical? c \\) read-char*
    (identical? c \%) read-arg
    (identical? c \#) read-dispatch
    :else nil))
