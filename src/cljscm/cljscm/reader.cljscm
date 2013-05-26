@@ -411,15 +411,57 @@ nil if the end of stream has been reached")
           :else o)]
     (if (meta o)
       (list 'cljscm.core/with-meta ret
-            (syntax-quote* (meta o)))
+            (syntax-quote* (meta o) gensym-env))
       ret)))
 
 (defn read-syntax-quote [rdr _]
   (let [form (read rdr true nil false)]
     (syntax-quote* form (atom {}))))
 
+(defn read-unquote-or-splice [rdr _]
+  (let [next-char (read-char rdr)]
+    (if (= next-char \@)
+      (list ::unquote-splicing (read rdr true nil false))
+      (do
+        (unread rdr next-char)
+        (list ::unquote (read rdr true nil false))))))
+
+(def ^:dynamic *fn-arg-env* nil)
+
+(defn register-arg
+  "-1 for 'rest', 1 for 1st arg (0 not used)"
+  [n]
+  (or (get @*fn-arg-env* n)
+      (let [sym (gensym (if (= -1 n)
+                          "rest__"
+                          (str "p" n "__")))]
+        (do (swap! *fn-arg-env* assoc n sym)
+            sym))))
+
 (defn read-fn [rdr _]
-  :TODO)
+  (if *fn-arg-env*
+    (reader-error rdr "Nested #()'s are not allowed")
+    (binding [*fn-arg-env* (atom {})]
+      (let [body (read-delimited-list \) rdr true)
+            max-idx (apply max (cons 0 (keys @*fn-arg-env*)))
+            rest? (get @*fn-arg-env* -1)]
+        (doall
+         (list 'fn*
+               (vec (concat (map #(register-arg (inc %)) (range max-idx))
+                            (when rest? ['& (register-arg -1)]) ))
+               (apply list body)))))))
+
+(defn read-arg [rdr initch]
+  (if *fn-arg-env*
+    (let [none ['none]
+          next-char (read-char rdr)
+          num (- (int next-char) 48)]
+      (cond
+        (< 0 num 10) (register-arg num)
+        (= \& next-char) (register-arg -1)
+        :else (do (unread rdr next-char)
+                  (register-arg 1))))
+    (read-symbol rdr initch)))
 
 (defn macros [c]
   (cond
@@ -430,7 +472,7 @@ nil if the end of stream has been reached")
    (identical? c \@) (wrapping-reader 'deref)
    (identical? c \^) read-meta
    (identical? c \`) read-syntax-quote
-   (identical? c \~) not-implemented
+   (identical? c \~) read-unquote-or-splice
    (identical? c \() read-list
    (identical? c \)) read-unmatched-delimiter
    (identical? c \[) read-vector
@@ -438,7 +480,7 @@ nil if the end of stream has been reached")
    (identical? c \{) read-map
    (identical? c \}) read-unmatched-delimiter
    (identical? c \\) read-char
-   (identical? c \%) not-implemented
+   (identical? c \%) read-arg
    (identical? c \#) read-dispatch
    :else nil))
 
