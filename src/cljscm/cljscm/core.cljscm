@@ -6809,7 +6809,9 @@ reduces them without incurring seq initialization"
   (-pr-writer [n wr opts] (-write wr (scm* [n] (number->string n))))
 
   Pair
-  (-pr-writer [c wr opts] (pr-sequential-writer wr pr-writer  "(" " " ")" opts c))
+  (-pr-writer [c wr opts] (if ((scm* {} list?) c)
+                            (pr-sequential-writer wr pr-writer  "(" " " ")" opts c)
+                            (-write wr ((scm* {} object->string) c)))) ;improper list.
 
   Boolean
   (-pr-writer [bool wr opts] (-write wr (if bool "true" "false")))
