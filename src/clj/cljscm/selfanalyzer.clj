@@ -954,7 +954,10 @@
 ;(for [[proname meths] (:impls a) [methname _] meths] (:name (:info methname)))
 ;; dot accessor code
 
-(def ^:private property-symbol? #(boolean (and (symbol? %) (re-matches #"^-.*" (name %)))))
+(defn ^boolean property-symbol? [sym]
+  (and (symbol? sym)
+       (= \- (first (name sym)))
+       (= \. (second (name sym)))))
 
 (defn- classify-dot-form
   [[target member args]]
