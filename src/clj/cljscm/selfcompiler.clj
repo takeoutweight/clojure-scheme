@@ -733,9 +733,14 @@
                             (condc/platform-case
                              :jvm (binding [*out* out]
                                     (prn (emit ast)))
-                             :gambit ((scm* {} with-output-to-file)
-                                      (pair [:path dest :append true])
-                                      (fn [] (prn (emit ast)))))
+                             :gambit (let [outfrm (emit ast)]
+                                       ((scm* {} with-output-to-file)
+                                        (pair [:path dest :append true])
+                                        (fn [] ((scm* {} write)
+                                                (if (coll? outfrm)
+                                                  (pair-recursive outfrm)
+                                                  (pair-item outfrm)))
+                                          (scm* {} (newline))))))
                             #_(pp/with-pprint-dispatch
                                   pp-scm
                                 (pp/pprint (emit ast)))
