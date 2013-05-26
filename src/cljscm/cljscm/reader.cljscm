@@ -13,6 +13,18 @@
 nil if the end of stream has been reached")
   (-unread [reader ch] "Push back a single character on to the stream"))
 
+(defprotocol IPositioned
+  (-line [reader] "returns reader's current line number")
+  (-column [reader] "returns reader's current column number"))
+
+(defn line [reader]
+  (when (satisfies? IPositioned reader)
+    (-line reader)))
+
+(defn column [reader]
+  (when (satisfies? IPositioned reader)
+    (-column reader)))
+
 (defn read-char [reader] (-read-char reader))
 (defn unread [reader ch] (-unread reader ch))
 
@@ -28,7 +40,10 @@ nil if the end of stream has been reached")
                (let [buf @buffer-atom]
                  (swap! buffer-atom rest)
                  (first buf))))
-  (-unread [reader ch] (swap! buffer-atom #(cons ch %))))
+  (-unread [reader ch] (swap! buffer-atom #(cons ch %)))
+  IPositioned
+  (-line [r] 1)
+  (-column [r] (- @index-atom (count @buffer-atom))))
 
 (defn push-back-reader [s]
   "Creates a StringPushbackReader from a given string"
@@ -43,7 +58,10 @@ nil if the end of stream has been reached")
       (let [buf @buffer-atom]
         (swap! buffer-atom rest)
         (first buf))))
-  (-unread [reader ch] (swap! buffer-atom #(cons ch %))))
+  (-unread [reader ch] (swap! buffer-atom #(cons ch %)))
+  IPositioned
+  (-line [r] ((scm* {} input-port-line) port))
+  (-column [r] ((scm* {} input-port-column) port)))
 
 (defn port-push-back-reader [port]
   "Creates a PortPushbackReader from a given scheme port"
@@ -432,13 +450,16 @@ nil if the end of stream has been reached")
 ;   (identical? s \") read-regex TODO
    (identical? s\!) read-comment
    (identical? s \_) read-discard
+   (identical? s \() read-fn
    :else nil))
 
 (defn read
   "Reads the first object from a PushbackReader. Returns the object read.
    If EOF, throws if eof-is-error is true. Otherwise returns sentinel."
   [reader eof-is-error sentinel is-recursive]
-  (let [ch (read-char reader)]
+  (let [ln (line reader)
+        col (column reader)
+        ch (read-char reader)]
     (cond
      (nil? ch) (if eof-is-error (reader-error reader "EOF while reading") sentinel)
      (whitespace? ch) (recur reader eof-is-error sentinel is-recursive)
@@ -451,7 +472,9 @@ nil if the end of stream has been reached")
                   :else (read-symbol reader ch))]
      (if (identical? res reader)
        (recur reader eof-is-error sentinel is-recursive)
-       res)))))
+       (let [res (if ln (vary-meta res assoc :line ln) res)
+             res (if col (vary-meta res assoc :column col) res)]
+         res))))))
 
 (defn read-string
   "Reads one object from the string s"

@@ -1166,18 +1166,15 @@
 
 (defn analyze-seq
   [env form name]
-  (let [env (assoc env :line
-                   (or (-> form meta :line)
-                       (:line env)))]
-    (let [op (first form)]
-      (assert (not (nil? op)) "Can't call nil")
-      (let [mform (macroexpand-1 env form)]
-        (if (identical? form mform)
-          (wrapping-errors env
-            (if (specials op)
-              (parse op env form name)
-              (parse-invoke env form)))
-          (analyze env mform name))))))
+  (let [op (first form)]
+    (assert (not (nil? op)) "Can't call nil")
+    (let [mform (macroexpand-1 env form)]
+      (if (identical? form mform)
+        (wrapping-errors env
+          (if (specials op)
+            (parse op env form name)
+            (parse-invoke env form)))
+        (analyze env mform name)))))
 
 (declare analyze-wrap-meta)
 
@@ -1229,7 +1226,13 @@
                                 :jvm clojure.lang.LazySeq
                                 :gambit cljscm.core/LazySeq) form)
                   (or (seq form) ())
-                  form)]
+                  form)
+           env (assoc env :line
+                      (or (-> form meta :line)
+                       (:line env)))
+           env (assoc env :column
+                      (or (-> form meta :column)
+                          (:column env)))]
        (load-core)
        (cond
         (symbol? form) (analyze-symbol env form)
