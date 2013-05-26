@@ -7695,4 +7695,19 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
             (alias* (nth spec 2) (first spec))))
       (binding [*ns* spec] (load-once spec false)))))
 
+(defn special-symbol? [s]
+  (if ('#{if case def fn* do let* loop* letfn* throw try* recur new set! ns deftype* defrecord* . extend scm-str* scm* & quote in-ns require} s)
+    true
+    false))
+
+(defn ns-resolve
+  ([ns sym]
+     (ns-resolve ns {:ns (get @namespaces ns) :context :statement :locals {}} sym))
+  ([ns env sym]
+     (cljscm.selfanalyzer/resolve-var env sym nil))) ;TODO split out symbol resolution code from selfanalyzer
+
+(defn resolve
+  ([sym] (ns-resolve *ns* sym))
+  ([env sym] (ns-resolve *ns* env sym)))
+
 

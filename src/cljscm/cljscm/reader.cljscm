@@ -322,7 +322,7 @@ nil if the end of stream has been reached")
                     (apply str name-chars))]
     #_"TODO: Invalid keyword checking, disallow further ::'s etc."
     (keyword (if resolve?
-               (:name (ana/resolve-var (ana/empty-env) sym))
+               (:name (resolve sym))
                sym))))
 
 (defn desugar-meta
@@ -366,6 +366,43 @@ nil if the end of stream has been reached")
   (read rdr true nil true)
   rdr)
 
+(defn expand-list [lst gensym-env]
+  (cons 'cljscm.core/concat
+        (map (fn [item]
+               (if (and (seq? item) (= ::unquote-splicing (first item)))
+                 (second item)
+                 (list 'cljscm.core/list (syntax-quote* item gensym-env)))) lst)))
+
+(defn syntax-quote* [o gensym-env]
+  (let [ret
+        (cond
+          (symbol? o) (list 'quote
+                            (cond (= \# (last (str o)))
+                                  , (-> (swap! gensym-env update-in [o]
+                                               #(or % (gensym o)))
+                                        (get o))
+                                    (special-symbol? o) o
+                                    :else (:name (resolve o))))
+          (and (seq? o) (= ::unquote (first o))) (second o)
+          (and (seq? o) (= ::unquote-splicing (first o))) (throw (Exception. "splice not in list"))
+          (map? o) (list 'cljscm.core/apply 'cljscm.core/hash-map
+                         (expand-list (apply concat o) gensym-env))
+          (vector? o) (list 'cljscm.core/apply 'cljscm.core/vector (expand-list o gensym-env))
+          (set? o) (list 'cljscm.core/apply 'cljscm.core/hash-set (expand-list o gensym-env))
+          (seq? o) (if (seq o) (expand-list o gensym-env), (list 'cljscm.core/list))
+          :else o)]
+    (if (meta o)
+      (list 'cljscm.core/with-meta ret
+            (syntax-quote* (meta o)))
+      ret)))
+
+(defn read-syntax-quote [rdr _]
+  (let [form (read rdr true nil false)]
+    (syntax-quote* form (atom {}))))
+
+(defn read-fn [rdr _]
+  :TODO)
+
 (defn macros [c]
   (cond
    (identical? c \") read-string*
@@ -374,7 +411,7 @@ nil if the end of stream has been reached")
    (identical? c \') (wrapping-reader 'quote)
    (identical? c \@) (wrapping-reader 'deref)
    (identical? c \^) read-meta
-   (identical? c \`) not-implemented
+   (identical? c \`) read-syntax-quote
    (identical? c \~) not-implemented
    (identical? c \() read-list
    (identical? c \)) read-unmatched-delimiter
