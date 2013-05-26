@@ -9,15 +9,14 @@
 (ns cljscm.selfcompiler
   (:refer-clojure :exclude [munge macroexpand-1])
   (:require [cljscm.conditional :as condc]
-            [cljscm.selfanalyzer :as ana]))
+            [cljscm.selfanalyzer :as ana]
+            [clojure.walk :as walk]))
 
 (condc/platform-case
  :jvm (do
         (require '[clojure.java.io :as io]
                  '[clojure.string :as string]
-                 '[clojure.walk :as walk]
                  '[clojure.pprint :as pp]
-                 '[cljscm.conditional :as condc]
                  '[cljscm.tagged-literals :as tags])
         (import (clojure.lang Symbol
                               Cons
