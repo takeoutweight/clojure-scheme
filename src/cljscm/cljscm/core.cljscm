@@ -6271,7 +6271,8 @@ reduces them without incurring seq initialization"
 (defn name
   "Returns the namespace String of a symbol or keyword, or nil if not present."
   [s]
-  (let [[ns _ nm] (partition-by #{\/} (str s))]
+  (let [st (if (keyword? s) (drop 1 (str s)) (str s))
+        [ns _ nm] (partition-by #{\/} st)]
     (if nm (apply str nm) (apply str ns))))
 
 (defn namespace
