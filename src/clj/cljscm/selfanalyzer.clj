@@ -1057,20 +1057,6 @@
         {:env env :op :scm-str :form form :code (apply str (interp jsform))
          :tag (-> form meta :tag)})))
 
-(defmethod parse 'in-ns [op env [_ [_ ns-name]] _]
-  (set! *cljs-ns* ns-name)
-  {:op :constant :env env :form (str "in-ns " ns-name)})
-
-(defmethod parse 'require [op env [_ & specs] _]
-  (doall (map (fn [spec]
-                (let [spec (if (and (coll? spec) (= 'quote (first spec))) (second spec) spec)
-                      preq (merge (parse-require-spec false *cljs-ns* spec)
-                                  (parse-require-spec true *cljs-ns* spec))]
-                  (do
-                    (println "; adding " preq)
-                    (swap! (get-namespaces) #(update-in % [*cljs-ns* :requires] merge (:require preq) (:require-macros preq)))))) specs))
-  {:op :constant :env env :form (str "require " specs)})
-
 (defn parse-invoke
   [env [f & args :as form]]
   (disallowing-recur
@@ -1091,6 +1077,20 @@
          (str "WARNING: " (-> fexpr :info :name) " is deprecated.")))
      {:env env :op :invoke :form form :f fexpr :args argexprs
       :tag (or (-> fexpr :info :tag) (-> form meta :tag)) :children (into [fexpr] argexprs)})))
+
+(defmethod parse 'in-ns [op env [_ [_ ns-name] :as form] _]
+  (set! *cljs-ns* ns-name)
+  (parse-invoke env form))
+
+(defmethod parse 'require [op env [_ & specs :as form] _]
+  (doall (map (fn [spec]
+                (let [spec (if (and (coll? spec) (= 'quote (first spec))) (second spec) spec)
+                      preq (merge (parse-require-spec false *cljs-ns* spec)
+                                  (parse-require-spec true *cljs-ns* spec))]
+                  (do
+                    (println "; adding " preq)
+                    (swap! (get-namespaces) #(update-in % [*cljs-ns* :requires] merge (:require preq) (:require-macros preq)))))) specs))
+  (parse-invoke env form))
 
 (defn analyze-symbol
   "Finds the var associated with sym"
