@@ -110,9 +110,7 @@
              ~@body))))
 
 (defn empty-env []
-  {:ns (@(get-namespaces) (condc/platform-case
-                           :jvm *cljs-ns*
-                           :gambit *ns*)) :context :statement :locals {}})
+  {:ns (@(get-namespaces) *cljs-ns*) :context :statement :locals {}})
 
 #_(defmacro-scm ^:private debug-prn
   [& args]
