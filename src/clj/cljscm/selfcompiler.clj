@@ -178,6 +178,10 @@
   (emit-meta-constant x `(cljscm.core/list ~@(map emit-constant x))))
 
 (condc/platform-case
+ :gambit (defmethod emit-constant Pair [x]
+           (emit-meta-constant x `(cljscm.core/list ~@(map emit-constant x)))))
+
+(condc/platform-case
  :jvm (defmethod emit-constant clojure.lang.IPersistentVector [x]
         (emit-meta-constant x
                             `(cljscm.core/vec ~(cons 'list (map emit-constant x)))))
