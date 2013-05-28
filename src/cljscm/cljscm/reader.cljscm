@@ -122,8 +122,6 @@ nil if the end of stream has been reached")
        (not (identical? ch \:))
        (macros ch)))
 
-(defn read-char* [reader _] (-read-char reader))
-
 (defn read-token
   [rdr initch]
   (loop [sb (write (string-buffer-writer) initch)
@@ -133,6 +131,16 @@ nil if the end of stream has been reached")
             (macro-terminating? ch))
       (do (unread rdr ch) (-toString sb))
       (recur (write sb ch) (read-char rdr)))))
+
+(defn read-char* [rdr _]
+  (let [tok (read-token rdr (-read-char rdr))]
+    (cond
+      (= tok "space") \space
+      (= tok "tab") \tab
+      (= tok "newline") \newline
+      (= tok "return") \return
+      (= (count tok) 1) (first tok)
+      :else (reader-error rdr "Uknown character token: " tok))))
 
 (defn skip-line
   "Advances the reader to the end of a line. Returns the reader"
