@@ -387,9 +387,10 @@ nil if the end of stream has been reached")
   [rdr _]
   (set (read-delimited-list \} rdr true)))
 
-#_( TODO (defn read-regex
-                [rdr ch]
-                (-> (read-string* rdr ch) re-pattern)))
+(defn read-regex
+  "TODO"
+  [rdr ch]
+  (list 'cljscm.core/re-pattern (read-string* rdr ch)))
 
 (defn read-discard
   [rdr _]
@@ -501,7 +502,7 @@ nil if the end of stream has been reached")
   (cond
    (identical? s \{) read-set
    (identical? s \<) (throwing-reader "Unreadable form")
-;   (identical? s \") read-regex TODO
+   (identical? s \") read-regex
    (identical? s\!) read-comment
    (identical? s \_) read-discard
    (identical? s \() read-fn
