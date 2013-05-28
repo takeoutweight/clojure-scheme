@@ -1824,7 +1824,7 @@
   [a]
   `(let [sz# (dec (alength ~a))
          r# (scm* {:sz sz#} ~'(make-vector :sz))]
-     (scm* {:a ~a :r r#} ~'(subvector-move! :a 0 sz# :r 0))
+     (scm* {:a ~a :r r# :sz sz#} ~'(subvector-move! :a 0 :sz :r 0))
      r#))
 
 (defmacro amap
