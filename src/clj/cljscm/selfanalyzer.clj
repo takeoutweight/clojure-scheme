@@ -71,15 +71,14 @@
 (def ^:dynamic *cljs-macros-is-classpath* true)
 (def  -cljs-macros-loaded (atom false))
 
-(condc/platform-case
- :jvm (defmacro no-warn [& body]
-        `(binding [*cljs-warn-on-undeclared* false
-                   *cljs-warn-on-redef* false
-                   *cljs-warn-on-dynamic* false
-                   *cljs-warn-on-fn-var* false
-                   *cljs-warn-fn-arity* false
-                   *cljs-warn-fn-deprecated* false]
-           ~@body)))
+(defmacro no-warn [& body]
+  `(binding [*cljs-warn-on-undeclared* false
+             *cljs-warn-on-redef* false
+             *cljs-warn-on-dynamic* false
+             *cljs-warn-on-fn-var* false
+             *cljs-warn-fn-arity* false
+             *cljs-warn-fn-deprecated* false]
+     ~@body))
 
 (defn load-core []
   (condc/platform-case
@@ -141,27 +140,26 @@
 (defn analysis-error? [ex]
   (= :cljs/analysis-error (:tag (ex-data ex))))
 
-(condc/platform-case
- :jvm (defmacro wrapping-errors [env & body]
-        (let [err (gensym "err")]
-          `(try
-             ~@body
-             ~(condc/platform-case
-               :jvm (case condc/*target-platform* ;macro definition vs macro expansion stages will differ on cross-compilation.
-                      :jvm `(catch Throwable ~err
-                              (if (analysis-error? ~err)
-                                (throw ~err)
-                                ~(if (= condc/*current-platform* :jvm)
-                                   `(throw (error ~env (.getMessage ~err) ~err))
-                                   `(throw (error ~env (str ~err) ~err)))))
-                      :gambit `(catch cljscm.core/ExceptionInfo ~err
-                                 (if (analysis-error? ~err)
-                                   (throw ~err)
-                                   ~`(throw (error ~env (str ~err) ~err)))))
-               :gambit `(catch cljscm.core/ExceptionInfo ~err
-                          (if (analysis-error? ~err)
-                            (throw ~err)
-                            ~`(throw (error ~env (str ~err) ~err)))))))))
+(defmacro wrapping-errors [env & body]
+  (let [err (gensym "err")]
+    `(try
+       ~@body
+       ~(condc/platform-case
+         :jvm (case condc/*target-platform* ;macro definition vs macro expansion stages will differ on cross-compilation.
+                :jvm `(catch Throwable ~err
+                        (if (analysis-error? ~err)
+                          (throw ~err)
+                          ~(if (= condc/*current-platform* :jvm)
+                             `(throw (error ~env (.getMessage ~err) ~err))
+                             `(throw (error ~env (str ~err) ~err)))))
+                :gambit `(catch cljscm.core/ExceptionInfo ~err
+                           (if (analysis-error? ~err)
+                             (throw ~err)
+                             ~`(throw (error ~env (str ~err) ~err)))))
+         :gambit `(catch cljscm.core/ExceptionInfo ~err
+                    (if (analysis-error? ~err)
+                      (throw ~err)
+                      ~`(throw (error ~env (str ~err) ~err))))))))
 
 (defn confirm-var-exists [env prefix suffix]
   (when *cljs-warn-on-undeclared*
@@ -268,9 +266,8 @@
 (def ^:dynamic *recur-frames* nil)
 (def ^:dynamic *loop-lets* nil)
 
-(condc/platform-case
- :jvm (defmacro disallowing-recur [& body]
-        `(binding [*recur-frames* (cons nil *recur-frames*)] ~@body)))
+(defmacro disallowing-recur [& body]
+  `(binding [*recur-frames* (cons nil *recur-frames*)] ~@body))
 
 (defn analyze-keyword
     [env sym]
