@@ -7670,6 +7670,7 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
 (defn get-namespaces [] cljscm.core/namespaces)
 
 (def ^:dynamic *ns* 'cljscm.user)
+(def ^:dynamic *assert* true)
 
 (def
   ^{:doc "vector of paths searched for lib loading" :dynamic true}
