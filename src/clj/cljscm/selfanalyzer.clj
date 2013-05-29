@@ -868,7 +868,7 @@
       (analyze-deps @deps))
     (set! *cljs-ns* name)
     (set! *reader-ns* (create-ns name))
-    (condc/platform-case :jvm (set! *ns* *reader-ns*))
+    (set! *ns* *reader-ns*)
     (load-core)
     (doseq [nsym (concat (vals requires-macros) (vals uses-macros))]
       (clojure.core/require nsym))
