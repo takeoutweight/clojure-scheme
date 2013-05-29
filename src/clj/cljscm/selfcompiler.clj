@@ -66,7 +66,9 @@
 (defonce ns-first-segments (atom '#{"cljs" "clojure"}))
 
 (defn munge-constant [c]
-  (if (#{'.} c) (symbol (str "|" c "|")) c)) ;dots are illegal syntax.
+  (cond (#{'.} c) (symbol (str "|" c "|"))
+        (= 'cljscm.core/scm* c) 'scm* ;un-resolve specails that jvm's syntax-quote won't recognize.
+        :else c)) ;dots are illegal syntax.
 
 (defn munge
   ([s] (munge s js-reserved))
