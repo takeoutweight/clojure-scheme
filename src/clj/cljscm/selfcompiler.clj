@@ -93,14 +93,7 @@
           munged-name
           (symbol (str munged-name "__$" depth))))
       ; String munging
-      s
-      #_(let [ss (string/replace (str s) #"\/(.)" ".$1") ; Division is special
-            ss (apply str (map #(if (reserved %) (str % "$") %)
-                               (string/split ss #"(?<=\.)|(?=\.)")))
-            ms (clojure.lang.Compiler/munge ss)]
-        (if (symbol? s)
-          (symbol ms)
-          ms)))))
+      s)))
 
 (defn- comma-sep [xs]
   (interpose "," xs))
@@ -682,7 +675,8 @@
   "Change the file extension from .cljscm to .js. Takes a File or a
   String. Always returns a String."
   [file-str]
-  (clojure.string/replace file-str #"\.clj.*$" ".scm"))
+  ;TODO (clojure.string/replace file-str #"\.clj.*$" ".scm")
+  )
 
 (condc/platform-case
  :jvm (defn mkdirs
