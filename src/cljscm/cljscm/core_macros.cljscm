@@ -1480,7 +1480,7 @@
                                                     (concat [sp-fn `(scm* {} ~o)]
                                                             (map (core/fn [s] `(scm* {} ~s)) (remove #{'&} rst))))])
                                                prim-types specialized-fns)))
-                            fast-dispatch `(cond ~@(mapcat (core/fn [t] [(scm-instance?* t `(scm* {} ~o)) (call-form (symbol (str fname "---" (-> (str t) (string/replace "." "_") (string/replace "/" "$")))))])
+                            fast-dispatch `(cond ~@(mapcat (core/fn [t] [(scm-instance?* t `(scm* {} ~o)) (call-form (symbol (str fname "---" (->> (str t) (replace {\. \_ \/ \$}) (apply str)))))])
                                                            known-implementing-types)
                                                  true ~prim-dispatches)]
 ;                   (println "DISPATCH: "fname"->"resolved-name":"known-implementing-types)

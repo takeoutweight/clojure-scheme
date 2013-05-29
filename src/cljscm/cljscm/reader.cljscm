@@ -8,6 +8,9 @@
 
 (ns cljscm.reader)
 
+(cljscm.core/add-protocol-hints!
+ {cljscm.reader/IPositioned [cljscm.reader/StringPushbackReader cljscm.reader/PortPushbackReader]})
+
 (defprotocol PushbackReader
   (-read-char [reader] "Returns the next char from the Reader,
 nil if the end of stream has been reached")
@@ -516,20 +519,22 @@ nil if the end of stream has been reached")
         col (column reader)
         ch (read-char reader)]
     (cond
-     (nil? ch) (if eof-is-error (reader-error reader "EOF while reading") sentinel)
-     (whitespace? ch) (recur reader eof-is-error sentinel is-recursive)
-     (comment-prefix? ch) (recur (read-comment reader ch) eof-is-error sentinel is-recursive)
-     :else (let [f (macros ch)
-                 res
-                 (cond
-                  f (f reader ch)
-                  (number-literal? reader ch) (read-number reader ch)
-                  :else (read-symbol reader ch))]
-     (if (identical? res reader)
-       (recur reader eof-is-error sentinel is-recursive)
-       (let [res (if ln (vary-meta res assoc :line ln) res)
-             res (if col (vary-meta res assoc :column col) res)]
-         res))))))
+      (nil? ch) (if eof-is-error (reader-error reader "EOF while reading") sentinel)
+      (whitespace? ch) (recur reader eof-is-error sentinel is-recursive)
+      (comment-prefix? ch) (recur (read-comment reader ch) eof-is-error sentinel is-recursive)
+      :else (let [f (macros ch)
+                  res
+                  (cond
+                    f (f reader ch)
+                    (number-literal? reader ch) (read-number reader ch)
+                    :else (read-symbol reader ch))]
+              (if (identical? res reader)
+                (recur reader eof-is-error sentinel is-recursive)
+                (if (satisfies? IWithMeta res)
+                  (let [res (if ln (vary-meta res assoc :line ln) res)
+                        res (if col (vary-meta res assoc :column col) res)]
+                    res)
+                  res))))))
 
 (defn read-string
   "Reads one object from the string s"
