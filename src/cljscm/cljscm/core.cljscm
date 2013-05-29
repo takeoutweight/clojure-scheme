@@ -7711,7 +7711,7 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
       (binding [*ns* spec] (load-once spec false)))))
 
 (defn special-symbol? [s]
-  (if ('#{if case def fn* do let* loop* letfn* throw try* recur new set! ns deftype* defrecord* . extend scm-str* scm* & quote in-ns require} s)
+  (if ('#{if case def fn* do let* loop* letfn* throw try* catch finally recur new set! ns deftype* defrecord* . extend scm-str* scm* & quote in-ns require} s)
     true
     false))
 
