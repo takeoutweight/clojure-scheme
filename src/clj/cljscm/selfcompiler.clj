@@ -294,11 +294,15 @@
   [{:keys [throw env]}] (list 'raise (emit throw)))
 
 (defmethod emit :def
-  [{:keys [name init dynamic env doc export]}]
+  [{qname :name init :init dynamic :dynamic env :env doc :doc export :export}]
   (let [i (when init [(emit init)])]
     (if dynamic
-      (list 'define name (concat ['make-parameter] (or i [(emit {:op :constant :form nil})])))
-      (concat ['define name] i))))
+      (list 'begin
+            (list 'define qname (concat ['make-parameter] (or i [(emit {:op :constant :form nil})])))
+            (emit (ana/analyze env `(swap! cljscm.core/namespaces assoc-in
+                                           [(quote ~(-> env :ns :name)) :defs (quote ~(symbol (name qname))) :dynamic]
+                                           true))))
+      (concat ['define qname] i))))
 
 (defn schemify-method-arglist
   "analyzed method [a b & r] -> (a b . r) as a list.
