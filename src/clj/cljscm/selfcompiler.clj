@@ -438,7 +438,8 @@
               (when finally
                 (assert (not= :constant (:op finally)) "finally block cannot contain constant")
                 [(emit finally)])
-              [rsym]))))
+              [rsym]))
+    (emit try)))
 
 (defn emit-let
   [{:keys [bindings expr env recur-name]} kind]
