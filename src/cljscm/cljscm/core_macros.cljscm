@@ -5,8 +5,10 @@
 ;   By using this software in any fashion, you are agreeing to be bound by
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software.
-(ns cljscm.core)
-(require '[cljscm.conditional :as condc])
+;(in-ns 'cljscm.core)
+(ns cljscm.core
+  (:require [cljscm.conditional :as condc]))
+
 
 (condc/platform-case
  :jvm :jvm
