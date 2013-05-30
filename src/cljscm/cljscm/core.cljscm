@@ -1022,8 +1022,15 @@ reduces them without incurring seq initialization"
 (declare Vector)
 (extend-type Array
   ISequential
+
+  IHash
+  (-hash [o] (scm-equal?-hash o))
+
   IEquiv
   (-equiv [a o] (equiv-sequential a o))
+
+  IEmptyableCollection
+  (-empty [coll] (array))
     
   IWithMeta
   (-with-meta [coll meta] (Vector. meta coll))
