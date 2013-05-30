@@ -7728,4 +7728,28 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
   ([sym] (ns-resolve *ns* sym))
   ([env sym] (ns-resolve *ns* env sym)))
 
-
+(defn scm-form-sanitize
+  "Converts all vector real scheme vectors and all colls to scheme
+  lists, possibly annotated with source code info"
+  [form source-loc?]
+  (let [san (cond
+              (scm* [form] (and (pair? form) (not (list? form))))
+              , ((scm* {} cons)
+                 (scm-form-sanitize (scm* [form] (car form)) source-loc?)
+                 (scm-form-sanitize (scm* [form] (cdr form)) source-loc?))
+              (vector? form) (apply array (map #(scm-form-sanitize % source-loc?) form))
+              (coll? form) (pair (map #(scm-form-sanitize % source-loc?) form))
+              (symbol? form) (pair-item form)
+              :else form)]
+    (if (and source-loc?
+             (some #{:line :column :file} (keys (meta form))))
+      (let [pos (+ (dec (or (:line (meta form)) 1))
+                   (* (or (:column (meta form)) 0) 65536))]
+        (scm-form-sanitize
+         (array
+          (scm-source-marker)
+          san
+          (or (:file (meta form)) "No Source")
+          pos)
+         false))
+      san)))

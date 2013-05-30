@@ -1516,6 +1516,9 @@
              ~'(table-ref (table-ref cljscm.core/protocol-impls :tx)
                           :p :f)))))
 
+(defmacro scm-source-marker []
+  (list 'scm* {} (symbol "##source2-marker")))
+
 (defmacro scm-table-ref [table key]
   `(scm* {:table ~table :key ~key} ~(list 'table-ref :table :key)))
 

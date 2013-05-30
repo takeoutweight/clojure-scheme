@@ -41,6 +41,8 @@
 (def ^:dynamic *lexical-renames* {})
 (def ^:dynamic *lexical-renames* {})
 (def ^:dynamic *emit-for-prn?* false)
+(def ^:dynamic *emit-source-loc?* false)
+(def ^:dynamic *current-file* nil)
 (def cljs-reserved-file-names #{"deps.cljs"})
 
 (defn dispatch-munge [s]
@@ -103,7 +105,19 @@
 (defn- wrap-in-double-quotes [x]
   (str \" x \"))
 
-(defmulti emit :op)
+(defmulti emit-form :op)
+
+(defn emit [m]
+  (let [form (emit-form m)]
+    (if (and *emit-source-loc?*
+             (condc/platform-case
+              :jvm (instance? clojure.lang.IObj form)
+              :gambit (satisfies? IWithMeta form)))
+      (let [loc {:line (:line (:env m))
+                 :column (:column (:env m))
+                 :file *current-file*}]
+        (vary-meta form #(merge loc %))) ; emit-form's meta has priority
+      form)))
 
 (defn emit-begin
   [statements ret]
@@ -211,12 +225,12 @@
      ~@body
      (when-not (= :expr (:context env#)) (emitln ";"))))
 
-(defmethod emit :no-op [m])
+(defmethod emit-form :no-op [m])
 
-(defmethod emit nil [m]
+(defmethod emit-form nil [m]
   (throw (Exception. (str "Analzyed form with null :op " (pr-str m)))))
 
-(defmethod emit :var
+(defmethod emit-form :var
   [{:keys [info env] :as arg}]
   (let [n (:name info)
         n (if (= (namespace n) "js")
@@ -230,21 +244,21 @@
       (:dynamic info) (list (munge n))
       :else (munge n))))
 
-(defmethod emit :meta [{:keys [expr meta]}]
+(defmethod emit-form :meta [{:keys [expr meta]}]
   `(cljscm.core/with-meta ~(emit expr) ~(emit meta)))
-(defmethod emit :map [{:keys [keys vals]}]
+(defmethod emit-form :map [{:keys [keys vals]}]
   (if (empty? keys)
     'cljscm.core/PersistentArrayMap-EMPTY
     `(cljscm.core/PersistentArrayMap-fromArrays ~(cons 'vector (map emit keys)) ~(cons 'vector (map emit vals)))))
-(defmethod emit :vector [{:keys [items]}]
+(defmethod emit-form :vector [{:keys [items]}]
   (if (empty? items)
     'cljscm.core/PersistentVector-EMPTY
     `(cljscm.core/PersistentVector-fromArray ~(cons 'vector (map emit items)) ~(emit-constant true))))
-(defmethod emit :set [{:keys [items]}]
+(defmethod emit-form :set [{:keys [items]}]
   (if (empty? items)
     'cljscm.core/PersistentHashSet-EMPTY
     `(cljscm.core/PersistentHashSet-fromArray ~(cons 'vector (map emit items)))))
-(defmethod emit :constant [{:keys [form]}] (emit-constant form))
+(defmethod emit-form :constant [{:keys [form]}] (emit-constant form))
 
 (defn get-tag [e]
   (or (-> e :tag)
@@ -270,7 +284,7 @@
   (let [tag (infer-tag e)]
     (#{'boolean} tag)))
 
-(defmethod emit :if
+(defmethod emit-form :if
   [{:keys [test then else unchecked]}]
   (let [checked (not (or unchecked (safe-test? test)))
         test (emit test)
@@ -283,17 +297,17 @@
                               ~else)))
        (list 'if test then else))))
 
-(defmethod emit :case
+(defmethod emit-form :case
   [{:keys [test clauses else]}]
   (concat `(~'case ~(emit test)
              ~@(for [[vals result] clauses]
                  `((~@(map emit vals)) ~(emit result))))
           (when else [(list 'else (emit else))])))
 
-(defmethod emit :throw
+(defmethod emit-form :throw
   [{:keys [throw env]}] (list 'raise (emit throw)))
 
-(defmethod emit :def
+(defmethod emit-form :def
   [{qname :name init :init dynamic :dynamic env :env doc :doc export :export}]
   (let [i (when init [(emit init)])]
     (if dynamic
@@ -365,7 +379,7 @@
       `(~'letrec ((~name ~lamb)) ~name)
       lamb)))
 
-(defmethod emit :fn
+(defmethod emit-form :fn
   [{:keys [name env methods max-fixed-arity single-arity variadic recur-frames loop-lets toplevel]}]
   (when-not (= :statement (:context env))
     (let [loop-locals (->> (concat (mapcat :params (filter #(and % @(:flag %)) recur-frames))
@@ -383,7 +397,7 @@
 (defn- void-dontcare [s]
   (get {'_ "#!void"} s s))
 
-(defmethod emit :extend
+(defmethod emit-form :extend
   [{:keys [etype impls base-type?]}]
   (cons
    'begin
@@ -416,11 +430,11 @@
                            (:name etype)
                            impl-name)]))))))))))
 
-(defmethod emit :do
+(defmethod emit-form :do
   [{:keys [statements ret env]}]
   (emit-begin statements ret))
 
-(defmethod emit :try*
+(defmethod emit-form :try*
   [{:keys [env try catch name finally]}]
   (if (or name finally)
     (let [try-expr (if catch
@@ -457,27 +471,27 @@
         :let (list 'let* bs (emit expr))
         :letfn (list 'letrec bs (emit expr))))))
 
-(defmethod emit :let [ast]
+(defmethod emit-form :let [ast]
   (emit-let ast :let))
 
-(defmethod emit :loop [ast]
+(defmethod emit-form :loop [ast]
   (emit-let ast :loop))
 
-(defmethod emit :recur
+(defmethod emit-form :recur
   [{:keys [frame exprs env]}]
   (let [temps (vec (take (count exprs) (repeatedly gensym)))
         params (:params frame)
         recur-name (:recur-name env)]
     (cons  recur-name (map emit exprs))))
 
-(defmethod emit :letfn
+(defmethod emit-form :letfn
   [{:keys [bindings expr env] :as ast}]
   (emit-let ast :letfn))
 
 #_(defn protocol-prefix [psym]
   (symbol (str (-> (str psym) (.replace \. \$) (.replace \/ \$)) "$")))
 
-(defmethod emit :invoke ; TODO -- this is ignoring all new protocol stuff.
+(defmethod emit-form :invoke ; TODO -- this is ignoring all new protocol stuff.
   [{:keys [f args env] :as expr}]
   (let [info (:info f)
         fn? (and ana/*cljs-static-fns*
@@ -553,11 +567,11 @@
          (emits f ".call(" (comma-sep (cons "null" args)) ")"))))
     (cons (emit f) (map emit args))))
 
-(defmethod emit :new
+(defmethod emit-form :new
   [{:keys [ctor args env]}]
   (cons (symbol (str "make-" (emit ctor))) (map emit args)))
 
-(defmethod emit :set!
+(defmethod emit-form :set!
   [{:keys [target val env]}]
   (cond
     (and (= :var (:op target)) (:dynamic (:info target)))
@@ -573,7 +587,7 @@
         (list 'cljscm.core/record-set! (emit (:target target)) `(quote ~(:field target))  (emit val)))
     :else (list 'set! (emit target) (emit val))))
 
-(defmethod emit :ns
+(defmethod emit-form :ns
   [{:keys [name requires uses requires-macros env]}]
   (swap! ns-first-segments conj (apply str (first (partition-by #{\.} (str name)))))
   (concat ['begin (list 'declare
@@ -591,7 +605,7 @@
           (for [lib (distinct (vals uses))]
             (list 'cljscm.core/require (munge lib)))))
 
-(defmethod emit :deftype*
+(defmethod emit-form :deftype*
   [{:keys [t fields no-constructor]}]
   (let [fields (map munge fields)]
     (list 'begin
@@ -602,7 +616,7 @@
           (list 'table-set! 'cljscm.core/protocol-impls t (list 'make-table)))))
 
 
-(comment (defmethod emit :defrecord*
+(comment (defmethod emit-form :defrecord*
   [{:keys [t fields pmasks]}]
   (let [fields (concat (map munge fields) '[__meta __extmap])]
     (emit-provide t)
@@ -632,7 +646,7 @@
     (emitln "}")
     (emitln "})"))))
 
-(defmethod emit :dot
+(defmethod emit-form :dot
   [{:keys [target field method args env]}]
   (if field
     (if-let [tag (get-tag target)]
@@ -640,7 +654,7 @@
       (list 'cljscm.core/record-ref (emit target) `(quote ~field)))
     (throw (Exception. (str "no special dot-method access line: " (:line env) " target: " (:op target)))))) ;TODO
 
-(defmethod emit :scm-str
+(defmethod emit-form :scm-str
   [{:keys [env code segs args]}]
   (throw (Exception. (str "scm-str* disabled in selfcompiler" (:line env))))
   #_(if code
@@ -649,7 +663,7 @@
                               (concat args [nil])))))
 
 ;form->form mapping (or a vector of candidate forms) that will be subject to analyze->emit in context.
-(defmethod emit :scm
+(defmethod emit-form :scm
   [{:keys [env symbol-map form]}]
   (let [symbol-map (if (and (coll? symbol-map) (not (map? symbol-map)))
                      (into {} (map vector symbol-map symbol-map))
@@ -751,9 +765,7 @@
                                        ((scm* {} with-output-to-file)
                                         (pair [:path dest :append true])
                                         (fn [] ((scm* {} write)
-                                                (if (coll? outfrm)
-                                                  (pair-recursive outfrm)
-                                                  (pair-item outfrm)))
+                                                (scm-form-sanitize outfrm *emit-source-loc?*))
                                           (scm* {} (newline))))))
                             #_(pp/with-pprint-dispatch
                                   pp-scm
