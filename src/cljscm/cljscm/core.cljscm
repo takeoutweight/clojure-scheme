@@ -7752,11 +7752,9 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
              (some #{:line :column :file} (keys (meta form))))
       (let [pos (+ (dec (or (:line (meta form)) 1))
                    (* (or (:column (meta form)) 0) 65536))]
-        (scm-form-sanitize
-         (array
-          (scm-source-marker)
-          san
-          (or (:file (meta form)) "No Source")
-          pos)
-         false))
+        (array
+         (scm-source-marker)
+         san
+         (or (:file (meta form)) "No Source")
+         pos))
       san)))
