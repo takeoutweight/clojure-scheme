@@ -64,14 +64,6 @@
 ;(def *unchecked-if* false)
 
 (def
-  ^{:doc "Each runtime environment provides a diffenent way to print output.
-  Whatever function *print-fn* is bound to will be passed any
-  Strings which should be printed." :dynamic true}
-  *print-fn*
-  (fn [s]
-    (scm* [s] (display s))))
-
-(def
   ^{:doc "bound in a repl thread to the most recent value printed"}
   *1)
 
@@ -6614,9 +6606,7 @@ reduces them without incurring seq initialization"
   (doseq [s ss]
     (-write writer s)))
 
-(defn string-print [x]
-  (*print-fn* x)
-  nil)
+(declare string-print)
 
 (defn flush [] ;stub
   nil)
@@ -7670,7 +7660,20 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
 (defn get-namespaces [] cljscm.core/namespaces)
 
 (def ^:dynamic *ns* 'cljscm.user)
+
 (def ^:dynamic *assert* true)
+
+(def
+  ^{:doc "Each runtime environment provides a diffenent way to print output.
+  Whatever function *print-fn* is bound to will be passed any
+  Strings which should be printed." :dynamic true}
+  *print-fn*
+  (fn [s]
+    (scm* [s] (display s))))
+
+(defn string-print [x]
+  (*print-fn* x)
+  nil)
 
 (def
   ^{:doc "vector of paths searched for lib loading" :dynamic true}
