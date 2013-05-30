@@ -679,7 +679,14 @@
   "Change the file extension from .cljscm to .js. Takes a File or a
   String. Always returns a String."
   [file-str]
-  ;TODO (clojure.string/replace file-str #"\.clj.*$" ".scm")
+  (let [rv (reverse file-str)
+        rvroot (cond
+                 (= [\j \l \c \.] (take 4 rv)) (drop 4 rv)
+                 (= [\s \j \l \c \.] (take 5 rv)) (drop 5 rv)
+                 (= [\m \c \s \j \l \c \.] (take 7 rv)) (drop 7 rv)
+                 :else rv)]
+    (str (apply str (reverse rvroot)) ".scm"))
+;TODO (clojure.string/replace file-str #"\.clj.*$" ".scm")
   )
 
 (condc/platform-case
