@@ -67,7 +67,7 @@
 (def ^:dynamic *cljs-warn-protocol-deprecated* true)
 (def ^:dynamic *unchecked-if* (atom false))
 (def ^:dynamic *cljs-static-fns* false)
-(def ^:dynamic *cljs-macros-path* "/cljscm/core")
+(def ^:dynamic *cljs-macros-path* "/cljscm/core_macros")
 (def ^:dynamic *cljs-macros-is-classpath* true)
 (def  -cljs-macros-loaded (atom false))
 
@@ -84,9 +84,10 @@
   (condc/platform-case
    :jvm (when (not @-cljs-macros-loaded)
           (reset! -cljs-macros-loaded true)
-          (if *cljs-macros-is-classpath*
-            (load *cljs-macros-path*)
-            (load-file *cljs-macros-path*)))
+          (binding [condc/*target-platform* :jvm] ;These forms will be evaled in :jvm
+            (if *cljs-macros-is-classpath*
+              (load *cljs-macros-path*)
+              (load-file *cljs-macros-path*))))
    :gambit :TODO))
 
 (condc/platform-case
