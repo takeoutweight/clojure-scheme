@@ -115,7 +115,7 @@
               :gambit (satisfies? IWithMeta form)))
       (let [loc {:line (:line (:env m))
                  :column (:column (:env m))
-                 :file *current-file*}]
+                 :file ana/*cljs-file*}]
         (vary-meta form #(merge loc %))) ; emit-form's meta has priority
       form)))
 
@@ -740,6 +740,31 @@
 (condc/platform-case
  :gambit (defn create-ns [x] x))
 
+(defn pr-source-loc
+  "prints scheme forms tagged wtih source and file info. Won't print
+   literal vectors or sets correctly."
+  [form]
+  (letfn [(pr-form []
+            (if (coll? form)
+              (do (print "(")
+                  (doall (map #(do (pr-source-loc %1) (when %2 (print " ")))
+                              form (concat (repeat (dec (count form)) true) [false])))
+                  (print ")"))
+              (pr form)))]
+    (if (some #{:line :column :file}
+              (keys (meta form)))
+      (let [pos (+ (dec (or (:line (meta form)) 1))
+                   (* (or (:column (meta form)) 0) 65536))]
+        (do
+          (print "#(#& ") ;; #& can be a reader-macro for ##source2-marker
+          (pr-form)
+          (print " ")
+          (pr (or (:file (meta form)) "(no source)"))
+          (print " ")
+          (pr pos)
+          (print ")")))
+      (pr-form))))
+
 (defn compile-file* [src dest]
   (with-core-cljs
     (letfn [(do-emit [out]
@@ -760,7 +785,10 @@
                       (do (binding [*emit-for-prn?* true]
                             (condc/platform-case
                              :jvm (binding [*out* out]
-                                    (prn (emit ast)))
+                                    (if *emit-source-loc?*
+                                      (do (pr-source-loc (emit ast))
+                                          (print "\n"))
+                                      (prn (emit ast))))
                              :gambit (let [outfrm (emit ast)]
                                        ((scm* {} with-output-to-file)
                                         (pair [:path dest :append true])

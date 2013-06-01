@@ -7755,6 +7755,6 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
         (array
          (scm-source-marker)
          san
-         (or (:file (meta form)) "No Source")
+         (or (:file (meta form)) "(no source)")
          pos))
       san)))
