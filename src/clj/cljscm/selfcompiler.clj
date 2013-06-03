@@ -42,7 +42,6 @@
 (def ^:dynamic *lexical-renames* {})
 (def ^:dynamic *emit-for-prn?* false)
 (def ^:dynamic *emit-source-loc?* false)
-(def ^:dynamic *current-file* nil)
 (def cljs-reserved-file-names #{"deps.cljs"})
 
 (defn dispatch-munge [s]
@@ -740,30 +739,23 @@
 (condc/platform-case
  :gambit (defn create-ns [x] x))
 
-(defn pr-source-loc
-  "prints scheme forms tagged wtih source and file info. Won't print
-   literal vectors or sets correctly."
+(defn wrap-source-loc
+  "recursively converts line numbering metadata into form recognized
+   by gambit. Will optionally skip attaching source to head-position
+   symbols to avoid any chance of wrapping macros or special forms."
   [form]
-  (letfn [(pr-form []
-            (if (coll? form)
-              (do (print "(")
-                  (doall (map #(do (pr-source-loc %1) (when %2 (print " ")))
-                              form (concat (repeat (dec (count form)) true) [false])))
-                  (print ")"))
-              (pr form)))]
+  (let [content (if (and (coll? form)
+                         (or (empty? form) (not= 'source-at (first form))))
+                  (map wrap-source-loc form)
+                  form)]
     (if (some #{:line :column :file}
               (keys (meta form)))
-      (let [pos (+ (dec (or (:line (meta form)) 1))
-                   (* (or (:column (meta form)) 0) 65536))]
-        (do
-          (print "#(#& ") ;; #& can be a reader-macro for ##source2-marker
-          (pr-form)
-          (print " ")
-          (pr (or (:file (meta form)) "(no source)"))
-          (print " ")
-          (pr pos)
-          (print ")")))
-      (pr-form))))
+      (list 'source-at
+            (or (:file (meta form)) "(no source)")
+            (or (:line (meta form)) 1)
+            (or (:column (meta form)) 0)
+            content)
+      content)))
 
 (defn compile-file* [src dest]
   (with-core-cljs
@@ -786,8 +778,7 @@
                             (condc/platform-case
                              :jvm (binding [*out* out]
                                     (if *emit-source-loc?*
-                                      (do (pr-source-loc (emit ast))
-                                          (print "\n"))
+                                      (prn (wrap-source-loc (emit ast)))
                                       (prn (emit ast))))
                              :gambit (let [outfrm (emit ast)]
                                        ((scm* {} with-output-to-file)
