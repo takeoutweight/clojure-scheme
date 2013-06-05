@@ -951,6 +951,14 @@
   ([coll k not-found]
      `(-lookup ~coll ~k ~not-found)))
 
+(defmacro caching-hash [coll hash-fn hash-key]
+  `(let [h# ~hash-key]
+     (if-not (nil? h#)
+       h#
+       (let [h# (~hash-fn ~coll)]
+         (set! ~hash-key h#)
+         h#))))
+
 ;;; internal -- reducers-related macros
 
 (core/defn- do-curried
