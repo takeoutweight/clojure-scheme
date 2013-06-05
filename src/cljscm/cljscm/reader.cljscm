@@ -403,7 +403,7 @@ nil if the end of stream has been reached")
 (defn expand-list [lst gensym-env]
   (cons 'cljscm.core/concat
         (map (fn [item]
-               (if (and (seq? item) (= ::unquote-splicing (first item)))
+               (if (and (seq? item) (= 'unquote-splicing (first item)))
                  (second item)
                  (list 'cljscm.core/list (syntax-quote* item gensym-env)))) lst)))
 
@@ -417,8 +417,8 @@ nil if the end of stream has been reached")
                                         (get o))
                                     (special-symbol? o) o
                                     :else (:name (resolve o))))
-          (and (seq? o) (= ::unquote (first o))) (second o)
-          (and (seq? o) (= ::unquote-splicing (first o))) (throw (Exception. "splice not in list"))
+          (and (seq? o) (= 'unquote (first o))) (second o)
+          (and (seq? o) (= 'unquote-splicing (first o))) (throw (Exception. "splice not in list"))
           (map? o) (list 'cljscm.core/apply 'cljscm.core/hash-map
                          (expand-list (apply concat o) gensym-env))
           (vector? o) (list 'cljscm.core/apply 'cljscm.core/vector (expand-list o gensym-env))
@@ -437,10 +437,10 @@ nil if the end of stream has been reached")
 (defn read-unquote-or-splice [rdr _]
   (let [next-char (read-char rdr)]
     (if (= next-char \@)
-      (list ::unquote-splicing (read rdr true nil false))
+      (list 'unquote-splicing (read rdr true nil false))
       (do
         (unread rdr next-char)
-        (list ::unquote (read rdr true nil false))))))
+        (list 'unquote (read rdr true nil false))))))
 
 (def ^:dynamic *fn-arg-env* nil)
 
