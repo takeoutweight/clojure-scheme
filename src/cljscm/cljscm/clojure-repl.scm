@@ -43,23 +43,30 @@
    ##repl-channel-ports-really-exit?
    ##repl-channel-ports-newline
 
-   (let ((nonproc-installed #f)
+   (let ((installed-handler #f)
 				 (old-read-expr (macro-repl-channel-ports-read-expr old-channel)))
 		 (lambda (channel)												;read-expr
-			 (if (not nonproc-installed)
-					 (begin (let ((old-handler (current-exception-handler)))
-										(current-exception-handler 
-										 (lambda (e) 
-											 (if (nonprocedure-operator-exception? e) 
-													 (let  ((oper (nonprocedure-operator-exception-operator e))
-																	(args (nonprocedure-operator-exception-arguments e)))
-														 (polymorphic-invoke oper args))
-													 (old-handler e)))))
-									(set! nonproc-installed #t)))
+			 (let ((cur-handler (current-exception-handler)))
+				 (if (not (eq? cur-handler installed-handler))
+						 (begin
+																				;(display "installing new handler\n")
+							 (current-exception-handler
+								(lambda (e)
+									(if (nonprocedure-operator-exception? e)
+											(let  ((oper (nonprocedure-operator-exception-operator e))
+														 (args (nonprocedure-operator-exception-arguments e)))
+												(polymorphic-invoke oper args))
+											(cur-handler e))))
+							 (set! installed-handler (current-exception-handler)))))
 			 (parameterize
 				((cljscm.selfcompiler/*emit-source-loc?* #t))
 				(let* ((reader (clojure-repl-channel-ports-pushback-reader channel))
-							 (first-char (peek-char (cljscm.reader/PortPushbackReader-port reader))))
+							 (port (cljscm.reader/PortPushbackReader-port reader))
+							 (first-char (let loop ((pk-char (peek-char port)))
+														 (if (equal? #\newline pk-char)
+																 (begin (read-char port)
+																				(loop (peek-char port)))
+																 pk-char))))
 					(if (equal? #\, first-char)
 							(old-read-expr channel)
 							(let* ((result (cljscm.selfcompiler/emit
@@ -68,14 +75,16 @@
 															 (cljscm.reader/read reader #t #!void #f))))
 										 (sanitized (cljscm.core/scm-form-sanitize result #t))
 										 (output-port (macro-repl-channel-output-port channel)))
-								(display "old char: ")
-								(display first-char)
+																				;(display "old char: ")
+																				;(write first-char)
+																				;(write (current-exception-handler))
+																				;(display "\n")
 								(##output-port-column-set! output-port 1)
 								(let ((ret (if (or (list? sanitized) (vector? sanitized))
 															 (##sourcify-deep sanitized (wrap-code "(repl)" 1 1 sanitized))
 															 (wrap-code "(repl)" 1 1 sanitized))))
-									(display ret)
-									(display "\n")
+																				;(display ret)
+																				;(display "\n")
 									ret)))))))
 
 	 (cljscm.reader/port-push-back-reader (macro-repl-channel-input-port old-channel))))
@@ -127,7 +136,8 @@
                 (##read-expr-from-port input-port))))
          (let ((output-port (macro-repl-channel-output-port channel)))
            (##output-port-column-set! output-port 1))
-				 (display result)
+				 ;(display result)
+				 (write (current-exception-handler))
 				 (display "\n")
          result)))
 
