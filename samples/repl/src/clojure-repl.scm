@@ -1,7 +1,12 @@
-(include "source-at.scm")
-
 (##include "~~lib/gambit#.scm")
 (##include "~~lib/_gambit#.scm")
+(include "../scm/cljscm/source-at.scm")
+(load "scm/cljscm/core.scm")
+(cljscm.core/require '(cljscm.selfanalyzer as: ana))
+(load "scm/cljscm/core_macros.scm")
+(cljscm.core/require  '(cljscm.reader))
+(cljscm.core/require  '(clojure.walk))
+(cljscm.core/require '(cljscm.selfcompiler as: sc))
 
 (define (wrap-code path line col code)
 	(##make-source
