@@ -1,0 +1,2 @@
+#!/usr/bin/env sh
+gsc -e "(include \"src/clojure-repl.scm\")" -

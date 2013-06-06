@@ -168,3 +168,7 @@
     (macro-thread-repl-channel-set!
      (macro-current-thread)
      (clone2-repl-channel old-channel))))
+
+(display "\n")
+(display "enter  (install-clojure-repl)  to switch to Clojure\n")
+(display "enter ,? for more options\n")
