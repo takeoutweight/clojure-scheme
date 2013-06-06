@@ -6,10 +6,10 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software.
 
-(ns cljscm.selfcompiler
+(ns cljscm.compiler
   (:refer-clojure :exclude [munge macroexpand-1])
   (:require [cljscm.conditional :as condc]
-            [cljscm.selfanalyzer :as ana]
+            [cljscm.analyzer :as ana]
             [clojure.walk :as walk]))
 
 (condc/platform-case
@@ -655,7 +655,7 @@
 
 (defmethod emit-form :scm-str
   [{:keys [env code segs args]}]
-  (throw (Exception. (str "scm-str* disabled in selfcompiler" (:line env))))
+  (throw (Exception. (str "scm-str* disabled in compiler" (:line env))))
   #_(if code
     (emit code)
     (apply concat (interleave (concat segs (repeat nil))

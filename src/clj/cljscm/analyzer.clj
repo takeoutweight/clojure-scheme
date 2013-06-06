@@ -8,7 +8,7 @@
 
 ;(set! *warn-on-reflection* true)
 
-(ns cljscm.selfanalyzer
+(ns cljscm.analyzer
   (:refer-clojure :exclude [macroexpand-1])
   (:require [cljscm.conditional :as condc]))
 
@@ -33,7 +33,7 @@
 (def ^:dynamic *reader-ns-name* (gensym "reader"))
 (def ^:dynamic *reader-ns* (condc/platform-case :jvm (create-ns *reader-ns-name*)))
 
-;in AOT, namespaces lives in selfanalyzer. For runtime repl it needs to be core.
+;in AOT, namespaces lives in analyzer. For runtime repl it needs to be core.
 (condc/platform-case
  :jvm (def namespaces (atom '{cljscm.core {:name cljscm.core}
                               cljscm.user {:name cljscm.user}}))) ;defonce TODO

@@ -1,5 +1,5 @@
 (ns build
-  (:require [cljscm.selfcompiler :as comp]
+  (:require [cljscm.compiler :as comp]
             [clojure.java.io :as io]
             [clojure.string :as string]))
 
@@ -26,7 +26,7 @@
   (build-file "cljscm/reader.cljscm")
   (build-file "clojure/walk.cljscm")
   (build-file "cljscm/conditional.clj")
-  (build-file "cljscm/selfanalyzer.clj")
-  (build-file "cljscm/selfcompiler.clj")
+  (build-file "cljscm/analyzer.clj")
+  (build-file "cljscm/compiler.clj")
   (copy-file "cljscm/polymorphic-apply.scm")
   (copy-file "cljscm/source-at.scm"))

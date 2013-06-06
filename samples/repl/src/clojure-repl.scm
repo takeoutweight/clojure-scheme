@@ -2,11 +2,11 @@
 (##include "~~lib/_gambit#.scm")
 (include "../scm/cljscm/source-at.scm")
 (load "scm/cljscm/core.scm")
-(cljscm.core/require '(cljscm.selfanalyzer as: ana))
+(cljscm.core/require '(cljscm.analyzer as: ana))
 (load "scm/cljscm/core_macros.scm")
 (cljscm.core/require  '(cljscm.reader))
 (cljscm.core/require  '(clojure.walk))
-(cljscm.core/require '(cljscm.selfcompiler as: sc))
+(cljscm.core/require '(cljscm.compiler as: sc))
 
 (define (wrap-code path line col code)
   (##make-source
@@ -64,7 +64,7 @@
                       (cur-handler e))))
                (set! installed-handler (current-exception-handler)))))
        (parameterize
-        ((cljscm.selfcompiler/*emit-source-loc?* #t))
+        ((cljscm.compiler/*emit-source-loc?* #t))
         (let* ((reader (clojure-repl-channel-ports-pushback-reader channel))
                (port (cljscm.reader/PortPushbackReader-port reader))
                (first-char (let loop ((pk-char (peek-char port)))
@@ -74,9 +74,9 @@
                                  pk-char))))
           (if (equal? #\, first-char)
               (old-read-expr channel)
-              (let* ((result (cljscm.selfcompiler/emit
-                              (cljscm.selfanalyzer/analyze
-                               (cljscm.selfanalyzer/empty-env)
+              (let* ((result (cljscm.compiler/emit
+                              (cljscm.analyzer/analyze
+                               (cljscm.analyzer/empty-env)
                                (cljscm.reader/read reader #t #!void #f))))
                      (sanitized (cljscm.core/scm-form-sanitize result #t))
                      (output-port (macro-repl-channel-output-port channel)))

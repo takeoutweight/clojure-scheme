@@ -32,9 +32,9 @@
                                   bit-test bit-shift-left bit-shift-right bit-xor])
         (:require [clojure.walk]
                   [clojure.string :as string]           
-                  [cljscm.selfanalyzer :as ana]))
+                  [cljscm.analyzer :as ana]))
  :gambit (ns cljscm.core
-           (:require [cljscm.selfanalyzer :as ana])))
+           (:require [cljscm.analyzer :as ana])))
 
 (condc/platform-case
  :jvm (defn get-namespaces [] ana/namespaces))
@@ -1220,8 +1220,8 @@
                                  (conj v (vary-meta (cons f (mapcat #(if (inline-arity? %)
                                                                        (drop 1 %)
                                                                        (list (drop 1 %))) sigs))
-                                                    assoc :cljscm.selfanalyzer/type t
-                                                    :cljscm.selfanalyzer/fields fields
+                                                    assoc :cljscm.analyzer/type t
+                                                    :cljscm.analyzer/fields fields
                                                     :protocol-impl true
                                                     :protocol-inline inline)))
                                []

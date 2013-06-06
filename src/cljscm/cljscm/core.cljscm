@@ -7660,7 +7660,7 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; namespaces ;;;;;;;;;;;;
 
-;runtime analog to cljscm.selfanalyzer/namespaces
+;runtime analog to cljscm.analyzer/namespaces
 (def namespaces (atom '{cljscm.core {:name cljscm.core}
                         cljscm.user {:name cljscm.user}}))
 
@@ -7729,7 +7729,7 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
   ([ns sym]
      (ns-resolve ns {:ns (get @namespaces ns) :context :statement :locals {}} sym))
   ([ns env sym]
-     (cljscm.selfanalyzer/resolve-var env sym nil))) ;TODO split out symbol resolution code from selfanalyzer
+     (cljscm.analyzer/resolve-var env sym nil))) ;TODO split out symbol resolution code from analyzer
 
 (defn resolve
   ([sym] (ns-resolve *ns* sym))
