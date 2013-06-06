@@ -7684,7 +7684,7 @@ Maps become Objects. Arbitrary keys are encoded to by key->js."
 
 (def
   ^{:doc "vector of paths searched for lib loading" :dynamic true}
-  *classpath* ["src/cljscm" "src" "." "src/clj"])
+  *classpath* ["src/cljscm" "src" "." "src/clj" "scm"])
 
 (defn find-file
   ([filename] (find-file filename *classpath*))

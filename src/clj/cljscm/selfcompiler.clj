@@ -706,7 +706,8 @@
  :jvm (defn mkdirs
         "Create all parent directories for the passed file."
         [^java.io.File f]
-        (.mkdirs (.getParentFile (.getCanonicalFile f))))
+        (.mkdirs (.getParentFile (.getCanonicalFile f)))
+        f)
  :gambit (defn mkdirs [f] :TODO))
 
 (defmacro with-core-cljs
@@ -760,10 +761,11 @@
 (defn compile-file* [src dest]
   (with-core-cljs
     (letfn [(do-emit [out]
-              (binding [ana/*cljs-ns* 'cljscm.user
+              (binding [*ns* *ns*
+                        ana/*cljs-ns* 'cljscm.user
                         ana/*reader-ns* (create-ns ana/*cljs-ns*)
                         ana/*cljs-file* (condc/platform-case
-                                         :jvm (.getPath ^java.io.File src)
+                                         :jvm (string/replace (.getPath src) #"file:/.*jar!/" "")
                                          :gambit src)
                         *position* (atom [0 0])
                         *emitted-provides* (atom #{})
