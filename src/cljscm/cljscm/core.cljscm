@@ -163,7 +163,7 @@
 (defprotocol IFn
   (-invoke [this args]))
 
-(scm* {} (include "polymorphic-apply.scm")) ;to trap non-proc exceptions and calls -invoke
+(scm* {} (begin (include "polymorphic-apply.scm"))) ;to trap non-proc exceptions and calls -invoke. The begin wrapper avoids problems with annotating the include form source in ##path-reference in lib/_eval.scm
 
 (defprotocol ICounted
   (-count [coll] "constant time count"))
