@@ -1,2 +1,0 @@
-function require(){}
-function process(){}
