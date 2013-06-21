@@ -7,6 +7,7 @@ closure
 /coresimple.js
 /out
 /scratch
+/samples/*/scm
 target/
 .repl
 .lein-deps-sum

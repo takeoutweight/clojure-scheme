@@ -109,8 +109,10 @@
                      *cljs-macros-is-classpath* false]
              ~@body))))
 
-(defn empty-env []
-  {:ns (@(get-namespaces) *cljs-ns*) :context :statement :locals {}})
+(defn empty-env [& locals]
+  {:ns (@(get-namespaces) *cljs-ns*) :context :statement
+   :locals (into {} (map #(vector % {:name % :local true})
+                         locals))})
 
 #_(defmacro-scm ^:private debug-prn
   [& args]

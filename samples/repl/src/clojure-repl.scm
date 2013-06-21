@@ -15,6 +15,35 @@
     (##path->container path)
     (##make-filepos (- line 1) (- col 1) 0))))
 
+(define (interp-procedure-locals cte) ;see ##display-rte
+	(define locals (list))
+  (let loop1 ((c cte))
+    (cond ((##cte-top? c))
+          ((##cte-frame? c)
+           (let loop2 ((vars (##cte-frame-vars c)))
+             (if (##pair? vars)
+                 (let ((var (##car vars)))
+                   (if (##not (##hidden-local-var? var))
+                       (set! locals (cons var locals)))
+                   (loop2 (##cdr vars)))
+                 (loop1 (##cte-parent-cte c)))))
+          (else
+           (loop1 (##cte-parent-cte c)))))
+	locals)
+
+;##continuation-locals is used per-continuation, and only for non-interp procs.
+(define (continuation-locals cont)
+	(define locals (list))
+	(let loop ((cont (##continuation-first-frame cont #t)))
+		(and cont
+				 (if (##interp-continuation? cont)
+						 (set! locals (append (interp-procedure-locals (macro-code-cte (##interp-continuation-code cont))) locals))
+						 (let ((loc-pairs (##continuation-locals cont)))
+							 (and loc-pairs (set! locals (append (map car loc-pairs) locals)))))
+																				;(loop (##continuation-next-frame cont #t)) ;FIXME This doubles locals. We don't need to walk them?
+				 ))
+	locals)
+
 (define-type-of-repl-channel-ports clojure-repl-channel-ports
   pushback-reader)
 
@@ -30,6 +59,30 @@
   (list 'scm* (vector) (list 'unquote sym)))
 (cljscm.core/swap! (cljscm.core/get-namespaces) cljscm.core/assoc-in (cljscm.core/PersistentVector-fromArray (vector (quote cljscm.core) defs: (quote repl-command) macro:) #t) #t)
 
+(define (clojure-repl-context-prompt repl-context)
+
+  (define (read-command)
+    (let* ((channel (##thread-repl-channel-get! (macro-current-thread))) (src
+           ((macro-repl-channel-read-command channel)
+						channel
+						repl-context))) ;can't go through ##repl-channel-read-command as we've changed arity
+      (cond ((##eof-object? src)
+             src)
+            (else
+             (let ((code (##source-code src)))
+               (if (and (##pair? code)
+                        (##eq? (##source-code (##car code)) 'six.prefix))
+                   (let ((rest (##cdr code)))
+                     (if (and (##pair? rest)
+                              (##null? (##cdr rest)))
+                         (##car rest)
+                         src))
+                   src))))))
+
+  (##step-off) ;; turn off single-stepping
+
+  (##repl-context-command repl-context (read-command)))
+
 (define (make-clojure-repl-channel old-channel)
   (make-clojure-repl-channel-ports
 
@@ -39,7 +92,22 @@
    (macro-repl-channel-output-port old-channel)
    (##make-empty-repl-result-history)
 
-   ##repl-channel-ports-read-command
+	 (lambda (channel repl-context) ;repl-channel-read-command (whole context instead of just level & depth)
+
+		 (define prompt "> ")
+
+		 (let ((level (macro-repl-context-level repl-context))
+					 (depth (macro-repl-context-depth repl-context))
+					 (output-port (macro-repl-channel-output-port channel)))
+			 (if (##fixnum.< 0 level)
+					 (##write level output-port))
+			 (if (##fixnum.< 0 depth)
+					 (begin
+						 (##write-string "\\" output-port)
+						 (##write depth output-port)))
+			 (##write-string prompt output-port)
+			 (##force-output output-port))
+		 ((macro-repl-channel-ports-read-expr channel) channel repl-context))
    clojure-repl-write-results
    ##repl-channel-ports-display-monoline-message
    ##repl-channel-ports-display-multiline-message
@@ -50,7 +118,7 @@
 
    (let ((installed-handler #f)
          (old-read-expr (macro-repl-channel-ports-read-expr old-channel)))
-     (lambda (channel)                        ;read-expr
+     (lambda (channel repl-context)					;read-expr
        (let ((cur-handler (current-exception-handler)))
          (if (not (eq? cur-handler installed-handler))
              (begin
@@ -74,16 +142,14 @@
                                  pk-char))))
           (if (equal? #\, first-char)
               (old-read-expr channel)
-              (let* ((result (cljscm.compiler/emit
+              (let* ((cont (macro-repl-context-cont repl-context))
+										 (locals (continuation-locals cont))
+										 (result (cljscm.compiler/emit
                               (cljscm.analyzer/analyze
-                               (cljscm.analyzer/empty-env)
+                               (apply cljscm.analyzer/empty-env locals)
                                (cljscm.reader/read reader #t #!void #f))))
                      (sanitized (cljscm.core/scm-form-sanitize result #t))
                      (output-port (macro-repl-channel-output-port channel)))
-                                        ;(display "old char: ")
-                                        ;(write first-char)
-                                        ;(write (current-exception-handler))
-                                        ;(display "\n")
                 (##output-port-column-set! output-port 1)
                 (let ((ret (if (or (list? sanitized) (vector? sanitized))
                                (##sourcify-deep sanitized (wrap-code "(repl)" 1 1 sanitized))
@@ -155,7 +221,8 @@
          (output (macro-repl-channel-output-port old-channel)))
     (macro-thread-repl-channel-set!
      (macro-current-thread)
-     (make-clojure-repl-channel old-channel))))
+     (make-clojure-repl-channel old-channel))
+		(set! ##repl-context-prompt clojure-repl-context-prompt)))
 
 '(define rc (let* ((old-channel (macro-thread-repl-channel (macro-current-thread)))
                    (input (macro-repl-channel-input-port old-channel))
