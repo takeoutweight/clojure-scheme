@@ -30,3 +30,5 @@
   (build-file "cljscm/compiler.clj")
   (copy-file "cljscm/polymorphic-apply.scm")
   (copy-file "cljscm/source-at.scm"))
+
+(defn -main [] (build-repl))
