@@ -7,9 +7,7 @@
 ;   You must not remove this notice, or any other, from this software.
 
 (ns clojure.string
-  (:refer-clojure :exclude [replace reverse])
-  (:require [goog.string :as gstring]
-            [goog.string.StringBuffer :as gstringbuf]))
+  (:refer-clojure :exclude [replace reverse]))
 
 (defn- seq-reverse
   [coll]
@@ -18,9 +16,9 @@
 (defn reverse
   "Returns s with its characters reversed."
   [s]
-  (.. s (split "") (reverse) (join "")))
+  (scm* [s] (list->string (reverse (string->list s)))))
 
-(defn replace
+#_(defn replace
   "Replaces all instance of match with replacement in s.
    match/replacement can be:
 
@@ -33,7 +31,7 @@
         (.replace s (js/RegExp. (.-source match) "g") replacement)
         :else (throw (str "Invalid match arg: " match))))
 
-(defn replace-first
+#_(defn replace-first
   "Replaces the first instance of match with replacement in s.
    match/replacement can be:
 
@@ -53,12 +51,16 @@
 (defn upper-case
   "Converts string to all upper-case."
   [s]
-  (.toUpperCase s))
+  (scm* [s] (list->string
+             (map char-upcase
+                  (string->list s)))))
 
 (defn lower-case
   "Converts string to all lower-case."
   [s]
-  (.toLowerCase s))
+  (scm* [s] (list->string
+             (map char-downcase
+                  (string->list s)))))
 
 (defn capitalize
   "Converts first character of the string to upper-case, all other
@@ -78,7 +80,7 @@
 ;; For consistency, the three arg version has been implemented to
 ;; mimic Java's behavior.
 
-(defn split
+#_(defn split
   "Splits string on a regular expression. Optional argument limit is
   the maximum number of splits. Not lazy. Returns vector of the splits."
   ([s re]
@@ -98,27 +100,27 @@
                       (conj parts (.substring s 0 index))))
              (conj parts s)))))))
 
-(defn split-lines
+#_(defn split-lines
   "Splits s on \n or \r\n."
   [s]
   (split s #"\n|\r\n"))
 
-(defn trim
+#_(defn trim
     "Removes whitespace from both ends of string."
     [s]
     (gstring/trim s))
 
-(defn triml
+#_(defn triml
     "Removes whitespace from the left side of string."
     [s]
     (gstring/trimLeft s))
 
-(defn trimr
+#_(defn trimr
     "Removes whitespace from the right side of string."
     [s]
     (gstring/trimRight s))
 
-(defn trim-newline
+#_(defn trim-newline
   "Removes all trailing newline \\n or return \\r characters from
   string.  Similar to Perl's chomp."
   [s]
@@ -130,12 +132,12 @@
           (recur (dec index))
           (.substring s 0 index))))))
 
-(defn blank?
+#_(defn blank?
   "True is s is nil, empty, or contains only whitespace."
   [s]
   (gstring/isEmptySafe s))
 
-(defn escape
+#_(defn escape
   "Return a new string, using cmap to escape each character ch
    from s as follows:
 
