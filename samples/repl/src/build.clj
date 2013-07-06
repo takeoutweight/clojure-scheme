@@ -25,6 +25,7 @@
   (build-file "cljscm/core_macros.clj")
   (build-file "cljscm/reader.cljscm")
   (build-file "clojure/walk.cljscm")
+  (build-file "clojure/string.cljscm")
   (build-file "cljscm/conditional.clj")
   (build-file "cljscm/analyzer.clj")
   (build-file "cljscm/compiler.clj")
