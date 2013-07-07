@@ -1,6 +1,6 @@
 (ns cljs.core-test)
 
-(defn test-stuff []
+;(defn test-stuff []
   ;; js primitives
   (let [keys #(vec (js-keys %))]
     (assert (= [] (keys (js-obj)) (keys (apply js-obj []))))
@@ -1918,4 +1918,4 @@
   (assert (nil? (:test "test")))
 
   :ok
-  )
+;  )
