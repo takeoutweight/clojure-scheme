@@ -850,7 +850,7 @@
                                       fixed-args)
                          (when variadic? [[variadic-arg
                                              `(scm-nillify (~'scm* [~restparam] ~(make-cdr restparam (core/count fixed-args))))]]))]
-              {:args (map first inits)
+              {:args (map (comp #(if (= '_ %) (gensym "_") %) first) inits) ; munge possibly colliding _'s
                :inits (map second inits)
                :implforms (rest meth) 
                :restcount (when (not variadic-arg) (core/count fixed-args))}))]
