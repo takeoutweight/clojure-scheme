@@ -507,7 +507,7 @@
   structures define -equiv (and thus =) as a value, not an identity,
   comparison."
   ([x] true)
-  ([x y] (or (identical? x y) (scm* [x y] (eqv? x y)) (-equiv x y)))
+  ([x y] (or (identical? x y) (scm* [x y] (eqv? x y)) (and (number? x) (number? y) (scm* [x y] (= x y))) (-equiv x y)))
   ([x y & more]
      (if (= x y)
        (if (next more)
@@ -720,7 +720,7 @@
 
 (extend-type Number
   IEquiv
-  (-equiv [x o] (identical? x o))
+  (-equiv [x o] (and (number? o) (scm* [x o] (= x o))))
 
   IHash
   (-hash [o] (scm-equal?-hash o)))
