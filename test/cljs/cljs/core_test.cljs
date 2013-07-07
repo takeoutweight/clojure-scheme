@@ -1442,11 +1442,11 @@
     (assert (= 123 (m "foo123"))))
 
   ;; comparator
-  (assert (= [1 1 2 2 3 5] (seq (.sort (to-array [2 3 1 5 2 1]) (comparator <)))))
-  (assert (= [5 3 2 2 1 1] (seq (.sort (to-array [2 3 1 5 2 1]) (comparator >)))))
+  #_(assert (= [1 1 2 2 3 5] (seq (.sort (to-array [2 3 1 5 2 1]) (comparator <)))))
+  #_(assert (= [5 3 2 2 1 1] (seq (.sort (to-array [2 3 1 5 2 1]) (comparator >)))))
   
   ;; dot
-  (let [s "abc"]
+  #_(let [s "abc"]
     (assert (= 3 (.-length s)))
     (assert (= 3 (. s -length)))
     (assert (= 3 (. (str 138) -length)))
