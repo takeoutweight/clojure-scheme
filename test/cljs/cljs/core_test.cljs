@@ -2,7 +2,7 @@
 
 ;(defn test-stuff []
   ;; js primitives
-  (let [keys #(vec (js-keys %))]
+  #_(let [keys #(vec (js-keys %))]
     (assert (= [] (keys (js-obj)) (keys (apply js-obj []))))
     (assert (= ["x"] (keys (js-obj "x" "y")) (keys (apply js-obj ["x" "y"])))))
 
