@@ -1,3 +1,7 @@
+## UNMAINTAINED ##
+
+This project is unmaintained and I won't likely investigate any issues.
+
 ## clojure-scheme ##
 
 Pervasive tail-call optimization anyone?
